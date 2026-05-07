@@ -65,6 +65,14 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
     - redirect URI: `http://localhost:3000/oauth/callback`
     - select *ALL THE SCOPES!!!!*
 
+> <details> 
+> <summary> ⚠️ Don't forget to enable developer mode on your HCA account.</summary>
+> <ul> <li> Go into "My Info" from the side panel </li>
+> <li> scroll down </li>
+> <li> check developer mode checkbox </li>
+> <li> click "Save changes"</li>
+> </ul> </details>
+
     **You may get an error like `The requested scope is invalid, unknown, or malformed` when authenticating.** If this is the case:
     - copy the `&state=<...>` parameter of the failing URL.
     - go to your app on HCA, and `Right click > Copy Link` on `Test Auth` to the right of the redirect URI.
