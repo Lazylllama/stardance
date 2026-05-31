@@ -3,6 +3,10 @@ class AdminPolicy < ApplicationPolicy
     user.admin? || user.fraud_dept? || user.shop_manager? || user.helper?
   end
 
+  def access_admin_dashboard?
+    user.admin? || user.fraud_dept? || user.shop_manager? || user.helper?
+  end
+
   def access_admin_endpoints?
     user.admin? || user.fraud_dept? || user.shop_manager? || user.helper?
   end

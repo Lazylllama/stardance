@@ -8,7 +8,46 @@ class Command
 
   def post? = method == :post
 
-  # TODO: add admin
+  HELPER = [
+    { id: :users,       title: "Users",       path: "/users",       keywords: %w[users people],         icon: "people"       },
+    { id: :projects,    title: "Projects",    path: "/projects",    keywords: %w[projects builds],      icon: "code"         },
+    { id: :shop_orders, title: "Shop Orders", path: "/shop/orders", keywords: %w[orders shop],          icon: "cart_outline" },
+    { id: :support,     title: "Support",     path: "/support",     keywords: %w[support tickets],      icon: "help"         },
+  ].map { |a| new(**a.merge(
+    id: :"helper_#{a[:id]}",
+    title: "[HELPER] #{a[:title]}",
+    path: "/admin#{a[:path]}",
+    keywords: (a[:keywords] || []) | %w[helper],
+    visible: ->(u) { u.helper? && !u.admin? }
+  )) }.freeze
+
+  ADMIN = [
+    { id: :dashboard,            title: "Dashboard",          path: "/",                        keywords: %w[dashboard],                    icon: "admin_panel_settings" },
+    { id: :users,                title: "Users",              path: "/users",                   keywords: %w[users people],                 icon: "people"               },
+    { id: :user_perms,           title: "User Permissions",   path: "/user-perms",              keywords: %w[permissions roles grants],     icon: "people"               },
+    { id: :projects,             title: "Projects",           path: "/projects",                keywords: %w[projects builds],              icon: "code"                 },
+    { id: :support,              title: "Support",            path: "/support",                 keywords: %w[support tickets],              icon: "help"                 },
+    { id: :fraud,                title: "Fraud",              path: "/fraud",                   keywords: %w[fraud suspicious],             icon: "warning"              },
+    { id: :shop,                 title: "Shop",               path: "/shop",                    keywords: %w[shop store items],             icon: "cart_outline"         },
+    { id: :shop_orders,          title: "Shop Orders",        path: "/shop/orders",             keywords: %w[orders shop],                  icon: "cart_outline"         },
+    { id: :shop_suggestions,     title: "Shop Suggestions",   path: "/shop/suggestions",        keywords: %w[suggestions shop requests],    icon: "cart_outline"         },
+    { id: :messages,             title: "Messages",           path: "/messages",                keywords: %w[messages],                     icon: "bell"                 },
+    { id: :support_vibes,        title: "Support Vibes",      path: "/support_vibes",           keywords: %w[vibes support],                                             },
+    { id: :sw_vibes,             title: "SW Vibes",           path: "/sw_vibes",                keywords: %w[vibes shipwright],                                          },
+    { id: :suspicious_votes,     title: "Suspicious Votes",   path: "/suspicious_votes",        keywords: %w[votes suspicious fraud],                                    },
+    { id: :audit_logs,           title: "Audit Logs",         path: "/audit_logs",              keywords: %w[audit logs],                   icon: "resources"            },
+    { id: :reports,              title: "Reports",            path: "/reports",                 keywords: %w[reports],                      icon: "resources"            },
+    { id: :fulfillment_payouts,  title: "Fulfillment Payouts",path: "/fulfillment_payouts",     keywords: %w[fulfillment payouts],          icon: "cart_outline"         },
+    { id: :missions,             title: "Missions",           path: "/missions",                keywords: %w[missions],                     icon: "star_outline"         },
+    { id: :cert_ships,           title: "Certification Ships",path: "/certification/ship",      keywords: %w[certification ships review],   icon: "code"                 },
+    { id: :cert_ysws,            title: "YSWS Reviews",       path: "/certification/review",    keywords: %w[ysws review certification],    icon: "code"                 },
+  ].map { |a| new(**a.merge(
+    id: :"admin_#{a[:id]}",
+    title: "[ADMIN] #{a[:title]}",
+    path: "/admin#{a[:path]}",
+    keywords: (a[:keywords] || []) | %w[admin],
+    visible: ->(u) { u.admin? }
+  )) }.freeze
   ALL = [
     new(id: :home,         title: "Home",            path: "/home",            keywords: %w[dashboard start]),
     new(id: :vote,         title: "Vote",             path: "/rate/new",        keywords: %w[review projects rate],       icon: "star_outline"),
@@ -19,7 +58,9 @@ class Command
     new(id: :achievements, title: "Achievements",     path: "/my/achievements", keywords: %w[badges trophies unlocked]),
     new(id: :leaderboard,  title: "Leaderboard",      path: "/leaderboard",     keywords: %w[rankings top scores]),
     new(id: :streamer_mode_on,  title: "Enable Streamer Mode",  path: "/my/settings/streamer_mode?enable=true",  keywords: %w[blur privacy stream sensitive hide], method: :post),
-    new(id: :streamer_mode_off, title: "Disable Streamer Mode", path: "/my/settings/streamer_mode?enable=false", keywords: %w[blur privacy stream sensitive hide], method: :post)
+    new(id: :streamer_mode_off, title: "Disable Streamer Mode", path: "/my/settings/streamer_mode?enable=false", keywords: %w[blur privacy stream sensitive hide], method: :post),
+    *ADMIN,
+    *HELPER
   ].freeze
 
   def visible_to?(user) = @visible.call(user)

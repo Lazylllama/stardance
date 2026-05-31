@@ -1,10 +1,12 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item"];
+  static targets = ["input", "item", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList"];
+  static values = { userSearchUrl: String, projectSearchUrl: String };
 
   connect() {
     this._activeIndex = -1;
+    this._searchTimer = null;
     this._boundGlobalKey = this._globalKey.bind(this);
     document.addEventListener("keydown", this._boundGlobalKey);
   }
@@ -27,6 +29,9 @@ export default class extends Controller {
   close() {
     this.element.close();
     this.inputTarget.value = "";
+    clearTimeout(this._searchTimer);
+    this._clearDynamic();
+    this._clearDynamicProjects();
     this.filter();
   }
 
@@ -47,6 +52,27 @@ export default class extends Controller {
 
   filter() {
     const query = this.inputTarget.value.toLowerCase().trim();
+
+    const directRoutes = [
+      { pattern: /^user#(\d+)$/i,        path: (id) => `/admin/users/${id}`,             label: "User" },
+      { pattern: /^audit#(\d+)$/i,        path: (id) => `/admin/audit_logs/${id}`,        label: "Audit Log" },
+      { pattern: /^project#(\d+)$/i,      path: (id) => `/admin/projects/${id}`,          label: "Project" },
+      { pattern: /^report#(\d+)$/i,       path: (id) => `/admin/reports/${id}`,           label: "Report" },
+      { pattern: /^order#(\d+)$/i,        path: (id) => `/admin/shop/orders/${id}`,       label: "Shop Order" },
+    ];
+    const directMatch = directRoutes.reduce((found, r) => found || (query.match(r.pattern) && { id: query.match(r.pattern)[1], ...r }), null);
+    if (directMatch) {
+      clearTimeout(this._searchTimer);
+      this._renderDynamic([{ id: directMatch.id, name: `${directMatch.label} #${directMatch.id}`, email: `→ /admin/.../${directMatch.id}`, _path: directMatch.path(directMatch.id) }]);
+      return;
+    }
+
+    if (query.length >= 2 && (this.hasUserSearchUrlValue || this.hasProjectSearchUrlValue)) {
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => this._fetchAll(query), 200);
+    } else {
+      this._clearDynamic();
+    }
     const list = this.itemTargets[0]?.parentElement;
     if (!list) return;
 
@@ -117,6 +143,99 @@ export default class extends Controller {
     } else {
       window.Turbo.visit(path);
     }
+  }
+
+  _fetchAll(query) {
+    const q = encodeURIComponent(query);
+    const fetches = [];
+
+    if (this.hasUserSearchUrlValue)
+      fetches.push(
+        fetch(`${this.userSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
+          .then((r) => r.json())
+          .then((users) => this._renderDynamic(users))
+          .catch(() => this._clearDynamic())
+      );
+
+    if (this.hasProjectSearchUrlValue)
+      fetches.push(
+        fetch(`${this.projectSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
+          .then((r) => r.json())
+          .then((projects) => this._renderDynamicProjects(projects))
+          .catch(() => this._clearDynamicProjects())
+      );
+
+    Promise.all(fetches);
+  }
+
+  _renderDynamic(users) {
+    const list = this.dynamicListTarget;
+    list.innerHTML = "";
+
+    if (!users.length) {
+      this.dynamicResultsTarget.style.display = "none";
+      return;
+    }
+
+    users.forEach((user, i) => {
+      const li = document.createElement("li");
+      li.className = "command-palette__item";
+      li.role = "option";
+      li.id = `cp-dyn-${i}`;
+      li.dataset.commandPaletteTarget = "item";
+      li.dataset.action =
+        "click->command-palette#select mouseenter->command-palette#highlight";
+      li.dataset.path = user._path || `/admin/users/${user.id}`;
+      li.innerHTML = `<span class="command-palette__item-title">${this._escape(user.name)} <span style="opacity:0.5;font-size:0.85em">${this._escape(user.email)}</span></span>`;
+      list.appendChild(li);
+    });
+
+    this.dynamicResultsTarget.style.display = "";
+  }
+
+  _renderDynamicProjects(projects) {
+    const list = this.dynamicProjectListTarget;
+    list.innerHTML = "";
+
+    if (!projects.length) {
+      this.dynamicProjectResultsTarget.style.display = "none";
+      return;
+    }
+
+    projects.forEach((project, i) => {
+      const li = document.createElement("li");
+      li.className = "command-palette__item";
+      li.role = "option";
+      li.id = `cp-dyn-proj-${i}`;
+      li.dataset.commandPaletteTarget = "item";
+      li.dataset.action =
+        "click->command-palette#select mouseenter->command-palette#highlight";
+      li.dataset.path = `/admin/projects/${project.id}`;
+      li.innerHTML = `<span class="command-palette__item-title">${this._escape(project.name)}</span>`;
+      list.appendChild(li);
+    });
+
+    this.dynamicProjectResultsTarget.style.display = "";
+  }
+
+  _clearDynamic() {
+    if (this.hasDynamicListTarget) this.dynamicListTarget.innerHTML = "";
+    if (this.hasDynamicResultsTarget)
+      this.dynamicResultsTarget.style.display = "none";
+  }
+
+  _clearDynamicProjects() {
+    if (this.hasDynamicProjectListTarget) this.dynamicProjectListTarget.innerHTML = "";
+    if (this.hasDynamicProjectResultsTarget)
+      this.dynamicProjectResultsTarget.style.display = "none";
+  }
+
+  _escape(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   _move(dir) {

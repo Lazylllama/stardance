@@ -546,6 +546,7 @@ Rails.application.routes.draw do
       AdminConstraint.allow?(request, :access_jobs?)
     }
 
+    get "users/search", to: "users#search", as: :search_admin_users
     resources :users, only: [ :index, :show, :update ] do
       scope module: :users do
         resources :roles,               only: [ :create, :destroy ], param: :name
@@ -564,6 +565,7 @@ Rails.application.routes.draw do
     end
 
     resource :impersonation, only: [ :destroy ], controller: "users/impersonations"
+    get "projects/search", to: "projects#search", as: :search_admin_projects
     resources :projects, only: [ :index, :show ] do
       member do
         post :restore
