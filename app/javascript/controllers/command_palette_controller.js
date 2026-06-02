@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList"];
+  static targets = ["input", "item", "dynamicJumpResults", "dynamicJumpList", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList"];
   static values = { userSearchUrl: String, projectSearchUrl: String, missionSearchUrl: String };
 
   connect() {
@@ -30,6 +30,7 @@ export default class extends Controller {
     this.element.close();
     this.inputTarget.value = "";
     clearTimeout(this._searchTimer);
+    this._clearDynamicJump();
     this._clearDynamic();
     this._clearDynamicProjects();
     this._clearDynamicMissions();
@@ -64,9 +65,13 @@ export default class extends Controller {
     const directMatch = directRoutes.reduce((found, r) => found || (query.match(r.pattern) && { id: query.match(r.pattern)[1], ...r }), null);
     if (directMatch) {
       clearTimeout(this._searchTimer);
-      this._renderDynamic([{ id: directMatch.id, name: `${directMatch.label} #${directMatch.id}`, email: `→ /admin/.../${directMatch.id}`, _path: directMatch.path(directMatch.id) }]);
+      this._clearDynamic();
+      this._clearDynamicProjects();
+      this._clearDynamicMissions();
+      this._renderDynamicJump({ label: `${directMatch.label} #${directMatch.id}`, path: directMatch.path(directMatch.id) });
       return;
     }
+    this._clearDynamicJump();
 
     if (query.length >= 2 && (this.hasUserSearchUrlValue || this.hasProjectSearchUrlValue || this.hasMissionSearchUrlValue)) {
       clearTimeout(this._searchTimer);
@@ -180,6 +185,26 @@ export default class extends Controller {
     Promise.all(fetches);
   }
 
+  _renderDynamicJump({ label, path }) {
+    const list = this.dynamicJumpListTarget;
+    list.innerHTML = "";
+    const li = document.createElement("li");
+    li.className = "command-palette__item";
+    li.role = "option";
+    li.id = "cp-dyn-jump";
+    li.dataset.commandPaletteTarget = "item";
+    li.dataset.action = "click->command-palette#select mouseenter->command-palette#highlight";
+    li.dataset.path = path;
+    li.innerHTML = `<span class="command-palette__item-title">${this._escape(label)}</span>`;
+    list.appendChild(li);
+    this.dynamicJumpResultsTarget.style.display = "";
+  }
+
+  _clearDynamicJump() {
+    if (this.hasDynamicJumpListTarget) this.dynamicJumpListTarget.innerHTML = "";
+    if (this.hasDynamicJumpResultsTarget) this.dynamicJumpResultsTarget.style.display = "none";
+  }
+
   _renderDynamic(users) {
     const list = this.dynamicListTarget;
     list.innerHTML = "";
@@ -198,7 +223,7 @@ export default class extends Controller {
       li.dataset.action =
         "click->command-palette#select mouseenter->command-palette#highlight";
       li.dataset.path = user._path || `/admin/users/${user.id}`;
-      li.innerHTML = `<span class="command-palette__item-title">${this._escape(user.name)} <span style="opacity:0.5;font-size:0.85em">${this._escape(user.email)}</span></span>`;
+      li.innerHTML = `<span class="command-palette__item-title">${this._escape(user.name)}</span>`;
       list.appendChild(li);
     });
 

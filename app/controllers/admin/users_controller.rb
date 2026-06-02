@@ -51,7 +51,7 @@ class Admin::UsersController < Admin::ApplicationController
     authorize User, :index?
     q = "%#{ActiveRecord::Base.sanitize_sql_like(params[:q].to_s)}%"
     users = User.where("email ILIKE ? OR display_name ILIKE ? OR slack_id ILIKE ?", q, q, q).limit(8)
-    render json: users.map { |u| { id: u.id, name: u.display_name, email: u.email } }
+    render json: users.map { |u| { id: u.id, name: u.display_name } }
   end
 
   def user_perms
