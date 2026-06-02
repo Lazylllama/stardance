@@ -32,8 +32,8 @@
             id="cp-item-<%= i %>"
             data-command-palette-target="item"
             data-action="click->command-palette#select mouseenter->command-palette#highlight"
-            <% if cmd.path %>data-path="<%= cmd.path %>"<% end %>
-            <% if cmd.focus %>data-focus="<%= cmd.focus %>"<% end %>
+            <% if cmd.path %> data-path="<%= cmd.path %>"<% end %>
+            <% if cmd.focus %> data-focus="<%= cmd.focus %>"<% end %>
             data-keywords="<%= cmd.keywords.join(" ") %>"
             <% if cmd.post? %> data-method="post"<% end %>>
           <% if cmd.icon %>

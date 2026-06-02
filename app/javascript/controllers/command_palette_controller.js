@@ -1,14 +1,23 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item", "results", "dynamicJumpResults", "dynamicJumpList", "dynamicMissionResults", "dynamicMissionList"];
+  static targets = [
+    "input",
+    "item",
+    "results",
+    "dynamicJumpResults",
+    "dynamicJumpList",
+    "dynamicMissionResults",
+    "dynamicMissionList",
+  ];
   static values = { searchUrl: String, missionSearchUrl: String };
 
   connect() {
     this._activeIndex = -1;
     this._searchTimer = null;
     this._commandTimer = null;
-    if (this.hasResultsTarget) this._initialResults = this.resultsTarget.innerHTML;
+    if (this.hasResultsTarget)
+      this._initialResults = this.resultsTarget.innerHTML;
     this._boundGlobalKey = this._globalKey.bind(this);
     document.addEventListener("keydown", this._boundGlobalKey);
   }
@@ -63,18 +72,46 @@ export default class extends Controller {
     const query = this.inputTarget.value.toLowerCase().trim();
 
     const directRoutes = [
-      { pattern: /^user#(\d+)$/i,        path: (id) => `/admin/users/${id}`,             label: "User" },
-      { pattern: /^audit#(\d+)$/i,        path: (id) => `/admin/audit_logs/${id}`,        label: "Audit Log" },
-      { pattern: /^project#(\d+)$/i,      path: (id) => `/admin/projects/${id}`,          label: "Project" },
-      { pattern: /^report#(\d+)$/i,       path: (id) => `/admin/reports/${id}`,           label: "Report" },
-      { pattern: /^order#(\d+)$/i,        path: (id) => `/admin/shop/orders/${id}`,       label: "Shop Order" },
+      {
+        pattern: /^user#(\d+)$/i,
+        path: (id) => `/admin/users/${id}`,
+        label: "User",
+      },
+      {
+        pattern: /^audit#(\d+)$/i,
+        path: (id) => `/admin/audit_logs/${id}`,
+        label: "Audit Log",
+      },
+      {
+        pattern: /^project#(\d+)$/i,
+        path: (id) => `/admin/projects/${id}`,
+        label: "Project",
+      },
+      {
+        pattern: /^report#(\d+)$/i,
+        path: (id) => `/admin/reports/${id}`,
+        label: "Report",
+      },
+      {
+        pattern: /^order#(\d+)$/i,
+        path: (id) => `/admin/shop/orders/${id}`,
+        label: "Shop Order",
+      },
     ];
-    const directMatch = directRoutes.reduce((found, r) => found || (query.match(r.pattern) && { id: query.match(r.pattern)[1], ...r }), null);
+    const directMatch = directRoutes.reduce(
+      (found, r) =>
+        found ||
+        (query.match(r.pattern) && { id: query.match(r.pattern)[1], ...r }),
+      null,
+    );
     if (directMatch) {
       clearTimeout(this._searchTimer);
       clearTimeout(this._commandTimer);
       this._clearDynamicMissions();
-      this._renderDynamicJump({ label: `${directMatch.label} #${directMatch.id}`, path: directMatch.path(directMatch.id) });
+      this._renderDynamicJump({
+        label: `${directMatch.label} #${directMatch.id}`,
+        path: directMatch.path(directMatch.id),
+      });
       return;
     }
     this._clearDynamicJump();
@@ -89,7 +126,8 @@ export default class extends Controller {
     if (this.hasResultsTarget && this.hasSearchUrlValue) {
       clearTimeout(this._commandTimer);
       if (query.length > 0) {
-        this.resultsTarget.innerHTML = '<p class="command-palette__empty">Searching...</p>';
+        this.resultsTarget.innerHTML =
+          '<p class="command-palette__empty">Searching...</p>';
         this._commandTimer = setTimeout(() => this._loadResults(query), 180);
       } else {
         this._restoreInitialResults();
@@ -159,7 +197,7 @@ export default class extends Controller {
   select(event) {
     const item = event.currentTarget;
     const { path, focus, method, adminPath } = item.dataset;
-    const effectivePath = (event.shiftKey && adminPath) ? adminPath : path;
+    const effectivePath = event.shiftKey && adminPath ? adminPath : path;
     if (!effectivePath && !focus) return;
 
     this.close();
@@ -175,7 +213,9 @@ export default class extends Controller {
   _fetchAll(query) {
     const q = encodeURIComponent(query);
 
-    fetch(`${this.missionSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
+    fetch(`${this.missionSearchUrlValue}?q=${q}`, {
+      headers: { Accept: "application/json" },
+    })
       .then((r) => r.json())
       .then((missions) => this._renderDynamicMissions(missions))
       .catch(() => this._clearDynamicMissions());
@@ -189,7 +229,8 @@ export default class extends Controller {
     li.role = "option";
     li.id = "cp-dyn-jump";
     li.dataset.commandPaletteTarget = "item";
-    li.dataset.action = "click->command-palette#select mouseenter->command-palette#highlight";
+    li.dataset.action =
+      "click->command-palette#select mouseenter->command-palette#highlight";
     li.dataset.path = path;
     li.innerHTML = `<span class="command-palette__item-title">${this._escape(label)}</span>`;
     list.appendChild(li);
@@ -197,8 +238,10 @@ export default class extends Controller {
   }
 
   _clearDynamicJump() {
-    if (this.hasDynamicJumpListTarget) this.dynamicJumpListTarget.innerHTML = "";
-    if (this.hasDynamicJumpResultsTarget) this.dynamicJumpResultsTarget.style.display = "none";
+    if (this.hasDynamicJumpListTarget)
+      this.dynamicJumpListTarget.innerHTML = "";
+    if (this.hasDynamicJumpResultsTarget)
+      this.dynamicJumpResultsTarget.style.display = "none";
   }
 
   _renderDynamicMissions(missions) {
@@ -216,7 +259,8 @@ export default class extends Controller {
       li.role = "option";
       li.id = `cp-dyn-mission-${i}`;
       li.dataset.commandPaletteTarget = "item";
-      li.dataset.action = "click->command-palette#select mouseenter->command-palette#highlight";
+      li.dataset.action =
+        "click->command-palette#select mouseenter->command-palette#highlight";
       li.dataset.path = `/missions/${mission.slug}`;
       li.innerHTML = `<span class="command-palette__item-title">${this._escape(mission.name)}</span>`;
       list.appendChild(li);
@@ -226,7 +270,8 @@ export default class extends Controller {
   }
 
   _clearDynamicMissions() {
-    if (this.hasDynamicMissionListTarget) this.dynamicMissionListTarget.innerHTML = "";
+    if (this.hasDynamicMissionListTarget)
+      this.dynamicMissionListTarget.innerHTML = "";
     if (this.hasDynamicMissionResultsTarget)
       this.dynamicMissionResultsTarget.style.display = "none";
   }
@@ -254,7 +299,7 @@ export default class extends Controller {
   _activate(shiftKey = false) {
     const item = this.itemTargets[this._activeIndex];
     const { path, focus, method, adminPath } = item?.dataset ?? {};
-    const effectivePath = (shiftKey && adminPath) ? adminPath : path;
+    const effectivePath = shiftKey && adminPath ? adminPath : path;
     if (!effectivePath && !focus) return;
 
     this.close();
@@ -283,12 +328,13 @@ export default class extends Controller {
     const groups = [
       ["Commands", data.commands ?? []],
       ["Projects", data.projects ?? []],
-      ["Posts",    data.posts    ?? []],
-      ["Users",    data.users    ?? []],
+      ["Posts", data.posts ?? []],
+      ["Users", data.users ?? []],
     ].filter(([, items]) => items.length > 0);
 
     if (!groups.length) {
-      this.resultsTarget.innerHTML = '<p class="command-palette__empty">No results found.</p>';
+      this.resultsTarget.innerHTML =
+        '<p class="command-palette__empty">No results found.</p>';
       this._activeIndex = -1;
       this._clearActive();
       return;
@@ -299,10 +345,14 @@ export default class extends Controller {
     groups.forEach(([label, items]) => {
       html += `<p class="command-palette__section-label">${this._escape(label)}</p><ul class="command-palette__list">`;
       items.forEach((item) => {
-        const path      = item.path       ? `data-path="${this._escape(item.path)}"` : "";
-        const focus     = item.focus      ? `data-focus="${this._escape(item.focus)}"` : "";
-        const adminPath = item.admin_path ? `data-admin-path="${this._escape(item.admin_path)}"` : "";
-        const method    = item.method === "post" ? 'data-method="post"' : "";
+        const path = item.path ? `data-path="${this._escape(item.path)}"` : "";
+        const focus = item.focus
+          ? `data-focus="${this._escape(item.focus)}"`
+          : "";
+        const adminPath = item.admin_path
+          ? `data-admin-path="${this._escape(item.admin_path)}"`
+          : "";
+        const method = item.method === "post" ? 'data-method="post"' : "";
         html += `<li class="command-palette__item" role="option" id="cp-sr-${idx++}"
                     data-command-palette-target="item"
                     data-action="click->command-palette#select mouseenter->command-palette#highlight"

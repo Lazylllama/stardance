@@ -13,7 +13,7 @@ class Command
     { id: :users,       title: "Users",       path: "/users",       keywords: %w[users people],         icon: "people"       },
     { id: :projects,    title: "Projects",    path: "/projects",    keywords: %w[projects builds],      icon: "code"         },
     { id: :shop_orders, title: "Shop Orders", path: "/shop/orders", keywords: %w[orders shop],          icon: "cart_outline" },
-    { id: :support,     title: "Support",     path: "/support",     keywords: %w[support tickets],      icon: "help"         },
+    { id: :support,     title: "Support",     path: "/support",     keywords: %w[support tickets],      icon: "help"         }
   ].map { |a| new(**a.merge(
     id: :"helper_#{a[:id]}",
     title: "[HELPER] #{a[:title]}",
@@ -33,15 +33,15 @@ class Command
     { id: :shop_orders,          title: "Shop Orders",        path: "/shop/orders",             keywords: %w[orders shop],                  icon: "cart_outline"         },
     { id: :shop_suggestions,     title: "Shop Suggestions",   path: "/shop/suggestions",        keywords: %w[suggestions shop requests],    icon: "cart_outline"         },
     { id: :messages,             title: "Messages",           path: "/messages",                keywords: %w[messages],                     icon: "bell"                 },
-    { id: :support_vibes,        title: "Support Vibes",      path: "/support_vibes",           keywords: %w[vibes support],                                             },
-    { id: :sw_vibes,             title: "SW Vibes",           path: "/sw_vibes",                keywords: %w[vibes shipwright],                                          },
-    { id: :suspicious_votes,     title: "Suspicious Votes",   path: "/suspicious_votes",        keywords: %w[votes suspicious fraud],                                    },
+    { id: :support_vibes,        title: "Support Vibes",      path: "/support_vibes",           keywords: %w[vibes support]                                             },
+    { id: :sw_vibes,             title: "SW Vibes",           path: "/sw_vibes",                keywords: %w[vibes shipwright]                                          },
+    { id: :suspicious_votes,     title: "Suspicious Votes",   path: "/suspicious_votes",        keywords: %w[votes suspicious fraud]                                    },
     { id: :audit_logs,           title: "Audit Logs",         path: "/audit_logs",              keywords: %w[audit logs],                   icon: "resources"            },
     { id: :reports,              title: "Reports",            path: "/reports",                 keywords: %w[reports],                      icon: "resources"            },
-    { id: :fulfillment_payouts,  title: "Fulfillment Payouts",path: "/fulfillment_payouts",     keywords: %w[fulfillment payouts],          icon: "cart_outline"         },
+    { id: :fulfillment_payouts,  title: "Fulfillment Payouts", path: "/fulfillment_payouts",     keywords: %w[fulfillment payouts],          icon: "cart_outline"         },
     { id: :missions,             title: "Missions",           path: "/missions",                keywords: %w[missions],                     icon: "star_outline"         },
-    { id: :cert_ships,           title: "Certification Ships",path: "/certification/ship",      keywords: %w[certification ships review],   icon: "code"                 },
-    { id: :cert_ysws,            title: "YSWS Reviews",       path: "/certification/review",    keywords: %w[ysws review certification],    icon: "code"                 },
+    { id: :cert_ships,           title: "Certification Ships", path: "/certification/ship",      keywords: %w[certification ships review],   icon: "code"                 },
+    { id: :cert_ysws,            title: "YSWS Reviews",       path: "/certification/review",    keywords: %w[ysws review certification],    icon: "code"                 }
   ].map { |a| new(**a.merge(
     id: :"admin_#{a[:id]}",
     title: "[ADMIN] #{a[:title]}",
