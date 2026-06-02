@@ -114,6 +114,15 @@ export default class extends Controller {
       this.submitTarget.getAttribute("aria-disabled") === "true"
     ) {
       event.preventDefault();
+      return;
+    }
+
+    // Manually swap the button text and disable it to give feedback and
+    // prevent double-clicks.
+    if (this.hasSubmitTarget) {
+      const label = this.submitTarget.querySelector(".action-btn__label");
+      if (label) label.textContent = "Posting...";
+      this.submitTarget.disabled = true;
     }
   }
 
@@ -192,7 +201,16 @@ export default class extends Controller {
     chip.classList.add("feed-composer__chip--active");
     chip.setAttribute("aria-current", "true");
 
-    if (this.hasFormTarget) this.formTarget.action = postUrl;
+    if (this.hasFormTarget) {
+      this.formTarget.action = postUrl;
+      const csrfToken = document.querySelector(
+        "meta[name='csrf-token']",
+      )?.content;
+      const tokenField = this.formTarget.querySelector(
+        "input[name='authenticity_token']",
+      );
+      if (csrfToken && tokenField) tokenField.value = csrfToken;
+    }
     this.previewTimeUrlValue = previewUrl;
     this.hackatimeLinkedValue = linked;
 

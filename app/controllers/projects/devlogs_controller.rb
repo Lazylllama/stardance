@@ -2,9 +2,18 @@ class Projects::DevlogsController < ApplicationController
   TEST_TIME_SECONDS = 15.minutes.to_i
 
   before_action :set_project
-  before_action :set_devlog, only: %i[edit update destroy versions]
+  before_action :set_devlog, only: %i[show edit update destroy versions]
   before_action :require_hackatime_project, only: %i[create]
   before_action :sync_hackatime_projects, only: %i[create]
+
+  skip_before_action :remember_page, only: %i[preview_time]
+
+  def show
+    authorize @devlog
+    @body_class = "app-layout-page"
+    @post = @project.posts.visible_to(current_user).find_by!(postable: @devlog)
+    @comments = @devlog.comments.not_deleted.includes(:user).order(created_at: :asc)
+  end
 
   def create
     authorize @project, :create_devlog?
@@ -20,6 +29,7 @@ class Projects::DevlogsController < ApplicationController
       if @devlog.save
         Post.create!(project: @project, user: current_user, postable: @devlog)
         session.delete(test_time_session_key) if test_time_granted?
+        track_event "devlog_posted", { project_id: @project.id, devlog_id: @devlog.id, duration_seconds: @devlog.duration_seconds }
         flash[:notice] = "Devlog created successfully"
 
         return redirect_to project_path(@project)
@@ -95,6 +105,11 @@ class Projects::DevlogsController < ApplicationController
       redirect_to project_path(@project) and return
     end
 
+    if @devlog.hackatime_projects_key_snapshot == "test" && !Flipper.enabled?(:delete_test_devlog, current_user)
+      flash[:alert] = "Test-time devlogs cannot be deleted"
+      redirect_to project_path(@project) and return
+    end
+
     if force && project_shipped
       PaperTrail::Version.create!(
         item_type: "Post::Devlog",
@@ -164,23 +179,14 @@ class Projects::DevlogsController < ApplicationController
     @project.reload
     hackatime_keys = @project.hackatime_keys
 
-    Rails.logger.info "DevlogsController#load_preview_time: project=#{@project.id}, hackatime_keys=#{hackatime_keys.inspect}"
-
     return apply_test_time_preview if test_time_granted? && hackatime_keys.blank?
     return @preview_time = nil unless hackatime_keys.present?
 
-    # Pull from the same source the project show page uses (fetch_stats via
-    # try_sync_hackatime_data!) so the composer preview and the ship warning
-    # modal don't disagree by a few minutes from hitting different Hackatime
-    # API paths.
-    result = current_user.try_sync_hackatime_data!
-    return apply_test_time_preview if test_time_granted? && !result
-    return @preview_time = nil unless result
+    seconds = @project.seconds_coded_in_devlog_window(current_user.hackatime_identity&.uid)
+    return apply_test_time_preview if test_time_granted? && seconds.nil?
+    return @preview_time = nil if seconds.nil?
 
-    project_times = result[:projects] || {}
-    total_seconds = hackatime_keys.sum { |k| project_times[k].to_i }
-
-    @preview_seconds = [ total_seconds - @project.duration_seconds, 0 ].max
+    @preview_seconds = seconds
     apply_test_time_preview if test_time_granted? && @preview_seconds < TEST_TIME_SECONDS
     @preview_time ||= format_preview_time(@preview_seconds)
   rescue => e

@@ -12,7 +12,7 @@
             <%= radio_button_tag :user_ref, opt, false,
                                   class: "user-ref-modal__radio",
                                   data: { action: "change->user-ref-modal#toggleOther" } %>
-            <span class="user-ref-modal__option-label"><%= opt == "HackClub" ? "Hack Club" : opt %></span>
+            <span class="user-ref-modal__option-label"><%= { "HackClub" => "Hack Club", "LinusTechTips" => "Linus Tech Tips" }[opt] || opt %></span>
           </label>
         <% end %>
         <label class="user-ref-modal__option">

@@ -21,12 +21,6 @@ class Admin::Shop::DashboardController < Admin::ApplicationController
     end
 
     @item_types = ShopItem.distinct.pluck(:type).compact.sort
-    @pagy, @shop_items = pagy(@shop_items)
-  end
-
-  def clear_carousel_cache
-    authorize ShopItem, :manage?
-    Rails.cache.delete(Cache::CarouselPrizesJob::CACHE_KEY)
-    redirect_to admin_shop_path, notice: "Carousel cache cleared successfully."
+    @pagy, @shop_items = pagy(@shop_items.includes(:shop_categories))
   end
 end

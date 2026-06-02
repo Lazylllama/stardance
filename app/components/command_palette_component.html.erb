@@ -21,7 +21,10 @@
            aria-activedescendant="">
   </div>
 
-  <div class="command-palette__results" role="listbox">
+  <turbo-frame id="command-palette-results"
+               class="command-palette__results"
+               role="listbox"
+               data-command-palette-target="results">
     <p class="command-palette__section-label">Commands</p>
     <ul class="command-palette__list">
       <% initial_commands.each_with_index do |cmd, i| %>
@@ -43,7 +46,7 @@
         </li>
       <% end %>
     </ul>
-  </div>
+  </turbo-frame>
 
   <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicJumpResults" style="display:none">
     <p class="command-palette__section-label">Jump to</p>

@@ -25,7 +25,16 @@
 #  index_rsvps_on_confirmation_token  (confirmation_token) UNIQUE
 #
 class Rsvp < ApplicationRecord
-  USER_REF_OPTIONS = %w[Teacher NASA GitHub AMD HackClub Friend].freeze
+  AMBASSADOR_REFERRAL_PREFIX = "a-".freeze
+  USER_REF_OPTIONS = [
+    "HackClub",
+    "NASA",
+    "AMD",
+    "GitHub",
+    "Linus Tech Tips",
+    "Teacher",
+    "Friend"
+  ].freeze
 
   has_paper_trail ignore: [ :ip_address, :user_agent ]
   has_secure_token :confirmation_token
@@ -40,7 +49,28 @@ class Rsvp < ApplicationRecord
   before_validation :downcase_email
   after_commit :deliver_signup_confirmation, on: :create
   after_commit :enqueue_geocode_job, on: :create
-  after_create_commit :broadcast_counter_update
+  after_commit :increment_signup_counter, on: :create, if: -> { Flipper.enabled?(:new_onboarding) }
+
+  class << self
+    def ambassador_referrals
+      where("LOWER(ref) LIKE ?", "#{AMBASSADOR_REFERRAL_PREFIX}%")
+    end
+  end
+
+  def ambassador_referral_payload
+    {
+      id: id,
+      email: email,
+      ref: ref,
+      user_ref: user_ref,
+      click_confirmed_at: click_confirmed_at,
+      reply_confirmed_at: reply_confirmed_at,
+      signup_confirmation_sent_at: signup_confirmation_sent_at,
+      synced_at: synced_at,
+      created_at: created_at,
+      updated_at: updated_at
+    }
+  end
 
   def deliver_signup_confirmation
     return if signup_confirmation_sent_at?
@@ -70,14 +100,7 @@ class Rsvp < ApplicationRecord
 
   def enqueue_geocode_job = RsvpGeocodeJob.perform_later(id)
 
-  def broadcast_counter_update
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "rsvp_counter",
-      target: "rsvp_counter",
-      partial: "landing/sections/rsvp_counter"
-    )
-  rescue StandardError => e
-    Rails.logger.warn("[Rsvp#broadcast_counter_update] #{e.class}: #{e.message}")
-    Sentry.capture_exception(e) if defined?(Sentry)
+  def increment_signup_counter
+    Rails.cache.increment("landing/signup_count", 1, expires_in: 30.seconds)
   end
 end

@@ -10,6 +10,7 @@
 @use "layout/container";
 
 // Components
+@use "components/app_loading";
 @use "components/alerts";
 @use "components/action_button";
 @use "components/special_action_button";
@@ -42,6 +43,7 @@
 
 @use "components/streamer_mode";
 @use "components/idv_setup_card";
+@use "components/settings-form";
 
 // Pages
 @use "pages/onboarding" as onboarding_pages;

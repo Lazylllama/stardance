@@ -6,6 +6,7 @@ class ApplicationController < ActionController::Base
   include Pundit::Authorization
   include Pagy::Method
   include Achievementable
+  include Trackable
 
   before_action :store_referral_code
   before_action :remember_page
@@ -17,6 +18,7 @@ class ApplicationController < ActionController::Base
   before_action :show_pending_achievement_notifications!
   before_action :apply_dev_override_ref
   before_action :allow_profiler
+  before_action :prepare_boot_splash
 
   # Track who makes changes in PaperTrail
   def user_for_paper_trail
@@ -107,6 +109,21 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def client_ip_address
+    request.headers["CF-Connecting-IP"].presence || request.remote_ip
+  end
+
+  def prepare_boot_splash
+    @show_boot_splash = false
+    return if controller_name == "landing"
+    return unless request.get? && request.format.html?
+    return if turbo_frame_request? || request.xhr?
+    return if cookies[:stardance_booted].present?
+
+    @show_boot_splash = true
+    cookies[:stardance_booted] = { value: "1", same_site: :lax } # session cookie (cleared when the browser closes)
+  end
+
   def store_referral_code
     return unless params[:ref].present? && params[:ref].length <= 64
 
@@ -146,13 +163,15 @@ class ApplicationController < ActionController::Base
       return
     end
 
-    @error_title = "Whoa there, explorer!"
-    @error_message = exception.message.presence || "You don't have the right ingredients to access this page."
-    @back_path = safe_referrer
+    render_not_authorized(exception)
+  end
+
+  def render_not_authorized(exception = nil)
+    message = exception&.message.presence || "You don't have permission to access this page."
 
     respond_to do |format|
-      format.html { render "errors/not_authorized", status: :forbidden }
-      format.json { render json: { error: @error_message }, status: :forbidden }
+      format.html { render "errors/not_authorized", status: :forbidden, layout: "application" }
+      format.json { render json: { error: message }, status: :forbidden }
     end
   end
 

@@ -4,10 +4,11 @@
 #
 #  id            :bigint           not null, primary key
 #  postable_type :string
+#  reposts_count :integer          default(0), not null
 #  created_at    :datetime         not null
 #  updated_at    :datetime         not null
 #  postable_id   :bigint
-#  project_id    :bigint           not null
+#  project_id    :bigint
 #  user_id       :bigint
 #
 # Indexes
@@ -22,12 +23,14 @@
 #  fk_rails_...  (user_id => users.id)
 #
 class Post < ApplicationRecord
+    include Gorse::SyncablePost
+
     has_paper_trail
 
     # Eager load all Post::* classes so Postable.types is populated
     Dir[Rails.root.join("app/models/post/*.rb")].each { |f| require_dependency f }
 
-    belongs_to :project, touch: true
+    belongs_to :project, optional: true, touch: true
     # optional because it can be a system post – achievements, milestones, well-done/magic happening, etc –
     # integeration – git remotes – or a user post
     belongs_to :user, optional: true
@@ -35,11 +38,14 @@ class Post < ApplicationRecord
     delegated_type :postable, types: Postable.types
 
     validates :postable_id, presence: true, if: :postable_type?
+    validates :project, presence: true, unless: :repost?
 
     after_commit :invalidate_project_time_cache, on: [ :create, :destroy ]
     after_commit :increment_devlogs_count, on: :create
     after_commit :decrement_devlogs_count, on: :destroy
     after_commit :update_project_duration_seconds, on: [ :create, :destroy ]
+    after_commit :enqueue_postable_semantic_search_index, on: %i[create update]
+    after_commit :enqueue_postable_semantic_search_delete, on: :destroy
 
     Postable.types.each do |type_class|
       # These are automatically generated scopes for each postable type:
@@ -87,6 +93,23 @@ class Post < ApplicationRecord
       end
     end
 
+    def repost?
+      postable_type == "Post::Repost"
+    end
+
+    def visible_repost_original_for?(viewer)
+      if repost?
+        original_post = postable&.original_post
+
+        original_post&.postable_type == "Post::Devlog" &&
+          original_post.postable.present? &&
+          !original_post.postable.deleted? &&
+          Post.visible_to(viewer).where(id: original_post.id).exists?
+      else
+        false
+      end
+    end
+
     # For multiple types, use .with to create a CTE with UNION ALL:
     #   Post.with(
     #     available_posts: [
@@ -120,5 +143,19 @@ class Post < ApplicationRecord
       return unless postable_type == "Post::Devlog"
 
       project&.recalculate_duration_seconds!
+    end
+
+    def enqueue_postable_semantic_search_index
+      return unless %w[Post::Devlog Post::ShipEvent].include?(postable_type)
+      return unless postable_id
+
+      SemanticSearch::IndexRecordJob.perform_later(postable_type, postable_id)
+    end
+
+    def enqueue_postable_semantic_search_delete
+      type = { "Post::Devlog" => "devlog", "Post::ShipEvent" => "ship" }[postable_type]
+      return unless type && postable_id
+
+      SemanticSearch::DeleteRecordJob.perform_later(type, postable_id)
     end
 end

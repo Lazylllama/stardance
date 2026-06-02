@@ -24,11 +24,27 @@
     box-shadow: 0 24px 60px var(--color-shadow-deep);
     max-width: 520px;
     width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
     color: var(--color-space-text);
     position: fixed;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--color-overlay-light);
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background: var(--color-border-input);
+    }
 
     &::backdrop {
       background: var(--color-backdrop);
@@ -375,6 +391,31 @@ button.sidebar__nav-link {
   height: 1.25rem;
   color: currentColor;
   fill: currentColor;
+}
+
+.sidebar__guest-cta {
+  padding: var(--space-xs) var(--space-s);
+}
+
+.sidebar__guest-cta-btn {
+  display: block;
+  width: 100%;
+  padding: var(--space-xs) var(--space-m);
+  border-radius: 999px;
+  background: var(--color-brand-highlight);
+  color: var(--color-set-1-bg);
+  font-family: var(--font-family-text);
+  font-size: var(--font-size-m);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    filter 160ms ease;
+
+  &:hover {
+    background: var(--color-brand-highlight-secondary);
+  }
 }
 
 @media (max-width: 1500px) {

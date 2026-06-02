@@ -62,13 +62,6 @@ production:
     concurrency: 1
     description: "Weekly refresh of verification status for all users with linked identities"
 
-  cache_carousel_prizes:
-    class: Cache::CarouselPrizesJob
-    args: [{ force: true }]
-    schedule: every hour
-    concurrency: 1
-    description: "Refresh carousel prizes cache for landing page"
-
   cache_sitemap:
     class: Cache::SitemapJob
     args: [{ force: true }]
@@ -117,6 +110,12 @@ production:
     schedule: every day at 7pm Europe/London
     concurrency: 1
     description: "Send daily shop order summary to Slack with backlog, assignments, and hang times"
+
+  shop_retry_free_sticker_orders:
+    class: Shop::RetryFreeStickerOrdersJob
+    schedule: every day at 6am UTC
+    concurrency: 1
+    description: "Retry fulfillment for free sticker orders stuck in pending"
 
   shop_calculate_fulfillment_payouts:
     class: Shop::CalculateFulfillmentPayoutsJob

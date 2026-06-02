@@ -1,4 +1,7 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
+<% content_for :stylesheets do %>
+  <%= stylesheet_link_tag "admin", "data-turbo-track": "reload" %>
+<% end %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>">
   <!-- Header Section -->
@@ -331,9 +334,9 @@
 
               <div class="devlog-git-section">
                 <div class="git-label">Git Activity</div>
-                <div class="chart-placeholder small">
-                  <div class="placeholder-text">Placeholder for Commit Chart</div>
-                </div>
+                <%= Certification::CommitGraphBuilder.new(
+                      @devlog_commits[devlog_review.post_devlog_id] || []
+                    ).svg %>
               </div>
             </div>
 
@@ -369,6 +372,9 @@
                          min="0"
                          autocomplete="off">
                   <span class="minutes-label">minutes</span>
+                  <span class="hours-display" data-certification--ysws--devlog-review-target="hoursDisplay">
+                    (<%= ((devlog_review.approved_minutes || devlog_review.original_minutes || 0) / 60.0).round(1) %>h)
+                  </span>
                 </div>
                 <div class="quick-adjust-buttons">
                   <button class="adjust-btn"

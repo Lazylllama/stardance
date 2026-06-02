@@ -79,6 +79,12 @@ application.register("customs-warning", CustomsWarningController);
 import DecisionTreeController from "./decision_tree_controller";
 application.register("decision-tree", DecisionTreeController);
 
+import DevlogEditController from "./devlog_edit_controller";
+application.register("devlog-edit", DevlogEditController);
+
+import DiscoverRailSearchController from "./discover_rail_search_controller";
+application.register("discover-rail-search", DiscoverRailSearchController);
+
 import DismissableController from "./dismissable_controller";
 application.register("dismissable", DismissableController);
 
@@ -87,6 +93,9 @@ application.register("emoji-picker", EmojiPickerController);
 
 import FallingStarController from "./falling_star_controller";
 application.register("falling-star", FallingStarController);
+
+import FeedEngagementController from "./feed_engagement_controller";
+application.register("feed-engagement", FeedEngagementController);
 
 import HorizontalScrollController from "./horizontal_scroll_controller";
 application.register("horizontal-scroll", HorizontalScrollController);
@@ -151,6 +160,9 @@ application.register("parallax", ParallaxController);
 import PrizeFloatController from "./prize_float_controller";
 application.register("prize-float", PrizeFloatController);
 
+import PostMenuController from "./post_menu_controller";
+application.register("post-menu", PostMenuController);
+
 import ProfileEditController from "./profile_edit_controller";
 application.register("profile-edit", ProfileEditController);
 
@@ -189,9 +201,6 @@ application.register("searchable-select", SearchableSelectController);
 
 import ShopController from "./shop_controller";
 application.register("shop", ShopController);
-
-import ShopGoalsController from "./shop_goals_controller";
-application.register("shop-goals", ShopGoalsController);
 
 import ShopWishlistController from "./shop_wishlist_controller";
 application.register("shop-wishlist", ShopWishlistController);

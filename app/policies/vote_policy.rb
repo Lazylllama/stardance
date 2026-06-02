@@ -1,14 +1,14 @@
 class VotePolicy < ApplicationPolicy
   def index?
-    true
+    user_can_vote?
   end
 
   def new?
-    true
+    user.present?
   end
 
   def create?
-    true
+    user_can_vote?
   end
 
   private

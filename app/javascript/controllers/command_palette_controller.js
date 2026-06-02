@@ -1,18 +1,20 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item", "dynamicJumpResults", "dynamicJumpList", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList"];
-  static values = { userSearchUrl: String, projectSearchUrl: String, missionSearchUrl: String };
+  static targets = ["input", "item", "dynamicJumpResults", "dynamicJumpList", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList", "input", "item", "results"];
+  static values = { userSearchUrl: String, projectSearchUrl: String, missionSearchUrl: String, searchUrl: String  };
 
   connect() {
     this._activeIndex = -1;
     this._searchTimer = null;
+    this._initialResults = this.resultsTarget.innerHTML;
     this._boundGlobalKey = this._globalKey.bind(this);
     document.addEventListener("keydown", this._boundGlobalKey);
   }
 
   disconnect() {
     document.removeEventListener("keydown", this._boundGlobalKey);
+    clearTimeout(this._searchTimer);
   }
 
   _globalKey(event) {
@@ -35,6 +37,7 @@ export default class extends Controller {
     this._clearDynamicProjects();
     this._clearDynamicMissions();
     this.filter();
+    this._restoreInitialResults();
   }
 
   handleCancel(event) {
@@ -80,6 +83,17 @@ export default class extends Controller {
       this._clearDynamic();
       this._clearDynamicMissions();
     }
+    clearTimeout(this._searchTimer);
+
+    if (query.length > 0 && this.hasSearchUrlValue) {
+      this.resultsTarget.innerHTML =
+        '<p class="command-palette__empty">Searching...</p>';
+      this._searchTimer = setTimeout(() => this._loadResults(query), 180);
+      return;
+    }
+
+    this._restoreInitialResults();
+
     const list = this.itemTargets[0]?.parentElement;
     if (!list) return;
 
@@ -330,6 +344,20 @@ export default class extends Controller {
     } else {
       window.Turbo.visit(path);
     }
+  }
+
+  _loadResults(query) {
+    const url = new URL(this.searchUrlValue, window.location.origin);
+    url.searchParams.set("q", query);
+    url.searchParams.set("surface", "command_palette");
+    this.resultsTarget.src = url.toString();
+  }
+
+  _restoreInitialResults() {
+    this.resultsTarget.removeAttribute("src");
+    this.resultsTarget.innerHTML = this._initialResults;
+    this._activeIndex = -1;
+    this._clearActive();
   }
 
   _postAction(path) {

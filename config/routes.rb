@@ -9,14 +9,17 @@
 #                                      rsvps POST   /rsvps(.:format)                                                                                  rsvps#create
 #                               confirm_rsvp GET    /rsvps/confirm/:token(.:format)                                                                   rsvps#confirm
 #                                    tic_tac GET    /tic_tac(.:format)                                                                                rsvps#tic_tac {format: :text}
+#                api_v1_ambassador_referrals GET    /api/v1/ambassador_referrals(.:format)                                                            api/v1/ambassador_referrals#index {format: :json}
+#                 api_v1_ambassador_referral GET    /api/v1/ambassador_referrals/:id(.:format)                                                        api/v1/ambassador_referrals#show {format: :json}
 #                                       shop GET    /shop(.:format)                                                                                   shop/items#index
-#                                 shop_item GET    /shop/items/:id(.:format)                                                                         shop/items#show
-#                               shop_orders GET    /shop/orders(.:format)                                                                            shop/orders#index
+#                                  shop_item GET    /shop/items/:id(.:format)                                                                         shop/items#show
+#                          cancel_shop_order DELETE /shop/orders/:id/cancel(.:format)                                                                 shop/orders#cancel
+#                                shop_orders GET    /shop/orders(.:format)                                                                            shop/orders#index
 #                                            POST   /shop/orders(.:format)                                                                            shop/orders#create
-#                        cancel_shop_order DELETE   /shop/orders/:id/cancel(.:format)                                                                 shop/orders#cancel
-#                               shop_region PATCH   /shop/region(.:format)                                                                            shop/regions#update
+#                                shop_region PATCH  /shop/region(.:format)                                                                            shop/regions#update
+#                                            PUT    /shop/region(.:format)                                                                            shop/regions#update
 #                              shop_category GET    /shop/category/:slug(.:format)                                                                    shop/items#category
-#                          shop_suggestions POST    /shop/suggestions(.:format)                                                                       shop/suggestions#create
+#                           shop_suggestions POST   /shop/suggestions(.:format)                                                                       shop/suggestions#create
 #                        review_report_token GET    /report-reviews/review/:token(.:format)                                                           report_reviews#review
 #                       dismiss_report_token GET    /report-reviews/dismiss/:token(.:format)                                                          report_reviews#dismiss
 #                                   new_rate GET    /rate/new(.:format)                                                                               votes#new
@@ -38,6 +41,7 @@
 #                                  dev_login GET    /dev_login/:id(.:format)                                                                          sessions#dev_login
 #                             oauth_callback GET    /oauth/callback(.:format)                                                                         sessions#create
 #                                       home GET    /home(.:format)                                                                                   home#index
+#                                  home_feed GET    /home/feed(.:format)                                                                              home/feeds#show
 #                                leaderboard GET    /leaderboard(.:format)                                                                            leaderboard#index
 #                                     events GET    /events(.:format)                                                                                 events#index
 #                                 my_balance GET    /my/balance(.:format)                                                                             my/balances#show
@@ -63,8 +67,13 @@
 #                       onboarding_interests GET    /onboarding/interests(.:format)                                                                   onboarding/wizard#interests
 #                                            POST   /onboarding/interests(.:format)                                                                   onboarding/wizard#submit_interests
 #                onboarding_interests_result GET    /onboarding/interests_result(.:format)                                                            onboarding/wizard#interests_result
+#                        onboarding_referral GET    /onboarding/referral(.:format)                                                                    onboarding/wizard#referral
+#                                            POST   /onboarding/referral(.:format)                                                                    onboarding/wizard#submit_referral
 #                            onboarding_name GET    /onboarding/name(.:format)                                                                        onboarding/wizard#name
 #                                            POST   /onboarding/name(.:format)                                                                        onboarding/wizard#submit_name
+#                     onboarding_guest_email GET    /onboarding/guest_email(.:format)                                                                 onboarding/wizard#guest_email
+#                 onboarding_guest_email_yes POST   /onboarding/guest_email_yes(.:format)                                                             onboarding/wizard#guest_email_yes
+#                  onboarding_guest_email_no POST   /onboarding/guest_email_no(.:format)                                                              onboarding/wizard#guest_email_no
 #                                 admin_root GET    /admin(.:format)                                                                                  admin/application#index
 #                               admin_blazer        /admin/blazer                                                                                     Blazer::Engine
 #                                                   /admin/flipper                                                                                    Flipper::UI
@@ -203,13 +212,12 @@
 #               preview_time_project_devlogs GET    /projects/:project_id/devlogs/preview_time(.:format)                                              projects/devlogs#preview_time
 #                            project_devlogs POST   /projects/:project_id/devlogs(.:format)                                                           projects/devlogs#create
 #                        edit_project_devlog GET    /projects/:project_id/devlogs/:id/edit(.:format)                                                  projects/devlogs#edit
-#                             project_devlog PATCH  /projects/:project_id/devlogs/:id(.:format)                                                       projects/devlogs#update
+#                             project_devlog GET    /projects/:project_id/devlogs/:id(.:format)                                                       projects/devlogs#show
+#                                            PATCH  /projects/:project_id/devlogs/:id(.:format)                                                       projects/devlogs#update
 #                                            PUT    /projects/:project_id/devlogs/:id(.:format)                                                       projects/devlogs#update
 #                                            DELETE /projects/:project_id/devlogs/:id(.:format)                                                       projects/devlogs#destroy
 #                            project_reports POST   /projects/:project_id/reports(.:format)                                                           projects/reports#create
 #                           project_og_image GET    /projects/:project_id/og_image(.:format)                                                          projects/og_images#show {format: :png}
-#                      compose_project_ships GET    /projects/:project_id/ships/compose(.:format)                                                     projects/ships#compose
-#                          new_project_ships GET    /projects/:project_id/ships/new(.:format)                                                         projects/ships#new
 #                              project_ships POST   /projects/:project_id/ships(.:format)                                                             projects/ships#create
 #                            project_mission DELETE /projects/:project_id/mission(.:format)                                                           projects/missions#destroy
 #                                            POST   /projects/:project_id/mission(.:format)                                                           projects/missions#create
@@ -227,6 +235,8 @@
 #                                            PATCH  /projects/:id(.:format)                                                                           projects#update
 #                                            PUT    /projects/:id(.:format)                                                                           projects#update
 #                                            DELETE /projects/:id(.:format)                                                                           projects#destroy
+#                                post_repost DELETE /posts/:post_id/repost(.:format)                                                                  posts/reposts#destroy
+#                                            POST   /posts/:post_id/repost(.:format)                                                                  posts/reposts#create
 #                                devlog_like DELETE /devlogs/:devlog_id/like(.:format)                                                                likes#destroy
 #                                            POST   /devlogs/:devlog_id/like(.:format)                                                                likes#create
 #                            devlog_comments POST   /devlogs/:devlog_id/comments(.:format)                                                            comments#create
@@ -251,6 +261,7 @@
 #                      username_availability GET    /username_availability(.:format)                                                                  users/username_availabilities#show
 #                               search_users GET    /search/users(.:format)                                                                           search#users
 #                            search_projects GET    /search/projects(.:format)                                                                        search#projects
+#                              global_search GET    /search/global(.:format)                                                                          search#global
 #                                        edu GET    /edu(.:format)                                                                                    landing#edu
 #                                     guides GET    /guides(.:format)                                                                                 guides#index
 #                                      guide GET    /guides/:id(.:format)                                                                             guides#show
@@ -265,6 +276,7 @@
 #                        mission_submissions GET    /mission_submissions(.:format)                                                                    mission_submissions#index
 #                         mission_submission GET    /mission_submissions/:id(.:format)                                                                mission_submissions#show
 #                                                   /400(.:format)                                                                                    errors#bad_request
+#                                                   /403(.:format)                                                                                    errors#not_authorized
 #                                                   /404(.:format)                                                                                    errors#not_found
 #                                                   /406(.:format)                                                                                    errors#not_acceptable
 #                                                   /422(.:format)                                                                                    errors#unprocessable_entity
@@ -415,7 +427,8 @@ Rails.application.routes.draw do
   get "og/:page", to: "og_images#show", as: :og_image, defaults: { format: :png }
   # Landing
   root "landing#index"
-  # get "marketing", to: "landing#marketing"
+  get "landing/signup_count", to: "landing#signup_count", as: :landing_signup_count
+  get "landing/rsvp_count", to: "landing#rsvp_count", as: :landing_rsvp_count
 
   # RSVPs
   resources :rsvps, only: [ :create ] do
@@ -423,6 +436,12 @@ Rails.application.routes.draw do
   end
   get "rsvps/confirm/:token", to: "rsvps#confirm", as: :confirm_rsvp
   get "tic_tac", to: "rsvps#tic_tac", as: :tic_tac, defaults: { format: :text }
+
+  namespace :api, defaults: { format: :json } do
+    namespace :v1 do
+      resources :ambassador_referrals, only: [ :index, :show ]
+    end
+  end
 
   # Shop
   get "shop", to: "shop/items#index", as: :shop
@@ -436,6 +455,8 @@ Rails.application.routes.draw do
     resource :region, only: [ :update ]
     get "category/:slug", to: "items#category", as: :category
     resources :suggestions, only: [ :create ]
+    post "wishlists/:id", to: "wishlists#create", as: :create_wishlist
+    delete "wishlists/:id", to: "wishlists#destroy", as: :wishlist
   end
 
   # Report Reviews
@@ -453,8 +474,6 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
 
-  # Test error page for Sentry
-  get "test_error" => "debug#error" unless Rails.env.production?
 
   # Letter opener web for development email preview
   if Rails.env.development?
@@ -484,6 +503,10 @@ Rails.application.routes.draw do
 
   # Home
   get "home", to: "home#index"
+  resources :feed_events, only: [ :create ]
+  namespace :home do
+    resource :feed, only: [ :show ]
+  end
 
   # Leaderboard
   get "leaderboard", to: "leaderboard#index"
@@ -524,6 +547,8 @@ Rails.application.routes.draw do
     get  :interests,                 to: "wizard#interests"
     post :interests,                 to: "wizard#submit_interests"
     get  :interests_result,          to: "wizard#interests_result"
+    get  :referral,                  to: "wizard#referral"
+    post :referral,                  to: "wizard#submit_referral"
     get  :name,                      to: "wizard#name"
     post :name,                      to: "wizard#submit_name"
     get  :guest_email,               to: "wizard#guest_email"
@@ -656,6 +681,7 @@ Rails.application.routes.draw do
       # Mission::ShopUnlock model namespace. `controller:` is set explicitly
       # because `scope module: :missions` doesn't reliably propagate inside
       # a parent `resources do ... end` block.
+      resource  :language_rename, only: [ :create, :destroy ],         controller: "missions/language_renames"
       resource  :guide_paste,    only: [ :create ],                  controller: "missions/guide_pastes"
       resource  :guide_preview,  only: [ :create ],                  controller: "missions/guide_previews"
       resources :memberships,    only: [ :create, :update, :destroy ], controller: "missions/memberships"
@@ -677,8 +703,11 @@ Rails.application.routes.draw do
 
       resources :devlog_reviews, only: [ :update ]
 
+      get "devlogs/:devlog_id/commits", to: "devlog_commits#index", as: "devlog_commits"
+
       get "review", to: "ysws#index", as: "ysws_reviews"
       get "review/:id", to: "ysws#show", as: "ysws_review"
+      get "review/:id/commits", to: "ysws#commits", as: "ysws_commits"
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
     end
   end
@@ -704,7 +733,7 @@ Rails.application.routes.draw do
   resources :projects, shallow: true, except: [ :index ] do
     post :add_test_time, on: :member
     resources :memberships, only: [ :create, :destroy ], module: :projects
-    resources :devlogs, only: %i[create edit update destroy], module: :projects, shallow: false do
+    resources :devlogs, only: %i[show create edit update destroy], module: :projects, shallow: false do
       member do
         get :versions
       end
@@ -729,6 +758,10 @@ Rails.application.routes.draw do
   end
 
   # Devlog likes and comments
+  resources :posts, only: [] do
+    resource :repost, only: [ :create, :destroy ], module: :posts
+  end
+
   resources :devlogs, only: [] do
     resource :like, only: [ :create, :destroy ]
     resources :comments, only: [ :create, :destroy ]
@@ -759,6 +792,7 @@ Rails.application.routes.draw do
   # Autocomplete search endpoints (used by the bio editor and elsewhere).
   get "search/users",    to: "search#users",    as: :search_users
   get "search/projects", to: "search#projects", as: :search_projects
+  get "search/global",   to: "search#global",   as: :global_search
 
   get "edu", to: "landing#edu", as: :edu
 
@@ -793,6 +827,7 @@ Rails.application.routes.draw do
   # every verb. Declared before the "/:ref" catch so numeric codes don't fall
   # through to landing#index.
   match "/400", to: "errors#bad_request",           via: :all
+  match "/403", to: "errors#not_authorized",        via: :all
   match "/404", to: "errors#not_found",             via: :all
   match "/406", to: "errors#not_acceptable",        via: :all
   match "/422", to: "errors#unprocessable_entity",  via: :all

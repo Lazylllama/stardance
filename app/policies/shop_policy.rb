@@ -1,17 +1,21 @@
 class ShopPolicy < ApplicationPolicy
-  def my_orders?
+  def index?
+    true
+  end
+
+  def show?
+    true
+  end
+
+  def create?
     signed_in_any?
   end
 
-  def cancel_order?
+  def cancel?
     signed_in_any?
   end
 
-  def order?
-    signed_in_any?
-  end
-
-  def create_order?
+  def destroy?
     signed_in_any?
   end
 end

@@ -49,8 +49,8 @@ turbo-frame#project_hero {
 // Red "still to complete" highlight for the banner — drawn inside the rounded
 // corners so it isn't clipped by `overflow: hidden`.
 .project-show__banner--incomplete {
-  outline: 2px solid var(--color-brand-salmon);
-  outline-offset: -2px;
+  outline: 4px solid var(--color-brand-salmon);
+  outline-offset: -4px;
 }
 
 .project-show__banner-image {
@@ -85,6 +85,27 @@ turbo-frame#project_hero {
 .project-show__back-icon {
   width: 30px;
   height: 30px;
+}
+
+.project-show__banner--empty .project-show__banner-image {
+  opacity: 0;
+}
+
+.project-show__banner-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 2px dashed var(--color-space-border);
+  border-radius: var(--profile-radius);
+}
+
+.project-show__banner-placeholder-text {
+  color: var(--color-space-text-muted);
+  font-size: var(--font-size-l);
+  font-weight: 600;
 }
 
 .project-show__banner-upload {
@@ -836,28 +857,19 @@ turbo-frame#project_hero {
 // Latest ship card — set 4 (the canonical "highlighted container" surface
 // per branding §1.1) with a cream highlight border for added visual lift.
 .project-show__latest-ship {
-  position: relative;
   background: var(--color-set-4-bg);
-  border-radius: var(--profile-radius);
-  box-shadow: 0 0 0 2px var(--color-brand-highlight);
-  padding: 12px 32px 24px 24px;
+  border-color: var(--color-brand-highlight);
+  box-shadow: none;
 }
 
 .project-show__latest-ship-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-left: 40px;
   color: var(--color-space-text);
-  // Branding §2.1 Label scale — small caption above the heading.
-  font-size: 1rem;
   opacity: 0.75;
-  margin-bottom: 4px;
 }
 
 .project-show__latest-ship-icon {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   color: currentColor;
 }
 
@@ -879,69 +891,6 @@ turbo-frame#project_hero {
   }
 }
 
-.project-show__latest-ship-body {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.project-show__latest-ship-avatar {
-  flex-shrink: 0;
-}
-
-.project-show__avatar--lg {
-  width: 57px;
-  height: 57px;
-  border: none;
-}
-
-.project-show__latest-ship-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.project-show__latest-ship-heading {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 1.1875rem; // 19px
-  color: var(--color-space-text);
-  line-height: 1;
-}
-
-.project-show__latest-ship-author {
-  font-weight: 700;
-  color: inherit;
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.project-show__latest-ship-on {
-  font-weight: 400;
-}
-
-.project-show__latest-ship-project {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-
-  &:hover {
-    opacity: 0.85;
-  }
-}
-
-.project-show__latest-ship-time {
-  opacity: 0.5;
-}
-
 .project-show__latest-ship-mission-link {
   color: var(--color-brand-yellow);
   text-decoration: underline;
@@ -953,16 +902,13 @@ turbo-frame#project_hero {
 }
 
 .project-show__latest-ship-text {
-  margin: 0;
-  font-size: 1.1875rem; // 19px
-  line-height: 1.3;
-  color: var(--color-space-text);
+  p {
+    margin: 0;
+  }
 }
 
 .project-show__latest-ship-stats {
   list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   align-items: center;
   gap: var(--space-l);
@@ -1022,26 +968,33 @@ turbo-frame#project_hero {
     color: var(--color-brand-highlight);
     border-color: var(--color-brand-highlight);
   }
+}
 
-  // Primary — light-bg state ladder: white → highlight-secondary → highlight.
-  &--primary {
-    background: var(--color-space-text);
-    border-color: var(--color-space-text);
-    color: var(--color-set-1-bg);
-  }
+// Primary — light-bg state ladder: white → highlight-secondary → highlight.
+.project-show__latest-ship-btn.project-show__latest-ship-btn--primary {
+  background: var(--color-space-text);
+  border-color: var(--color-space-text);
+  color: var(--color-set-1-bg);
+}
 
-  &--primary:hover:not(:disabled):not([aria-disabled="true"]),
-  &--primary:focus-visible:not(:disabled):not([aria-disabled="true"]) {
-    background: var(--color-brand-highlight-secondary);
-    border-color: var(--color-brand-highlight-secondary);
-    outline: none;
-  }
+.project-show__latest-ship-btn.project-show__latest-ship-btn--primary:hover:not(
+    :disabled
+  ):not([aria-disabled="true"]),
+.project-show__latest-ship-btn.project-show__latest-ship-btn--primary:focus-visible:not(
+    :disabled
+  ):not([aria-disabled="true"]) {
+  background: var(--color-brand-highlight-secondary);
+  border-color: var(--color-brand-highlight-secondary);
+  color: var(--color-set-1-bg);
+  outline: none;
+}
 
-  &--primary:active:not(:disabled):not([aria-disabled="true"]) {
-    background: var(--color-brand-highlight);
-    border-color: var(--color-brand-highlight);
-    color: var(--color-set-1-bg);
-  }
+.project-show__latest-ship-btn.project-show__latest-ship-btn--primary:active:not(
+    :disabled
+  ):not([aria-disabled="true"]) {
+  background: var(--color-brand-highlight);
+  border-color: var(--color-brand-highlight);
+  color: var(--color-set-1-bg);
 }
 
 // Devlog feed

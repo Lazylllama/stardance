@@ -13,35 +13,14 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     @post = Post.create!(project: @other_project, user: users(:two), postable: @devlog)
   end
 
-  test "home page loads for signed in user" do
+  test "home page loads the shell and lazy feed frame for signed in user" do
     sign_in @user
 
     get home_path
 
     assert_response :success
     assert_select ".feed-composer"
-    assert_select ".feed-post-card"
-    assert_select ".feed-shelf"
-  end
-
-  test "home feed excludes deleted devlogs for normal users" do
-    @devlog.update!(deleted_at: Time.current)
-    sign_in @user
-
-    get home_path
-
-    assert_response :success
-    assert_select ".feed-post-card", count: 0
-    assert_no_match "Home feed update", response.body
-  end
-
-  test "recommended projects exclude current user's projects" do
-    sign_in @user
-
-    get home_path
-
-    assert_response :success
-    assert_no_match @project.title, response.body.scan(/project-shelf-card.*?<\/a>/m).join
+    assert_select "turbo-frame#home_feed[src=?]", home_feed_path
   end
 
   private

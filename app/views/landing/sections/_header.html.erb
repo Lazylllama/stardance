@@ -10,9 +10,4 @@
     <%= image_tag image_url("landing/header/github-logo.png"), loading: "eager", alt: "GitHub", class: "landing-header__github-logo" %>
   </div>
 
-  <% unless current_user %>
-    <%= form_tag "/auth/hack_club", method: :post, data: { turbo: false }, class: "landing-header__login-form" do %>
-      <button type="submit" class="landing-header__login-btn">Log in</button>
-    <% end %>
-  <% end %>
 </header>

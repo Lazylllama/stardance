@@ -3,6 +3,7 @@ class UsersController < ApplicationController
   before_action :authorize_user, only: %i[update followers following]
 
   ALLOWED_TABS = %w[feed devlogs replies projects].freeze
+  ACTIVITY_LIMIT = 20
 
   def show
     if profile_hidden_from_viewer?
@@ -84,21 +85,29 @@ class UsersController < ApplicationController
   end
 
   def profile_activity
-    scope = Post.joins(:project)
-                .merge(Project.not_deleted)
+    scope = Post.left_outer_joins(:project)
+                .where("projects.deleted_at IS NULL OR posts.postable_type = ?", "Post::Repost")
                 .visible_to(current_user)
                 .where(user_id: @user.id)
-                .preload(:project, :user, postable: [ { attachments_attachments: :blob } ])
+                .preload(:project, :user, :postable)
                 .order(created_at: :desc)
 
     scope = hide_deleted_devlogs(scope) unless policy(@user).view_deleted_devlogs?
+    scope = hide_deleted_reposts(scope)
     scope = hide_rejected_ships(scope)
-    scope
+
+    @pagy, posts = pagy(:offset, scope, limit: ACTIVITY_LIMIT)
+    posts.select { |post| !post.repost? || post.visible_repost_original_for?(current_user) }
   end
 
   def hide_deleted_devlogs(scope)
     deleted_ids = Post::Devlog.unscoped.deleted.pluck(:id)
     scope.where.not(postable_type: "Post::Devlog", postable_id: deleted_ids)
+  end
+
+  def hide_deleted_reposts(scope)
+    deleted_ids = Post::Repost.unscoped.deleted.pluck(:id)
+    scope.where.not(postable_type: "Post::Repost", postable_id: deleted_ids)
   end
 
   def hide_rejected_ships(scope)

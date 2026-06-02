@@ -13,6 +13,18 @@ module OnboardingResumable
 
   private
 
+  def resume_or_expire_onboarding!
+    user = current_user
+    return unless onboarding_in_progress?(user)
+
+    if onboarding_fresh?(user)
+      redirect_to onboarding_resume_path(user)
+    else
+      reset_session
+      redirect_to root_path
+    end
+  end
+
   def onboarding_in_progress?(user)
     return false unless Flipper.enabled?(:new_onboarding)
 
@@ -26,6 +38,7 @@ module OnboardingResumable
 
   # The first wizard step the user hasn't answered yet.
   def onboarding_resume_path(user)
+    return onboarding_age_gate_path   if user.age_blocked?
     return onboarding_birthday_path   if user.age_attestation.blank?
     return onboarding_experience_path if user.experience_level.blank?
     return onboarding_interests_path  if user.interests.blank?

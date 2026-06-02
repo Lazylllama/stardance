@@ -1,7 +1,7 @@
 class VotesController < ApplicationController
   def new
     authorize Vote
-    load_assignment
+    @has_shipped = current_user.shipped_projects.exists?
   end
 
   def create

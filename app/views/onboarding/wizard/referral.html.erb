@@ -1,0 +1,59 @@
+<% content_for :title, "How'd you hear about us?" %>
+<main class="onboarding-screen onboarding-screen--referral" data-controller="onboarding-transition">
+  <%= render Onboarding::ProgressBarComponent.new(step: :referral) %>
+
+  <div class="onboarding-screen__content">
+    <h1 class="onboarding-screen__title">How'd you hear about us?</h1>
+    <p class="onboarding-screen__subhead">No wrong answer &mdash; it just helps us know where folks are finding Stardance.</p>
+
+    <% suggested = @suggested_user_ref %>
+    <% suggested_other = (suggested.present? && User::USER_REF_OPTIONS.exclude?(suggested)) ? suggested : nil %>
+    <%= form_with url: onboarding_referral_path, method: :post,
+                   data: { controller: "user-ref-modal" },
+                   class: "onboarding-referral__form" do %>
+      <div class="onboarding-referral__options">
+        <% User::USER_REF_OPTIONS.each do |opt| %>
+          <label class="onboarding-referral__option">
+            <%= radio_button_tag :user_ref, opt, suggested == opt,
+                                  class: "onboarding-referral__radio",
+                                  data: { action: "change->user-ref-modal#toggleOther" } %>
+            <span class="onboarding-referral__option-label"><%= opt == "HackClub" ? "Hack Club" : opt %></span>
+          </label>
+        <% end %>
+        <label class="onboarding-referral__option">
+          <%= radio_button_tag :user_ref, "Other", suggested_other.present?,
+                                class: "onboarding-referral__radio",
+                                data: { action: "change->user-ref-modal#toggleOther" } %>
+          <span class="onboarding-referral__option-label">Other</span>
+        </label>
+      </div>
+
+      <div class="onboarding-referral__other" data-user-ref-modal-target="otherWrap" <%= "hidden" if suggested_other.blank? %>>
+        <%= text_field_tag :user_ref_other, suggested_other,
+                            placeholder: "Tell us where...",
+                            class: "onboarding-referral__other-input",
+                            autocomplete: "off",
+                            maxlength: 100,
+                            data: { user_ref_modal_target: "otherInput" } %>
+      </div>
+
+      <div class="onboarding-referral__actions">
+        <%= render ActionButtonComponent.new(
+              text: "Skip",
+              variant: :secondary,
+              size: :large,
+              href: onboarding_name_path,
+              data: { action: "click->onboarding-transition#leave" }
+            ) %>
+        <%= render ActionButtonComponent.new(
+              text: "Next",
+              variant: :primary,
+              size: :large,
+              type: :submit,
+              icon: "icons/right-arrow.svg",
+              data: { action: "click->onboarding-transition#press" }
+            ) %>
+      </div>
+    <% end %>
+  </div>
+</main>

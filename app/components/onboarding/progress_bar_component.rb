@@ -1,6 +1,6 @@
 module Onboarding
   class ProgressBarComponent < ViewComponent::Base
-    STEPS = %i[birthday experience experience_result interests interests_result name done].freeze
+    STEPS = %i[birthday experience experience_result interests interests_result referral name done].freeze
     STEP_FRACTIONS = STEPS.each_with_index.to_h { |slug, i| [ slug, (i + 1).to_f / STEPS.size ] }.freeze
 
     # Steps prior to the progress bar's first frame; back from birthday lands here.

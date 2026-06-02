@@ -1,0 +1,9 @@
+<% if @pagy.page > 1 %>
+  <%= turbo_frame_tag "home_feed_page_#{@pagy.page}", target: "_top", class: "feed-home__frame" do %>
+    <%= render "home/feed_pages/feed_page" %>
+  <% end %>
+<% else %>
+  <%= turbo_frame_tag "home_feed", target: "_top", class: "feed-home__frame" do %>
+    <%= render "home/feed_pages/feed_page" %>
+  <% end %>
+<% end %>

@@ -1,13 +1,15 @@
 <% if enabled? %>
   <section class="feed-composer"
-           aria-label="Create a devlog"
+           aria-label="<%= aria_label %>"
            data-controller="composer emoji-picker"
            data-composer-target="dropZone"
+           data-composer-simple-mode-value="<%= simple_mode? %>"
            data-composer-max-files-value="<%= Post::Devlog::MAX_ATTACHMENTS %>"
            data-composer-preview-time-url-value="<%= preview_time_url %>"
            data-composer-hackatime-linked-value="<%= hackatime_linked? %>"
-           data-action="drop->composer#drop dragover->composer#dragover dragleave->composer#dragleave">
-    <div class="feed-composer__chips" aria-label="Posting project">
+           data-action="<%= "drop->composer#drop dragover->composer#dragover dragleave->composer#dragleave" if show_attachments? %>">
+    <% if show_project_chips? %>
+      <div class="feed-composer__chips" aria-label="Posting project">
       <% projects.each do |project| %>
         <% selected = project == selected_project %>
         <%= link_to project.title,
@@ -21,13 +23,15 @@
                       composer_edit_url_param: project_path(project, editing: true),
                       composer_hackatime_linked_param: project.hackatime_keys.present? || (project == selected_project && test_time_granted) } %>
       <% end %>
-    </div>
+      </div>
+    <% end %>
 
-    <%= form_with model: [selected_project, post],
-          url: project_devlogs_path(selected_project),
+    <%= form_with model: (scope.present? ? false : [selected_project, post]),
+          scope: scope,
+          url: form_url,
           html: { multipart: true,
                   data: { composer_target: "form",
-                          action: "paste->composer#paste submit->composer#guardSubmit" } },
+                          action: class_names("submit->composer#guardSubmit", "paste->composer#paste": show_attachments?) } },
           class: "feed-composer__form",
           local: true do |f| %>
       <div class="feed-composer__scroll">
@@ -35,33 +39,36 @@
           <%= image_tag current_user.avatar, alt: "", class: "feed-composer__avatar" %>
 
           <div class="feed-composer__field">
-            <%= f.label :body, "What are you working on?", class: "feed-composer__label" %>
+            <%= f.label :body, body_label, class: "feed-composer__label" %>
             <%= f.text_area :body,
                   class: "feed-composer__textarea",
                   rows: 1,
                   maxlength: Post::Devlog::BODY_MAX_LENGTH,
-                  placeholder: "What are you working on?",
-                  aria: { label: "Devlog text" },
+                  required: simple_mode?,
+                  placeholder: placeholder,
+                  aria: { label: body_label },
                   data: { composer_target: "textarea",
                           emoji_picker_target: "textarea",
                           action: "focus->composer#showInfo input->composer#autogrow input->composer#refreshSubmit blur->composer#collapseIfEmpty" } %>
           </div>
         </div>
 
-        <div class="feed-composer__attach-wrap" data-composer-target="attachWrap">
-          <label class="feed-composer__attach">
-            <%= inline_svg_tag "icons/paper.svg", class: "feed-composer__attach-icon" %>
-            <span class="feed-composer__attach-text">Drop a screenshot here, or click to attach</span>
-            <%= f.file_field :attachments,
-                  multiple: true,
-                  accept: Post::Devlog::ACCEPTED_CONTENT_TYPES.join(","),
-                  class: "feed-composer__file-input",
-                  data: { composer_target: "fileInput",
-                          action: "change->composer#selectFiles" } %>
-          </label>
-        </div>
+        <% if show_attachments? %>
+          <div class="feed-composer__attach-wrap" data-composer-target="attachWrap">
+            <label class="feed-composer__attach">
+              <%= inline_svg_tag "icons/paper.svg", class: "feed-composer__attach-icon" %>
+              <span class="feed-composer__attach-text">Drop a screenshot here, or click to attach</span>
+              <%= f.file_field :attachments,
+                    multiple: true,
+                    accept: Post::Devlog::ACCEPTED_CONTENT_TYPES.join(","),
+                    class: "feed-composer__file-input",
+                    data: { composer_target: "fileInput",
+                            action: "change->composer#selectFiles" } %>
+            </label>
+          </div>
 
-        <div class="feed-composer__grid" data-composer-target="grid" data-count="0" hidden></div>
+          <div class="feed-composer__grid" data-composer-target="grid" data-count="0" hidden></div>
+        <% end %>
       </div>
 
       <div class="feed-composer__toolbar">
@@ -79,7 +86,8 @@
                  hidden></div>
           </div>
 
-          <div class="feed-composer__info-wrap" data-composer-target="footer">
+          <% if show_time_preview? %>
+            <div class="feed-composer__info-wrap" data-composer-target="footer">
             <div class="feed-composer__info">
               <turbo-frame id="devlog-preview-time"
                            data-composer-target="timeFrame"
@@ -92,23 +100,24 @@
                     data: { composer_target: "warn", turbo: false },
                     hidden: hackatime_linked? %>
             </div>
-          </div>
+            </div>
+          <% end %>
         </div>
 
         <div class="feed-composer__submit-group">
-          <%= render IdvBadgeComponent.new(user: current_user, context: :devlog) %>
+          <%= render IdvBadgeComponent.new(user: current_user, context: :devlog) unless simple_mode? %>
           <%= render ActionButtonComponent.new(
-                text: "Post",
+                text: submit_text,
                 size: :small,
                 type: :submit,
-                disable_with: "Posting...",
-                disabled: :soft,
+                disable_with: disable_with,
+                disabled: simple_mode? ? true : :soft,
                 class: "feed-composer__submit",
                 data: {
                   composer_target: "submit",
-                  controller: "tooltip",
-                  tooltip_message_value: "Attach a screenshot or video and log at least 15 minutes of coding time to post.",
-                  tooltip_position_value: "top"
+                  controller: ("tooltip" unless simple_mode?),
+                  tooltip_message_value: ("Attach a screenshot or video and log at least 15 minutes of coding time to post." unless simple_mode?),
+                  tooltip_position_value: ("top" unless simple_mode?)
                 }
               ) %>
         </div>
