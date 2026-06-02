@@ -1,13 +1,14 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item", "dynamicJumpResults", "dynamicJumpList", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList", "input", "item", "results"];
-  static values = { userSearchUrl: String, projectSearchUrl: String, missionSearchUrl: String, searchUrl: String  };
+  static targets = ["input", "item", "results", "dynamicJumpResults", "dynamicJumpList", "dynamicMissionResults", "dynamicMissionList"];
+  static values = { searchUrl: String, missionSearchUrl: String };
 
   connect() {
     this._activeIndex = -1;
     this._searchTimer = null;
-    this._initialResults = this.resultsTarget.innerHTML;
+    this._commandTimer = null;
+    if (this.hasResultsTarget) this._initialResults = this.resultsTarget.innerHTML;
     this._boundGlobalKey = this._globalKey.bind(this);
     document.addEventListener("keydown", this._boundGlobalKey);
   }
@@ -15,6 +16,7 @@ export default class extends Controller {
   disconnect() {
     document.removeEventListener("keydown", this._boundGlobalKey);
     clearTimeout(this._searchTimer);
+    clearTimeout(this._commandTimer);
   }
 
   _globalKey(event) {
@@ -32,12 +34,14 @@ export default class extends Controller {
     this.element.close();
     this.inputTarget.value = "";
     clearTimeout(this._searchTimer);
+    clearTimeout(this._commandTimer);
     this._clearDynamicJump();
-    this._clearDynamic();
-    this._clearDynamicProjects();
     this._clearDynamicMissions();
-    this.filter();
-    this._restoreInitialResults();
+    if (this.hasResultsTarget && this.hasSearchUrlValue) {
+      this._restoreInitialResults();
+    } else {
+      this.filter();
+    }
   }
 
   handleCancel(event) {
@@ -68,31 +72,30 @@ export default class extends Controller {
     const directMatch = directRoutes.reduce((found, r) => found || (query.match(r.pattern) && { id: query.match(r.pattern)[1], ...r }), null);
     if (directMatch) {
       clearTimeout(this._searchTimer);
-      this._clearDynamic();
-      this._clearDynamicProjects();
+      clearTimeout(this._commandTimer);
       this._clearDynamicMissions();
       this._renderDynamicJump({ label: `${directMatch.label} #${directMatch.id}`, path: directMatch.path(directMatch.id) });
       return;
     }
     this._clearDynamicJump();
 
-    if (query.length >= 2 && (this.hasUserSearchUrlValue || this.hasProjectSearchUrlValue || this.hasMissionSearchUrlValue)) {
+    if (query.length >= 2 && this.hasMissionSearchUrlValue) {
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => this._fetchAll(query), 200);
     } else {
-      this._clearDynamic();
       this._clearDynamicMissions();
     }
-    clearTimeout(this._searchTimer);
 
-    if (query.length > 0 && this.hasSearchUrlValue) {
-      this.resultsTarget.innerHTML =
-        '<p class="command-palette__empty">Searching...</p>';
-      this._searchTimer = setTimeout(() => this._loadResults(query), 180);
+    if (this.hasResultsTarget && this.hasSearchUrlValue) {
+      clearTimeout(this._commandTimer);
+      if (query.length > 0) {
+        this.resultsTarget.innerHTML = '<p class="command-palette__empty">Searching...</p>';
+        this._commandTimer = setTimeout(() => this._loadResults(query), 180);
+      } else {
+        this._restoreInitialResults();
+      }
       return;
     }
-
-    this._restoreInitialResults();
 
     const list = this.itemTargets[0]?.parentElement;
     if (!list) return;
@@ -137,7 +140,7 @@ export default class extends Controller {
         break;
       case "Enter":
         event.preventDefault();
-        this._activate();
+        this._activate(event.shiftKey);
         break;
       case "Escape":
         this.close();
@@ -155,48 +158,27 @@ export default class extends Controller {
 
   select(event) {
     const item = event.currentTarget;
-    const { path, focus, method } = item.dataset;
-    if (!path && !focus) return;
+    const { path, focus, method, adminPath } = item.dataset;
+    const effectivePath = (event.shiftKey && adminPath) ? adminPath : path;
+    if (!effectivePath && !focus) return;
 
     this.close();
-    if (focus) {
+    if (focus && !event.shiftKey) {
       document.querySelector(focus)?.focus();
-    } else if (method === "post") {
-      this._postAction(path);
+    } else if (method === "post" && !event.shiftKey) {
+      this._postAction(effectivePath);
     } else {
-      window.Turbo.visit(path);
+      window.Turbo.visit(effectivePath);
     }
   }
 
   _fetchAll(query) {
     const q = encodeURIComponent(query);
-    const fetches = [];
 
-    if (this.hasUserSearchUrlValue)
-      fetches.push(
-        fetch(`${this.userSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
-          .then((r) => r.json())
-          .then((users) => this._renderDynamic(users))
-          .catch(() => this._clearDynamic())
-      );
-
-    if (this.hasProjectSearchUrlValue)
-      fetches.push(
-        fetch(`${this.projectSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
-          .then((r) => r.json())
-          .then((projects) => this._renderDynamicProjects(projects))
-          .catch(() => this._clearDynamicProjects())
-      );
-
-    if (this.hasMissionSearchUrlValue)
-      fetches.push(
-        fetch(`${this.missionSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
-          .then((r) => r.json())
-          .then((missions) => this._renderDynamicMissions(missions))
-          .catch(() => this._clearDynamicMissions())
-      );
-
-    Promise.all(fetches);
+    fetch(`${this.missionSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
+      .then((r) => r.json())
+      .then((missions) => this._renderDynamicMissions(missions))
+      .catch(() => this._clearDynamicMissions());
   }
 
   _renderDynamicJump({ label, path }) {
@@ -217,68 +199,6 @@ export default class extends Controller {
   _clearDynamicJump() {
     if (this.hasDynamicJumpListTarget) this.dynamicJumpListTarget.innerHTML = "";
     if (this.hasDynamicJumpResultsTarget) this.dynamicJumpResultsTarget.style.display = "none";
-  }
-
-  _renderDynamic(users) {
-    const list = this.dynamicListTarget;
-    list.innerHTML = "";
-
-    if (!users.length) {
-      this.dynamicResultsTarget.style.display = "none";
-      return;
-    }
-
-    users.forEach((user, i) => {
-      const li = document.createElement("li");
-      li.className = "command-palette__item";
-      li.role = "option";
-      li.id = `cp-dyn-${i}`;
-      li.dataset.commandPaletteTarget = "item";
-      li.dataset.action =
-        "click->command-palette#select mouseenter->command-palette#highlight";
-      li.dataset.path = user._path || `/admin/users/${user.id}`;
-      li.innerHTML = `<span class="command-palette__item-title">${this._escape(user.name)}</span>`;
-      list.appendChild(li);
-    });
-
-    this.dynamicResultsTarget.style.display = "";
-  }
-
-  _renderDynamicProjects(projects) {
-    const list = this.dynamicProjectListTarget;
-    list.innerHTML = "";
-
-    if (!projects.length) {
-      this.dynamicProjectResultsTarget.style.display = "none";
-      return;
-    }
-
-    projects.forEach((project, i) => {
-      const li = document.createElement("li");
-      li.className = "command-palette__item";
-      li.role = "option";
-      li.id = `cp-dyn-proj-${i}`;
-      li.dataset.commandPaletteTarget = "item";
-      li.dataset.action =
-        "click->command-palette#select mouseenter->command-palette#highlight";
-      li.dataset.path = `/admin/projects/${project.id}`;
-      li.innerHTML = `<span class="command-palette__item-title">${this._escape(project.name)}</span>`;
-      list.appendChild(li);
-    });
-
-    this.dynamicProjectResultsTarget.style.display = "";
-  }
-
-  _clearDynamic() {
-    if (this.hasDynamicListTarget) this.dynamicListTarget.innerHTML = "";
-    if (this.hasDynamicResultsTarget)
-      this.dynamicResultsTarget.style.display = "none";
-  }
-
-  _clearDynamicProjects() {
-    if (this.hasDynamicProjectListTarget) this.dynamicProjectListTarget.innerHTML = "";
-    if (this.hasDynamicProjectResultsTarget)
-      this.dynamicProjectResultsTarget.style.display = "none";
   }
 
   _renderDynamicMissions(missions) {
@@ -331,18 +251,19 @@ export default class extends Controller {
     this._applyActive();
   }
 
-  _activate() {
+  _activate(shiftKey = false) {
     const item = this.itemTargets[this._activeIndex];
-    const { path, focus, method } = item?.dataset ?? {};
-    if (!path && !focus) return;
+    const { path, focus, method, adminPath } = item?.dataset ?? {};
+    const effectivePath = (shiftKey && adminPath) ? adminPath : path;
+    if (!effectivePath && !focus) return;
 
     this.close();
-    if (focus) {
+    if (focus && !shiftKey) {
       document.querySelector(focus)?.focus();
-    } else if (method === "post") {
-      this._postAction(path);
+    } else if (method === "post" && !shiftKey) {
+      this._postAction(effectivePath);
     } else {
-      window.Turbo.visit(path);
+      window.Turbo.visit(effectivePath);
     }
   }
 
@@ -350,11 +271,55 @@ export default class extends Controller {
     const url = new URL(this.searchUrlValue, window.location.origin);
     url.searchParams.set("q", query);
     url.searchParams.set("surface", "command_palette");
-    this.resultsTarget.src = url.toString();
+    url.searchParams.set("current_path", window.location.pathname);
+
+    fetch(url.toString(), { headers: { Accept: "application/json" } })
+      .then((r) => r.json())
+      .then((data) => this._renderResults(data))
+      .catch(() => {});
+  }
+
+  _renderResults(data) {
+    const groups = [
+      ["Commands", data.commands ?? []],
+      ["Projects", data.projects ?? []],
+      ["Posts",    data.posts    ?? []],
+      ["Users",    data.users    ?? []],
+    ].filter(([, items]) => items.length > 0);
+
+    if (!groups.length) {
+      this.resultsTarget.innerHTML = '<p class="command-palette__empty">No results found.</p>';
+      this._activeIndex = -1;
+      this._clearActive();
+      return;
+    }
+
+    let html = "";
+    let idx = 0;
+    groups.forEach(([label, items]) => {
+      html += `<p class="command-palette__section-label">${this._escape(label)}</p><ul class="command-palette__list">`;
+      items.forEach((item) => {
+        const path      = item.path       ? `data-path="${this._escape(item.path)}"` : "";
+        const focus     = item.focus      ? `data-focus="${this._escape(item.focus)}"` : "";
+        const adminPath = item.admin_path ? `data-admin-path="${this._escape(item.admin_path)}"` : "";
+        const method    = item.method === "post" ? 'data-method="post"' : "";
+        html += `<li class="command-palette__item" role="option" id="cp-sr-${idx++}"
+                    data-command-palette-target="item"
+                    data-action="click->command-palette#select mouseenter->command-palette#highlight"
+                    ${path} ${focus} ${adminPath} ${method}>
+                   <span class="command-palette__item-title">${this._escape(item.title ?? "")}</span>
+                   ${item.subtitle ? `<span class="command-palette__item-meta">${this._escape(item.subtitle)}</span>` : ""}
+                 </li>`;
+      });
+      html += "</ul>";
+    });
+
+    this.resultsTarget.innerHTML = html;
+    this._activeIndex = -1;
+    this._clearActive();
   }
 
   _restoreInitialResults() {
-    this.resultsTarget.removeAttribute("src");
     this.resultsTarget.innerHTML = this._initialResults;
     this._activeIndex = -1;
     this._clearActive();

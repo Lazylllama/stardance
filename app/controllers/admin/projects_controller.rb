@@ -21,13 +21,6 @@ class Admin::ProjectsController < Admin::ApplicationController
     @pagy, @projects = pagy(:offset, projects.order(:id))
   end
 
-  def search
-    authorize ::Project, :index?
-    q = "%#{ActiveRecord::Base.sanitize_sql_like(params[:q].to_s)}%"
-    projects = ::Project.unscoped.where("title ILIKE ?", q).limit(8)
-    render json: projects.map { |p| { id: p.id, name: p.title } }
-  end
-
   def show
     @project = ::Project.unscoped.find(params[:id])
     authorize @project

@@ -47,13 +47,6 @@ class Admin::UsersController < Admin::ApplicationController
     redirect_to admin_user_path(@user)
   end
 
-  def search
-    authorize User, :index?
-    q = "%#{ActiveRecord::Base.sanitize_sql_like(params[:q].to_s)}%"
-    users = User.where("email ILIKE ? OR display_name ILIKE ? OR slack_id ILIKE ?", q, q, q).limit(8)
-    render json: users.map { |u| { id: u.id, name: u.display_name } }
-  end
-
   def user_perms
     authorize User, :index?
     @users = User.where("array_length(granted_roles, 1) > 0").order(:id)

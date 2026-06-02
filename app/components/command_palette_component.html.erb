@@ -2,8 +2,7 @@
         id="command-palette-dialog"
         data-controller="command-palette"
         data-action="cancel->command-palette#handleCancel click->command-palette#backdropClick"
-        <% if user_search_url %>data-command-palette-user-search-url-value="<%= user_search_url %>"<% end %>
-        <% if project_search_url %>data-command-palette-project-search-url-value="<%= project_search_url %>"<% end %>
+        data-command-palette-search-url-value="<%= search_url %>"
         data-command-palette-mission-search-url-value="<%= mission_search_url %>"
         aria-label="Command palette"
         aria-modal="true">
@@ -51,16 +50,6 @@
   <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicJumpResults" style="display:none">
     <p class="command-palette__section-label">Jump to</p>
     <ul class="command-palette__list" data-command-palette-target="dynamicJumpList"></ul>
-  </div>
-
-  <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicResults" style="display:none">
-    <p class="command-palette__section-label">Users</p>
-    <ul class="command-palette__list" data-command-palette-target="dynamicList"></ul>
-  </div>
-
-  <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicProjectResults" style="display:none">
-    <p class="command-palette__section-label">Projects</p>
-    <ul class="command-palette__list" data-command-palette-target="dynamicProjectList"></ul>
   </div>
 
   <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicMissionResults" style="display:none">

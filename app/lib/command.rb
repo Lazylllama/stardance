@@ -71,8 +71,8 @@ class Command
     ALL.select { |cmd| cmd.visible_to?(user) && (cmd.page.nil? || cmd.page == current_path) }
   end
 
-  def self.search(query, user)
-    commands = for_user(user)
+  def self.search(query, user, current_path: nil)
+    commands = for_user(user, current_path: current_path)
     return commands if query.blank?
     normalized = query.downcase.strip
     commands.select do |cmd|
