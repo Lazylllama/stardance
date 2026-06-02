@@ -1,9 +1,10 @@
 class Command
-  attr_reader :id, :title, :path, :keywords, :icon, :method
+  attr_reader :id, :title, :path, :keywords, :icon, :method, :page, :focus
 
-  def initialize(id:, title:, path:, keywords: [], icon: nil, method: :get, visible: ->(_u) { true })
+  def initialize(id:, title:, path: nil, keywords: [], icon: nil, method: :get, visible: ->(_u) { true }, page: nil, focus: nil)
     @id = id; @title = title; @path = path
     @keywords = keywords; @icon = icon; @method = method; @visible = visible
+    @page = page; @focus = focus
   end
 
   def post? = method == :post
@@ -49,6 +50,7 @@ class Command
     visible: ->(u) { u.admin? }
   )) }.freeze
   ALL = [
+    new(id: :create_post, title: "Create Post", keywords: %w[devlog post write compose blog], icon: "pencil", focus: '[data-composer-target="textarea"]', page: "/home"),
     new(id: :home,         title: "Home",            path: "/home",            keywords: %w[dashboard start]),
     new(id: :vote,         title: "Vote",             path: "/rate/new",        keywords: %w[review projects rate],       icon: "star_outline"),
     new(id: :shop,         title: "Shop",             path: "/shop",            keywords: %w[store buy prizes stardust],  icon: "cart_outline"),
@@ -65,8 +67,8 @@ class Command
 
   def visible_to?(user) = @visible.call(user)
 
-  def self.for_user(user)
-    ALL.select { |cmd| cmd.visible_to?(user) }
+  def self.for_user(user, current_path: nil)
+    ALL.select { |cmd| cmd.visible_to?(user) && (cmd.page.nil? || cmd.page == current_path) }
   end
 
   def self.search(query, user)

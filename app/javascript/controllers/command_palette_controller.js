@@ -1,8 +1,8 @@
 import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
-  static targets = ["input", "item", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList"];
-  static values = { userSearchUrl: String, projectSearchUrl: String };
+  static targets = ["input", "item", "dynamicResults", "dynamicList", "dynamicProjectResults", "dynamicProjectList", "dynamicMissionResults", "dynamicMissionList"];
+  static values = { userSearchUrl: String, projectSearchUrl: String, missionSearchUrl: String };
 
   connect() {
     this._activeIndex = -1;
@@ -32,6 +32,7 @@ export default class extends Controller {
     clearTimeout(this._searchTimer);
     this._clearDynamic();
     this._clearDynamicProjects();
+    this._clearDynamicMissions();
     this.filter();
   }
 
@@ -67,11 +68,12 @@ export default class extends Controller {
       return;
     }
 
-    if (query.length >= 2 && (this.hasUserSearchUrlValue || this.hasProjectSearchUrlValue)) {
+    if (query.length >= 2 && (this.hasUserSearchUrlValue || this.hasProjectSearchUrlValue || this.hasMissionSearchUrlValue)) {
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => this._fetchAll(query), 200);
     } else {
       this._clearDynamic();
+      this._clearDynamicMissions();
     }
     const list = this.itemTargets[0]?.parentElement;
     if (!list) return;
@@ -134,11 +136,13 @@ export default class extends Controller {
 
   select(event) {
     const item = event.currentTarget;
-    const path = item.dataset.path;
-    if (!path) return;
+    const { path, focus, method } = item.dataset;
+    if (!path && !focus) return;
 
     this.close();
-    if (item.dataset.method === "post") {
+    if (focus) {
+      document.querySelector(focus)?.focus();
+    } else if (method === "post") {
       this._postAction(path);
     } else {
       window.Turbo.visit(path);
@@ -163,6 +167,14 @@ export default class extends Controller {
           .then((r) => r.json())
           .then((projects) => this._renderDynamicProjects(projects))
           .catch(() => this._clearDynamicProjects())
+      );
+
+    if (this.hasMissionSearchUrlValue)
+      fetches.push(
+        fetch(`${this.missionSearchUrlValue}?q=${q}`, { headers: { Accept: "application/json" } })
+          .then((r) => r.json())
+          .then((missions) => this._renderDynamicMissions(missions))
+          .catch(() => this._clearDynamicMissions())
       );
 
     Promise.all(fetches);
@@ -230,6 +242,36 @@ export default class extends Controller {
       this.dynamicProjectResultsTarget.style.display = "none";
   }
 
+  _renderDynamicMissions(missions) {
+    const list = this.dynamicMissionListTarget;
+    list.innerHTML = "";
+
+    if (!missions.length) {
+      this.dynamicMissionResultsTarget.style.display = "none";
+      return;
+    }
+
+    missions.forEach((mission, i) => {
+      const li = document.createElement("li");
+      li.className = "command-palette__item";
+      li.role = "option";
+      li.id = `cp-dyn-mission-${i}`;
+      li.dataset.commandPaletteTarget = "item";
+      li.dataset.action = "click->command-palette#select mouseenter->command-palette#highlight";
+      li.dataset.path = `/missions/${mission.slug}`;
+      li.innerHTML = `<span class="command-palette__item-title">${this._escape(mission.name)}</span>`;
+      list.appendChild(li);
+    });
+
+    this.dynamicMissionResultsTarget.style.display = "";
+  }
+
+  _clearDynamicMissions() {
+    if (this.hasDynamicMissionListTarget) this.dynamicMissionListTarget.innerHTML = "";
+    if (this.hasDynamicMissionResultsTarget)
+      this.dynamicMissionResultsTarget.style.display = "none";
+  }
+
   _escape(str) {
     return str
       .replace(/&/g, "&amp;")
@@ -252,13 +294,16 @@ export default class extends Controller {
 
   _activate() {
     const item = this.itemTargets[this._activeIndex];
-    if (!item?.dataset.path) return;
+    const { path, focus, method } = item?.dataset ?? {};
+    if (!path && !focus) return;
 
     this.close();
-    if (item.dataset.method === "post") {
-      this._postAction(item.dataset.path);
+    if (focus) {
+      document.querySelector(focus)?.focus();
+    } else if (method === "post") {
+      this._postAction(path);
     } else {
-      window.Turbo.visit(item.dataset.path);
+      window.Turbo.visit(path);
     }
   }
 

@@ -4,6 +4,7 @@
         data-action="cancel->command-palette#handleCancel click->command-palette#backdropClick"
         <% if user_search_url %>data-command-palette-user-search-url-value="<%= user_search_url %>"<% end %>
         <% if project_search_url %>data-command-palette-project-search-url-value="<%= project_search_url %>"<% end %>
+        data-command-palette-mission-search-url-value="<%= mission_search_url %>"
         aria-label="Command palette"
         aria-modal="true">
 
@@ -29,7 +30,8 @@
             id="cp-item-<%= i %>"
             data-command-palette-target="item"
             data-action="click->command-palette#select mouseenter->command-palette#highlight"
-            data-path="<%= cmd.path %>"
+            <% if cmd.path %>data-path="<%= cmd.path %>"<% end %>
+            <% if cmd.focus %>data-focus="<%= cmd.focus %>"<% end %>
             data-keywords="<%= cmd.keywords.join(" ") %>"
             <% if cmd.post? %> data-method="post"<% end %>>
           <% if cmd.icon %>
@@ -51,6 +53,11 @@
   <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicProjectResults" style="display:none">
     <p class="command-palette__section-label">Projects</p>
     <ul class="command-palette__list" data-command-palette-target="dynamicProjectList"></ul>
+  </div>
+
+  <div class="command-palette__results command-palette__results--dynamic" data-command-palette-target="dynamicMissionResults" style="display:none">
+    <p class="command-palette__section-label">Missions</p>
+    <ul class="command-palette__list" data-command-palette-target="dynamicMissionList"></ul>
   </div>
 
   <div class="command-palette__footer">

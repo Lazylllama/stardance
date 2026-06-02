@@ -81,7 +81,7 @@
     </div>
     <% if current_user.present? && !current_user.banned? && !@hide_sidebar %>
       <%= render SidebarComponent.new(user: current_user, active_slug_override: @active_nav_slug) %>
-      <%= render CommandPaletteComponent.new(current_user: current_user) %>
+      <%= render CommandPaletteComponent.new(current_user: current_user, current_path: request.path) %>
     <% end %>
     <div id="flash-region"><%= render "shared/flash" %></div>
     <%= render Onboarding::GuestBannerComponent.new %>

@@ -772,6 +772,9 @@ Rails.application.routes.draw do
     member do
       get :guide
     end
+    collection do
+      get :search
+    end
   end
 
   # Reviewer queue.
