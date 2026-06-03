@@ -752,6 +752,7 @@ Rails.application.routes.draw do
       get :readme
       post :follow
       delete :unfollow
+      get :followers
     end
   end
 

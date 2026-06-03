@@ -371,6 +371,13 @@ class ProjectsController < ApplicationController
     end
   end
 
+  def followers
+    @project = Project.find(params[:id])
+    authorize @project, :show?
+    @followers = @project.followers.order(:display_name)
+    render "users/followers", layout: false
+  end
+
   def readme
     unless turbo_frame_request?
       redirect_to project_path(@project)

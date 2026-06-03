@@ -223,18 +223,19 @@ class Project < ApplicationRecord
     hackatime_uid = memberships.owner.first&.user&.hackatime_identity&.uid
     return 0 unless hackatime_uid
 
-    total_seconds = HackatimeService.fetch_total_seconds_for_projects(hackatime_uid, hackatime_keys)
+    total_seconds = HackatimeService.fetch_total_seconds_for_projects(hackatime_uid, hackatime_keys, access_token: memberships.owner.first&.user&.hackatime_identity&.access_token)
     return 0 unless total_seconds
 
     (total_seconds / 3600.0).round(1)
   end
 
-  def seconds_coded_in_devlog_window(hackatime_uid, at: Time.current)
+  def seconds_coded_in_devlog_window(hackatime_uid, at: Time.current, access_token: nil)
     HackatimeService.fetch_total_seconds_for_projects(
       hackatime_uid,
       hackatime_keys,
       start_date: devlog_window_start(at).iso8601,
-      end_date: at.iso8601
+      end_date: at.iso8601,
+      access_token: access_token
     )
   end
 
