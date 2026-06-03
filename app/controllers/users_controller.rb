@@ -52,7 +52,7 @@ class UsersController < ApplicationController
   private
 
   def set_user
-    @user = User.includes(:preference)
+    @user = User.eager_load(:preference)
 
     if params[:username].present?
       @user = @user.find_by!("LOWER(display_name) = ?", params[:username].downcase)
