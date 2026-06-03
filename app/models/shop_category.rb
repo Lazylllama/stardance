@@ -48,9 +48,9 @@ class ShopCategory < ApplicationRecord
 
     ids = if instance_variable_defined?(:@preloaded_item_ids)
             @preloaded_item_ids
-          else
+    else
             shop_item_ids.to_set
-          end
+    end
     items.select { |it| ids.include?(it.id) }
   end
 end
