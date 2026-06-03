@@ -52,7 +52,7 @@
   <% if logged_in %>
     <button type="button"
             class="shop-item-card__star"
-            data-action="click->shop-wishlist#toggle"
+            data-action="click->shop-wishlist#toggle shop-wishlist:changed@window->shop-wishlist#sync"
             aria-label="Toggle wishlist">
       <%= helpers.inline_svg_tag "icons/star_fill.svg" %>
     </button>

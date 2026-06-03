@@ -1,13 +1,24 @@
-<section class="discover-rail__section discover-rail__section--wishlist" aria-label="Wishlist">
+<section
+id="discover-rail-wishlist"
+class="discover-rail__section discover-rail__section--wishlist"
+aria-label="Wishlist">
+
   <h3 class="discover-rail__heading">WISHLIST</h3>
   <% if wishlisted_items.any? %>
     <div class="shop-goals__container">
       <div class="shop-goals__items">
         <% wishlisted_items.each do |item| %>
-          <div class="shop-goals__item">
-            <%= button_to shop_wishlist_path(item.id), method: :delete, class: "shop-goals__remove", title: "Remove from wishlist" do %>
-              &times;
-            <% end %>
+          <div class="shop-goals__item"
+                data-controller="shop-wishlist"
+                data-shop-wishlist-item-id-value="<%= item.id %>"
+                data-shop-wishlist-wishlisted-value="true"
+          >
+            <button type="button"
+                class="shop-goals__remove"
+                data-action="click->shop-wishlist#remove shop-wishlist:changed@window->shop-wishlist#sync"
+                aria-label="Remove from wishlist">
+                &times;
+            </button>
             <%= link_to shop_item_path(item), class: "shop-goals__link" do %>
               <%= image_tag item.image.variant(:carousel_sm), alt: item.name, class: "shop-goals__image" %>
               <div class="shop-goals__info">
