@@ -101,7 +101,11 @@ class Project < ApplicationRecord
   has_many :mission_submissions,         class_name: "Mission::Submission",         through: :ship_events
 
   def current_mission_attachment
-    mission_attachments.where(detached_at: nil).order(attached_at: :desc).first
+    if mission_attachments.loaded?
+      mission_attachments.select { |ma| ma.detached_at.nil? }.max_by(&:attached_at)
+    else
+      mission_attachments.where(detached_at: nil).order(attached_at: :desc).first
+    end
   end
 
   def current_mission

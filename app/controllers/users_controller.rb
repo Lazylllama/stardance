@@ -68,7 +68,7 @@ class UsersController < ApplicationController
   def load_profile(active_tab)
     @active_tab     = active_tab
     @body_class     = "app-layout-page"
-    @projects       = profile_projects
+    @projects       = profile_projects.load
     @activity       = profile_activity
     @stats          = profile_stats
     @follower_count  = @user.followers.count
@@ -80,7 +80,7 @@ class UsersController < ApplicationController
     @user.projects
          .select(:id, :title, :description, :created_at, :updated_at,
                  :ship_status, :shipped_at, :devlogs_count, :duration_seconds)
-         .includes(:users, banner_attachment: :blob)
+         .includes(:users, banner_attachment: :blob, mission_attachments: :mission)
          .order(created_at: :desc)
   end
 
