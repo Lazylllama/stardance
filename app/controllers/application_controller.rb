@@ -63,9 +63,9 @@ class ApplicationController < ActionController::Base
     return @current_user if defined?(@current_user)
 
     if session[:user_id]
-      # preload user prefs along with HCA & hackatime identity since they are used in sidebar
       scope = User.where(id: session[:user_id])
-                  .includes(:hack_club_identity, :hackatime_identity, :preference)
+                  .eager_load(:preference)
+                  .preload(:hack_club_identity, :hackatime_identity)
 
       scope = scope.eager_load(*Array(preloads)) if preloads.present?
       user = scope.to_a.first
