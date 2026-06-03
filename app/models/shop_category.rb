@@ -46,7 +46,11 @@ class ShopCategory < ApplicationRecord
   def filter(items)
     return items if virtual_all?
 
-    item_ids = shop_item_ids
-    items.select { |it| item_ids.include?(it.id) }
+    ids = if instance_variable_defined?(:@preloaded_item_ids)
+            @preloaded_item_ids
+          else
+            shop_item_ids.to_set
+          end
+    items.select { |it| ids.include?(it.id) }
   end
 end

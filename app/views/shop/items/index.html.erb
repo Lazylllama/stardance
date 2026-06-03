@@ -116,7 +116,7 @@
       <section class="shop-hub__main">
         <ul class="shop-hub__category-grid" aria-label="Shop categories">
           <% @categories.each do |category| %>
-            <% category_items = Shop::Categorization.filter(@shop_items, category.slug) %>
+            <% category_items = category.filter(@shop_items) %>
             <% category_thumbs = category_items.select { |i| i.image.attached? }.first(3) %>
             <li class="shop-hub__category-tile">
               <%= link_to shop_category_path(category.slug), class: "shop-hub__category-link", data: { turbo: true } do %>

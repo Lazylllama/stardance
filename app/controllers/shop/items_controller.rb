@@ -12,6 +12,7 @@ class Shop::ItemsController < Shop::BaseController
 
     prepare_shop_chrome
     load_shop_items
+    preload_category_item_ids
     load_hub_sections
     load_orders_sidebar
   end
@@ -71,7 +72,7 @@ class Shop::ItemsController < Shop::BaseController
 
     prepare_shop_chrome
     load_shop_items
-    @shop_items = Shop::Categorization.filter(@shop_items, @slug)
+    @shop_items = @category.filter(@shop_items)
   end
 
   private
@@ -94,6 +95,20 @@ class Shop::ItemsController < Shop::BaseController
 
     @categories = Shop::Categorization.all
     @wishlisted_item_ids = current_user&.shop_wishlists&.pluck(:shop_item_id) || []
+  end
+
+  def preload_category_item_ids
+    real_cats = @categories.reject(&:virtual_all?)
+    return if real_cats.empty? || @shop_items.empty?
+
+    item_ids_by_cat = ShopItemCategory
+      .where(shop_category_id: real_cats.map(&:id))
+      .group_by(&:shop_category_id)
+      .transform_values { |sics| sics.map(&:shop_item_id).to_set }
+
+    real_cats.each do |cat|
+      cat.instance_variable_set(:@preloaded_item_ids, item_ids_by_cat[cat.id] || Set.new)
+    end
   end
 
   def load_hub_sections
