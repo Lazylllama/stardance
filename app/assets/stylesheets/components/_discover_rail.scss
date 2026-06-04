@@ -279,8 +279,20 @@
   }
 
   .shop-goals__items {
+    animation: shop-goals-item-in 360ms ease-out;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+  }
+}
+
+@keyframes shop-goals-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
