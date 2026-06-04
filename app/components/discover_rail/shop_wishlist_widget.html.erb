@@ -11,8 +11,7 @@ aria-label="Wishlist">
           <div class="shop-goals__item"
                 data-controller="shop-wishlist"
                 data-shop-wishlist-item-id-value="<%= item.id %>"
-                data-shop-wishlist-wishlisted-value="true"
-          >
+                data-shop-wishlist-wishlisted-value="true">
             <button type="button"
                 class="shop-goals__remove"
                 data-action="click->shop-wishlist#remove shop-wishlist:changed@window->shop-wishlist#sync"

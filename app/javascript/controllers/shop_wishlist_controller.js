@@ -25,7 +25,12 @@ export default class extends Controller {
       if (!r.ok) this.wishlistedValue = wasWishlisted;
       else {
         r.text().then((html) => Turbo.renderStreamMessage(html));
-        this.dispatch("changed", { detail: { itemId: this.itemIdValue, wishlisted: this.wishlistedValue } });
+        this.dispatch("changed", {
+          detail: {
+            itemId: this.itemIdValue,
+            wishlisted: this.wishlistedValue,
+          },
+        });
       }
     });
   }
@@ -49,8 +54,10 @@ export default class extends Controller {
     }).then((r) => {
       if (!r.ok) this.wishlistedValue = true;
       else {
-        r.text().then((html) => Turbo.renderStreamMessage(html))
-        this.dispatch("changed", { detail: { itemId: this.itemIdValue, wishlisted: false } });
+        r.text().then((html) => Turbo.renderStreamMessage(html));
+        this.dispatch("changed", {
+          detail: { itemId: this.itemIdValue, wishlisted: false },
+        });
       }
     });
   }
