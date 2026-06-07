@@ -1,9 +1,12 @@
 <% if attachments.any? %>
-  <div class="feed-post-card__media">
+  <div class="feed-post-card__media" data-controller="post-attachments">
     <div class="feed-post-card__media-viewport">
-      <div class="feed-post-card__media-track">
+      <button type="button" class="feed-post-card__chevron feed-post-card__chevron--prev" data-post-attachments-target="prevButton" data-action="post-attachments#prev" aria-label="Previous" hidden>
+        <%= inline_svg_tag "icons/chevron-down.svg", class: "feed-post-card__chevron-icon", focusable: "false", aria: { hidden: true } %>
+      </button>
+      <div class="feed-post-card__media-track" data-post-attachments-target="track">
         <% attachments.each_with_index do |attachment, index| %>
-          <figure class="feed-post-card__media-slide" <%= "hidden" if index.positive? %>>
+          <figure class="feed-post-card__media-slide">
             <% if attachment.variable? %>
               <%= image_tag attachment.variant(:large), alt: "", class: "feed-post-card__image" %>
             <% elsif attachment.content_type.to_s.start_with?("image/") %>
@@ -16,6 +19,10 @@
           </figure>
         <% end %>
       </div>
+      <button type="button" class="feed-post-card__chevron feed-post-card__chevron--next" data-post-attachments-target="nextButton" data-action="post-attachments#next" aria-label="Next" hidden>
+        <%= inline_svg_tag "icons/chevron-down.svg", class: "feed-post-card__chevron-icon", focusable: "false", aria: { hidden: true } %>
+      </button>
+      <div class="feed-post-card__indicators" data-post-attachments-target="indicators" hidden></div>
     </div>
   </div>
 <% end %>

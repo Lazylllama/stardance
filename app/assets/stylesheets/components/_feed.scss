@@ -671,6 +671,10 @@
     @media (max-width: 640px) {
       padding-left: 0;
     }
+
+    [hidden] {
+      display: none !important;
+    }
   }
 
   &__media-viewport {
@@ -719,7 +723,7 @@
   }
 
   &__chevron {
-    position: absolute;
+    position: absolute !important;
     top: 50%;
     transform: translateY(-50%);
     width: 29px;
@@ -741,6 +745,12 @@
     right: var(--space-s);
   }
 
+  &__chevron-icon {
+    width: 1.3rem;
+    height: 1.3rem;
+    pointer-events: none;
+  }
+
   &__chevron--prev &__chevron-icon {
     transform: rotate(90deg);
   }
@@ -757,6 +767,23 @@
     display: flex;
     gap: var(--space-xs);
   }
+
+  &__indicator-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-brand-blue);
+    opacity: 0.6;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+
+    &.is-active {
+      opacity: 1;
+      background: var(--color-brand-mint);
+    }
+
+  } 
 
   &__actions {
     margin-left: var(--feed-content-offset);
