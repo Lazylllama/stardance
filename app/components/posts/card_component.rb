@@ -44,7 +44,7 @@ module Posts
     def card_classes
       class_names(
         "feed-post-card",
-        "feed-post-card--linked": card_link_url.present?,
+        "feed-post-card--linked": card_link_url.present? && !request.original_fullpath.include?(card_link_url),
         "feed-post-card--compact": compact,
         "feed-post-card--quote-repost": quote_repost?,
         "feed-post-card--#{theme}": theme.present?
@@ -67,7 +67,7 @@ module Posts
 
     def card_link_url
       if interaction_post&.postable_type == "Post::Devlog" && interaction_post.project.present?
-        helpers.project_devlog_path(interaction_post.project, interaction_postable)
+              helpers.project_devlog_path(interaction_post.project, interaction_postable)
       end
     end
 
