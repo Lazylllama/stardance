@@ -81,7 +81,19 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
 
     If you're using `nano`, press <kbd>CTRL</kbd> + <kbd>S</kbd> to save, then <kbd>CTRL</kbd> + <kbd>X</kbd> to exit.
 
-8. It's time to launch! Run `bin/dev`! 
+8. Prepare the database and seed initial data.
+    ```sh
+    bin/rails db:migrate
+    bin/rails db:seed # Generates the admin user required for /dev_login
+    ```
+    
+    Optionally, generate a realistic community of users, projects, and activities for testing:
+    ```sh
+    bin/rails seed:community
+    ```
+    See [`docs/development-seeds.md`](/docs/development-seeds.md) for more details.
+
+9. It's time to launch! Run `bin/dev`! 
 
 ## Starting the development environment back up again
 If you already did all of the steps above previously, but e.g. your PC or Codespace restarted, you only need to do a subset of the steps above.
