@@ -8,6 +8,7 @@ require_relative "likes"
 require_relative "follows"
 require_relative "reposts"
 require_relative "stardust"
+require_relative "summary"
 
 module DevelopmentSeed
   class Runner
@@ -33,14 +34,7 @@ module DevelopmentSeed
       DevelopmentSeed::Reposts.call(users, posts)
       DevelopmentSeed::Stardust.call(users)
 
-      log "Successfully generated community with:"
-      log "- #{users.count} users"
-      log "- #{projects.count} projects"
-      log "- #{posts.count} devlogs"
-      log "- #{Comment.count} comments"
-      log "- #{Like.count} likes"
-      log "- #{Post::Repost.count} reposts"
-      log "- #{LedgerEntry.count} ledger entries"
+      DevelopmentSeed::Summary.call
       log "Development community seed complete!"
     end
 
