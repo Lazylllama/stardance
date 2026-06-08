@@ -21,6 +21,7 @@ module DevelopmentSeed
     private
 
     def create_user(index)
+      # deterministic names based on index and random seed
       first_name = first_names[random.rand(first_names.size)]
       last_name = last_names[random.rand(last_names.size)]
       display_name = "#{first_name.downcase}_#{last_name.downcase}_#{index}"
@@ -31,14 +32,17 @@ module DevelopmentSeed
         last_name: last_name,
         display_name: display_name,
         email: email,
+        # verified status is required for posts to be visible to others
         verification_status: "verified",
         onboarded_at: Time.current - (random.rand(1..30)).days
       )
 
+      # set synced_at to prevent trying to sync with Hackatime immediately
       user.synced_at = Time.current
 
       user.save!
 
+      # opt-in to leaderboard by default (preference is auto-created by User model callback)
       user.preference.update!(leaderboard_optin: true)
 
       user.identities.create!(
