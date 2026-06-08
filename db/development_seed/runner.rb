@@ -6,6 +6,7 @@ require_relative "devlogs"
 require_relative "comments"
 require_relative "likes"
 require_relative "follows"
+require_relative "reposts"
 
 module DevelopmentSeed
   class Runner
@@ -28,6 +29,7 @@ module DevelopmentSeed
       DevelopmentSeed::Comments.call(users, posts)
       DevelopmentSeed::Likes.call(users, posts)
       DevelopmentSeed::Follows.call(users, projects)
+      DevelopmentSeed::Reposts.call(users, posts)
 
       log "Successfully generated community with:"
       log "- #{users.count} users"
@@ -35,6 +37,7 @@ module DevelopmentSeed
       log "- #{posts.count} devlogs"
       log "- #{Comment.count} comments"
       log "- #{Like.count} likes"
+      log "- #{Post::Repost.count} reposts"
       log "Development community seed complete!"
     end
 
