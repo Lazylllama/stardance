@@ -12,11 +12,11 @@ module DevelopmentSeed
 
     def call
       progress "Generating devlogs for #{@projects.count} projects"
-      
+
       all_posts = []
       @projects.each do |project|
         num_devlogs = random.rand(Config::MIN_DEVLOGS_PER_PROJECT..Config::MAX_DEVLOGS_PER_PROJECT)
-        
+
         num_devlogs.times do |i|
           all_posts << create_devlog(project, i)
         end
@@ -31,7 +31,7 @@ module DevelopmentSeed
     def create_devlog(project, index)
       # pick a random member of the project to be the author
       author = project.users.sample(random: random)
-      
+
       devlog = Post::Devlog.new(
         body: generate_body,
         # minimum 15 minutes required by validation
@@ -62,7 +62,7 @@ module DevelopmentSeed
 
     def generate_body
       intros = [
-        "Today I worked on", "Just finished", "Making progress on", 
+        "Today I worked on", "Just finished", "Making progress on",
         "Updates for", "Spent some time on", "Excited to share"
       ]
       tasks = [

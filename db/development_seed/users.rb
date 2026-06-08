@@ -8,7 +8,7 @@ module DevelopmentSeed
 
     def call
       progress "Generating #{Config::USER_COUNT} users"
-      
+
       users = []
       Config::USER_COUNT.times do |i|
         users << create_user(i)
@@ -26,7 +26,7 @@ module DevelopmentSeed
       last_name = last_names[random.rand(last_names.size)]
       display_name = "#{first_name.downcase}_#{last_name.downcase}_#{index}"
       email = "#{display_name}@example.com"
-      
+
       user = User.new(
         first_name: first_name,
         last_name: last_name,
