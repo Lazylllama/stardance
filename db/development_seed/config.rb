@@ -19,5 +19,7 @@ module DevelopmentSeed
 
     FOLLOW_PERCENTAGE = 0.30
     PROJECT_FOLLOW_PERCENTAGE = 0.25
+
+    STARDUST_TRANSACTIONS_PER_USER = 8
   end
 end

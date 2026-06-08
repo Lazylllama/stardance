@@ -7,6 +7,7 @@ require_relative "comments"
 require_relative "likes"
 require_relative "follows"
 require_relative "reposts"
+require_relative "stardust"
 
 module DevelopmentSeed
   class Runner
@@ -30,6 +31,7 @@ module DevelopmentSeed
       DevelopmentSeed::Likes.call(users, posts)
       DevelopmentSeed::Follows.call(users, projects)
       DevelopmentSeed::Reposts.call(users, posts)
+      DevelopmentSeed::Stardust.call(users)
 
       log "Successfully generated community with:"
       log "- #{users.count} users"
@@ -38,20 +40,23 @@ module DevelopmentSeed
       log "- #{Comment.count} comments"
       log "- #{Like.count} likes"
       log "- #{Post::Repost.count} reposts"
+      log "- #{LedgerEntry.count} ledger entries"
       log "Development community seed complete!"
     end
-
-    private
 
     def cleanup
       progress "Cleaning up existing community data"
 
-      # Protect the admin user (dev_login) if they exist
+      # Protect the admin user and their projects
       admin = User.find_by(email: "kartikey@hackclub.com")
       admin_id = admin&.id
       admin_project_ids = admin&.memberships&.pluck(:project_id) || []
 
+      # 0. Kill LedgerEntries first
+      LedgerEntry.where.not(user_id: admin_id).delete_all
+
       # 1. Kill Reposts first (they reference both Posts and Users)
+
       Post::Repost.unscoped.destroy_all
 
       # 2. Kill all Postables (Devlog, ShipEvent, etc.)
