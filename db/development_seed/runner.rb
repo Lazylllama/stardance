@@ -2,6 +2,7 @@ require_relative "config"
 require_relative "helpers"
 require_relative "users"
 require_relative "projects"
+require_relative "devlogs"
 
 module DevelopmentSeed
   class Runner
@@ -19,8 +20,9 @@ module DevelopmentSeed
       
       users = DevelopmentSeed::Users.call
       projects = DevelopmentSeed::Projects.call(users)
+      posts = DevelopmentSeed::Devlogs.call(projects)
       
-      log "Successfully generated #{users.count} users and #{projects.count} projects."
+      log "Successfully generated #{users.count} users, #{projects.count} projects, and #{posts.count} devlogs."
       log "Development community seed complete!"
     end
 
@@ -29,7 +31,7 @@ module DevelopmentSeed
     def cleanup
       progress "Cleaning up existing community data"
       
-      # Protect the admin user if they exist
+      # Protect the admin user (dev_login) if they exist
       admin_email = "kartikey@hackclub.com"
       
       # Destroy users and dependent associations (projects, memberships, posts, etc.)
