@@ -12,7 +12,7 @@ module DevelopmentSeed
 
     def call
       progress "Generating stardust history (earnings and spendings)"
-      
+
       count = 0
       @users.each do |user|
         create_grant(user, 100, "Free Stickers Welcome Grant")
@@ -55,7 +55,7 @@ module DevelopmentSeed
       project = user.projects.sample(random: random)
       return false unless project
 
-      amount = [50, 100, 150, 200, 500].sample(random: random)
+      amount = [ 50, 100, 150, 200, 500 ].sample(random: random)
       reason = [
         "Project Payout: #{project.title}",
         "Ship Bonus: #{project.title}",
@@ -76,13 +76,13 @@ module DevelopmentSeed
     def create_spending(user)
       return false if user.balance < 50
 
-      amount = -[50, 100, 200].sample(random: random)
-      
+      amount = -[ 50, 100, 200 ].sample(random: random)
+
       LedgerEntry.create!(
         user: user,
         ledgerable: user,
         amount: amount,
-        reason: ["Shop Purchase: Sticker Pack", "Shop Purchase: Hardware Grant", "Shop Purchase: Digital Asset"].sample(random: random),
+        reason: [ "Shop Purchase: Sticker Pack", "Shop Purchase: Hardware Grant", "Shop Purchase: Digital Asset" ].sample(random: random),
         created_by: "Seed System"
       )
       true
