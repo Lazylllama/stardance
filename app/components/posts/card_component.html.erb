@@ -128,7 +128,7 @@
                   <%= form_with url: helpers.devlog_comments_path(interaction_postable),
                                 scope: :comment,
                                 class: "comment-modal__form",
-                                data: { turbo_frame: "_top" } do |f| %>
+                                data: { turbo_frame: "_top", controller: "form-submit-once" } do |f| %>
                     <div class="comment-modal__thread-reply">
                       <div class="comment-modal__thread-left">
                         <%= image_tag current_user.avatar, alt: "", class: "comment-modal__reply-avatar" %>
