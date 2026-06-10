@@ -61,10 +61,8 @@ class Post::Devlog < ApplicationRecord
             },
             allow_nil: true,
             on: :create
-  
   # Call normalizer prior to validation
   before_validation :normalize_line_endings
-  
   validates :body, presence: true, length: { maximum: BODY_MAX_LENGTH }
 
   private
