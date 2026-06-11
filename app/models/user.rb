@@ -55,6 +55,7 @@
 #  index_users_on_approx_balance             (approx_balance)
 #  index_users_on_approx_total_earned        (approx_total_earned)
 #  index_users_on_email                      (email)
+#  index_users_on_guest_email                (guest_email)
 #  index_users_on_lower_display_name_unique  (lower((display_name)::text)) UNIQUE WHERE ((display_name IS NOT NULL) AND ((display_name)::text <> ''::text))
 #  index_users_on_lower_email_unique         (lower((email)::text)) UNIQUE WHERE ((email IS NOT NULL) AND ((email)::text <> ''::text))
 #  index_users_on_onboarded_at               (onboarded_at)
@@ -165,9 +166,9 @@ class User < ApplicationRecord
   validate :interests_must_be_allowed
   after_commit :enqueue_geocode_job, on: :create
 
-  scope :discoverable, -> { joins(:hack_club_identity).distinct }
+  scope :discoverable, -> { where(banned: false).joins(:hack_club_identity).distinct }
   scope :on_leaderboard, -> {
-    discoverable.joins(:preference).where(user_preferences: { leaderboard_optin: true }, banned: false)
+    discoverable.joins(:preference).where(user_preferences: { leaderboard_optin: true })
   }
   scope :ambassador_referrals, -> {
     where(arel_table[:ref].lower.matches("#{Rsvp::AMBASSADOR_REFERRAL_PREFIX}%"))
@@ -247,6 +248,25 @@ class User < ApplicationRecord
     return random_funny_display_name if local.blank?
 
     "#{local.first(MAX_DISPLAY_NAME_LENGTH - 5)}_#{rand(1000..9999)}"
+  end
+
+  def verified_referral_count
+    raffle_participant&.referrals&.status_verified&.count || 0
+  end
+
+  REFERRAL_ACHIEVEMENTS = { referral_2: 2, referral_5: 5 }.freeze
+
+  def sync_referral_achievements!
+    return unless Flipper.enabled?(:week_2_release, self)
+
+    count = verified_referral_count
+    REFERRAL_ACHIEVEMENTS.each do |slug, threshold|
+      if count >= threshold
+        award_achievement!(slug)
+      else
+        revoke_achievement!(slug)
+      end
+    end
   end
 
   def ambassador_referral_payload(hours_logged:, hours_approved:)

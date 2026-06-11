@@ -609,6 +609,7 @@ Rails.application.routes.draw do
         get  :votes
       end
     end
+    get "super_stars", to: "super_stars#show", as: :super_stars
     get "user-perms", to: "users#user_perms"
     resource :support, only: [ :show ], controller: "support/dashboards"
     resource :fraud, only: [ :show ], controller: "fraud/dashboards"
@@ -616,12 +617,31 @@ Rails.application.routes.draw do
     # Referral raffle management (reads the Raffle engine's models).
     get "raffles", to: "raffles/dashboard#show", as: :raffles
     namespace :raffles do
-      resources :participants, only: [ :index, :show ]
+      resource :fraud, only: [ :show ], controller: "fraud" do
+        get :cleared, controller: "fraud"
+        post :reject_all_flagged, controller: "fraud"
+        post :reject_and_ban_all_flagged, controller: "fraud"
+      end
+      resources :participants, only: [ :index, :show ] do
+        member do
+          post :reject_referrals
+          post :ban_participant
+          post :ban_user
+          post :ban_referred_users
+          post :reject_selected
+          post :ban_selected
+          post :reject_referral
+          post :ban_referred_user
+          post :clear_fraud
+          post :unclear_fraud
+        end
+      end
       resources :referrals, only: [ :index, :update ]
       resources :weeks, only: [ :index, :show ] do
         member do
           post :close
           post :draw
+          post :void_draw
         end
       end
     end
@@ -668,15 +688,6 @@ Rails.application.routes.draw do
     resources :sw_vibes, only: [ :index ]
     resources :suspicious_votes, only: [ :index ]
     resources :audit_logs, only: [ :index, :show ]
-    resources :reports, only: [ :index, :show ] do
-      collection do
-        post :process_demo_broken
-      end
-      member do
-        post :review
-        post :dismiss
-      end
-    end
     resources :fulfillment_payouts, only: [ :index, :show ] do
       member do
         post :approve
@@ -738,12 +749,24 @@ Rails.application.routes.draw do
       get "review/:id", to: "ysws#show", as: "ysws_review"
       get "review/:id/commits", to: "ysws#commits", as: "ysws_commits"
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
+      post "review/:id/complete", to: "ysws#complete", as: "complete_ysws_review"
+      post "review/:id/return_to_ship_cert", to: "ysws#return_to_ship_cert", as: "return_to_ship_cert_ysws_review"
 
       # Admin payout management
       resources :payouts, only: [ :index, :show ] do
         member do
           post :pay
           post :reject
+        end
+      end
+
+      resources :reports, path: "report", only: [ :index, :show ] do
+        collection do
+          post :process_demo_broken
+        end
+        member do
+          post :review
+          post :dismiss
         end
       end
     end
@@ -781,6 +804,7 @@ Rails.application.routes.draw do
     resources :reports, only: [ :create ], module: :projects
     resource :og_image, only: [ :show ], module: :projects, defaults: { format: :png }
     resource :ships, only: [ :create ], module: :projects
+    resource :recertification, only: [ :create ], module: :projects
     resource :mission, only: [ :create, :destroy ], module: :projects, controller: "missions"
     resource :magic, only: [ :create, :destroy ], module: :projects, controller: "magic"
     resource :fire_nomination, only: [ :create, :destroy ], module: :projects
@@ -844,6 +868,7 @@ Rails.application.routes.draw do
     resource :og_image, only: [ :show ], module: :missions, defaults: { format: :png }
     member do
       get :guide
+      get :gallery
     end
   end
 

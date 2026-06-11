@@ -187,12 +187,14 @@
               </div>
 
               <label class="project-show__field project-show__field--inline">
-                <span>AI usage declaration <%= render "projects/help_tooltip", text: "Describe how you used AI in this project (e.g. \"Used ChatGPT for debugging\", \"GitHub Copilot for code completion\"). AI use is OK, but it should feel like your own work! If you didn't use AI, you can state that." %></span>
+                <span>AI usage declaration <%= render "projects/help_tooltip", text: "Describe how you used AI in this project (e.g. \"Used ChatGPT for debugging\", \"GitHub Copilot for code completion\"). AI use is OK, but it should feel like your own work! If you didn't use AI, write \"None\"." %></span>
                 <%= form.text_area :ai_declaration,
                                    rows: 2,
                                    maxlength: 1000,
                                    class: "project-show__control project-show__textarea",
-                                   aria: { label: "AI usage declaration" } %>
+                                   placeholder: "How did you use AI? Write \"None\" if you didn't.",
+                                   aria: { label: "AI usage declaration" },
+                                   data: { "project-form-target": "aiDeclaration" } %>
               </label>
 
               <label class="project-show__started-check">
@@ -609,10 +611,14 @@
         <% @posts.each do |post| %>
           <% if post.postable_type == "Post::ShipEvent" %>
             <% ship_index += 1 %>
+            <% recert_id = ((is_member || current_user&.can_review?) && @project.needs_changes? && ship_index == 1) ? "recert-modal-#{@project.id}" : nil %>
             <%= render "projects/ship_card",
                        post: post,
                        project: @project,
-                       ship_number: ship_count - ship_index + 1 %>
+                       ship_number: ship_count - ship_index + 1,
+                       recert_modal_id: recert_id %>
+          <% elsif post.postable_type == Post::PRIVATE_SHIP_DECISION_TYPE %>
+            <%= render "users/ship_decision_card", post: post, decision: post.postable, project: @project %>
           <% else %>
             <%= render PostComponent.new(post: post, current_user: current_user, theme: :profile_dark) %>
           <% end %>
@@ -663,6 +669,10 @@
     <% end %>
 
   </div>
+
+  <% if (is_member || current_user&.can_review?) && @project.needs_changes? %>
+    <%= render "projects/recert_modal", project: @project, is_member: is_member %>
+  <% end %>
 
   <% if is_member && @composer_devlog && @composer_projects %>
     <dialog id="composer-modal-<%= @project.id %>"

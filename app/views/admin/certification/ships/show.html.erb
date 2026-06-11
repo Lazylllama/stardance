@@ -37,6 +37,18 @@
           </div>
         <% end %>
 
+        <% if @ship.returned_by.present? || @ship.recert_reason.present? %>
+          <div class="ship-review__return-alert">
+            <h2 class="ship-review__return-alert-title">Returned from YSWS Review</h2>
+            <% if @ship.returned_by.present? %>
+              <p class="ship-review__return-alert-meta">by <%= @ship.returned_by.display_name %></p>
+            <% end %>
+            <% if @ship.recert_reason.present? %>
+              <p class="ship-review__return-alert-reason"><%= @ship.recert_reason %></p>
+            <% end %>
+          </div>
+        <% end %>
+
         <div class="ship-review__panel">
           <h2 class="ship-review__panel-title">AI Declaration</h2>
           <% if @ship.project.ai_declaration.present? %>

@@ -13,7 +13,7 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
     @to = parse_date(params[:to])
 
     scope = policy_scope(::Certification::Ship)
-              .includes(:reviewer, project: { memberships: :user })
+              .includes(:reviewer, :returned_by, project: { memberships: :user })
     scope = scope.where(status: @status) unless @status == "all"
     scope = scope.where("certification_ship_reviews.created_at >= ?", @from.beginning_of_day) if @from
     scope = scope.where("certification_ship_reviews.created_at <= ?", @to.end_of_day) if @to
