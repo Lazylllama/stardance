@@ -1,5 +1,6 @@
 class HomeController < ApplicationController
   include OnboardingResumable
+  discover_rail_widgets :raffle, :daily_roll, :upcoming_events
 
   before_action :resume_or_expire_onboarding!, only: :index, if: -> { current_user.present? }
 
