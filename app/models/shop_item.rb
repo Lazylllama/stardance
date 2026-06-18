@@ -151,12 +151,12 @@ class ShopItem < ApplicationRecord
   ].freeze
 
   RECENTLY_ADDED_WINDOW = 2.weeks
-  SHOP_PAGE_CACHE_KEY = "shop_items/shop_page"
+  SHOP_PAGE_CACHE_KEY = "shop_items/shop_page/v2"
   SHOP_PAGE_CACHE_VERSION_KEY = "shop_items/shop_page/version"
   SHOP_PAGE_CACHE_INITIAL_VERSION = 1
 
   def self.cached_shop_page_data
-    Rails.cache.fetch(versioned_shop_page_cache_key, expires_in: 5.minutes) do
+    shop_page_data = Rails.cache.fetch(versioned_shop_page_cache_key, expires_in: 5.minutes) do
       buyable = enabled.listed.buyable_standalone.where(mission_prize_only: false).includes(image_attachment: :blob).to_a
       item_ids = buyable.map(&:id)
 
@@ -176,8 +176,15 @@ class ShopItem < ApplicationRecord
       cutoff = RECENTLY_ADDED_WINDOW.ago
       recently_added = buyable.select { |item| item.created_at >= cutoff && item.type != "ShopItem::FreeStickers" }.sort_by(&:created_at).reverse
 
-      { buyable_standalone: buyable, recently_added: recently_added }
+      { buyable_standalone: buyable, recently_added: recently_added, reserved_counts:, purchase_counts: }
     end
+
+    shop_page_data[:buyable_standalone].each do |item|
+      item.instance_variable_set(:@preloaded_reserved_quantity, shop_page_data[:reserved_counts][item.id] || 0)
+      item.instance_variable_set(:@preloaded_purchase_count, shop_page_data[:purchase_counts][item.id] || 0)
+    end
+
+    shop_page_data
   end
 
   def self.invalidate_shop_page_cache!
@@ -294,18 +301,29 @@ class ShopItem < ApplicationRecord
     sale_percentage.present? && sale_percentage > 0
   end
 
-  def average_hours_estimated
-    return 0 unless ticket_cost.present?
-    ticket_cost / (Rails.configuration.game_constants.tickets_per_dollar * Rails.configuration.game_constants.dollars_per_mean_hour)
-  end
-
-  def hours_estimated
-    average_hours_estimated.to_i
+  # Per-user effective price. Most items ignore the user and just use the
+  # regional price; ShopItem::OutpostTicket overrides this to subtract the
+  # user's accrued discount. This is the price enforced at purchase (see
+  # ShopOrder#freeze_item_price).
+  def price_for_user(_user, region)
+    price_for_region(region)
   end
 
   def fixed_estimate(price)
     return 0 unless price.present? && price > 0
     price / (Rails.configuration.game_constants.tickets_per_dollar * Rails.configuration.game_constants.dollars_per_mean_hour)
+  end
+
+  def hours_estimate_label(price)
+    return nil unless price.present? && price.to_f.positive?
+
+    base_hours = fixed_estimate(price).to_f
+    return nil unless base_hours.positive?
+
+    high = base_hours.ceil
+    low = (base_hours * 0.5).ceil
+
+    low == high ? "~#{low}" : "~#{low}-#{high}"
   end
 
   def remaining_stock

@@ -1,27 +1,35 @@
 class Admin::Certification::ShipsController < Admin::Certification::ApplicationController
-  before_action :release_other_claims, only: [ :next, :claim ]
-  before_action :set_ship, only: [ :show, :update, :claim ]
-  before_action :set_body_class, only: [ :index, :show, :update ]
+  before_action :release_other_claims, only: [ :next ]
+  before_action :set_ship, only: [ :show, :update ]
+  before_action :set_submitter_context, only: [ :show, :update ]
+  before_action :set_body_class, only: [ :index, :show, :update, :logs ]
 
   def index
     authorize ::Certification::Ship
 
-    @status = params[:status].presence_in(%w[pending approved returned all]) || "pending"
-    @sort = params[:sort] == "newest" ? "newest" : "oldest"
-    @search = params[:search].to_s.strip
-    @from = parse_date(params[:from])
-    @to = parse_date(params[:to])
+    @status       = params[:status].presence_in(%w[pending approved returned all]) || "pending"
+    @sort         = params[:sort] == "newest" ? "newest" : "oldest"
+    @search       = params[:search].to_s.strip
+    @from         = parse_date(params[:from])
+    @to           = parse_date(params[:to])
+    @project_type = params[:project_type].presence
 
     scope = policy_scope(::Certification::Ship)
-              .includes(:reviewer, project: { memberships: :user })
     scope = scope.where(status: @status) unless @status == "all"
     scope = scope.where("certification_ship_reviews.created_at >= ?", @from.beginning_of_day) if @from
     scope = scope.where("certification_ship_reviews.created_at <= ?", @to.end_of_day) if @to
     scope = apply_search(scope) if @search.present?
 
+    @type_counts = scope.joins(:project).group("projects.project_type").count
+
+    scope = scope.by_project_type(@project_type) if @project_type.present?
+
     @pagy, @ships = pagy(:offset,
-                         scope.order(created_at: @sort == "newest" ? :desc : :asc),
+                         scope.includes(:reviewer, :returned_by, project: { memberships: :user })
+                              .order(created_at: @sort == "newest" ? :desc : :asc),
                          limit: 25)
+
+    @own_project_ids = current_user.memberships.pluck(:project_id).to_set
 
     @stats = ::Certification::Ship.dashboard_stats
     @lb_period = params[:lb].presence_in(%w[daily weekly alltime]) || "daily"
@@ -30,6 +38,29 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
       "weekly" => ::Certification::Ship.leaderboard(:weekly),
       "alltime" => ::Certification::Ship.leaderboard(:alltime)
     }
+  end
+
+  def logs
+    authorize ::Certification::Ship, :logs?
+
+    @status = params[:status].presence_in(%w[approved returned all]) || "all"
+    @sort = params[:sort] == "oldest" ? "oldest" : "newest"
+    @search = params[:search].to_s.strip
+    @from = parse_date(params[:from])
+    @to = parse_date(params[:to])
+
+    scope = policy_scope(::Certification::Ship)
+              .where.not(status: :pending)
+              .includes(:reviewer, project: { memberships: :user })
+
+    scope = scope.where(status: @status) unless @status == "all"
+    scope = scope.where("certification_ship_reviews.decided_at >= ?", @from.beginning_of_day) if @from
+    scope = scope.where("certification_ship_reviews.decided_at <= ?", @to.end_of_day) if @to
+    scope = apply_search(scope) if @search.present?
+
+    @pagy, @ships = pagy(:offset,
+                         scope.order(decided_at: @sort == "newest" ? :desc : :asc),
+                         limit: 25)
   end
 
   def show
@@ -42,7 +73,7 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
     if @ship.update(ship_params)
       verb = @ship.approved? ? "Approved" : "Returned"
       count = ::Certification::Ship.reviewed_today(current_user)
-      redirect_to next_admin_certification_ships_path,
+      redirect_to admin_certification_ships_path,
                   notice: "#{verb} “#{@ship.project.title}.” That's #{count} reviewed today. Keep going!"
     else
       render :show, status: :unprocessable_entity
@@ -65,17 +96,14 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
     end
   end
 
-  def claim
-    authorize @ship, :claim?
-    claimed = ::Certification::Ship.atomic_claim!(@ship.id, current_user)
-    if claimed
-      redirect_to admin_certification_ship_path(claimed)
-    else
-      redirect_to admin_certification_ships_path, alert: "Couldn't claim that review — someone else got it."
-    end
-  end
-
   private
+
+  # Also loaded for update so the re-rendered show page keeps the submitter
+  # panel when the verdict form fails validation.
+  def set_submitter_context
+    @owner = @ship.owner
+    @submitter_history = @owner && ::Certification::Ship.submitter_history(@owner)
+  end
 
   def set_ship
     @ship = ::Certification::Ship.find(params[:id])

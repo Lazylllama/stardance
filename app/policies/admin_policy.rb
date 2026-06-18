@@ -30,4 +30,16 @@ class AdminPolicy < ApplicationPolicy
   def access_jobs?
     user.admin?
   end
+
+  def access_raffles?
+    user.admin? || user.has_role?(:raffle_admin)
+  end
+
+  def manage_shop?
+    user.admin? || user.shop_manager?
+  end
+
+  def manage_draft_shop_items?
+    user.admin? || user.shop_manager?
+  end
 end

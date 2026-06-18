@@ -47,6 +47,12 @@
     }
   }
 
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
   // Shared card chrome.
   &__stats,
   &__leaderboard,
@@ -59,7 +65,8 @@
     border-radius: 12px;
   }
 
-  &__label {
+  &__label,
+  &__filters label {
     display: block;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -300,15 +307,6 @@
     gap: var(--space-m);
     padding: var(--space-m) var(--space-l);
     margin-bottom: var(--space-l);
-
-    label {
-      display: block;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin-bottom: var(--space-xxs);
-    }
   }
 
   &__filter {
@@ -386,20 +384,13 @@
       letter-spacing: 0.06em;
       color: var(--muted);
       border-bottom: 2px solid rgba(255, 255, 255, 0.32);
-      border-right: 1px solid var(--grid-line);
       white-space: nowrap;
     }
 
     tbody td {
       padding: var(--space-s) var(--space-m);
       border-bottom: 1px solid var(--grid-line);
-      border-right: 1px solid var(--grid-line);
       vertical-align: top;
-    }
-
-    thead th:last-child,
-    tbody td:last-child {
-      border-right: 0;
     }
 
     tbody tr:last-child td {
@@ -474,6 +465,12 @@
   &__cell-status {
     width: 130px;
     white-space: nowrap;
+  }
+
+  &__cell-feedback {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: var(--line-height-body);
   }
 
   &__cell-action {
@@ -596,6 +593,33 @@
 
   &__card-claim {
     margin-top: var(--space-xs);
+  }
+
+  &__card-feedback {
+    margin-top: var(--space-xs);
+    font-size: 0.85rem;
+    color: var(--muted);
+    border-top: 1px solid var(--card-border);
+    padding-top: var(--space-xs);
+  }
+
+  // Inline type tags in table rows and mobile cards.
+  &__type-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+
+    &--own {
+      background: rgba(255, 176, 122, 0.2);
+      color: var(--color-brand-orange);
+    }
   }
 
   // --- Empty state -------------------------------------------------------
