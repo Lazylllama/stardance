@@ -1,4 +1,4 @@
-<article id="<%= dom_id(post) %>" class="<%= card_classes %>" <%= tag.attributes(data: engagement_data) %>>
+<article id="<%= dom_id(post) %>" class="<%= card_classes %>" <%= tag.attributes(data: card_data) %>>
   <% if card_link_url.present? %>
     <%= link_to card_link_url,
           class: "feed-post-card__overlay-link",
@@ -40,7 +40,7 @@
         <% end %>
 
         <time class="feed-post-card__time" datetime="<%= display_post.created_at.iso8601 %>" title="<%= l(display_post.created_at, format: :long) %>">
-          · <%= time_ago_in_words(display_post.created_at) %>
+          · <%= time_ago_in_words(display_post.created_at) %> ago
         </time>
 
         <% if show_idv_badge? %>
@@ -53,7 +53,7 @@
       <% end %>
 
       <% if quote_repost? && body.present? %>
-        <div class="feed-post-card__body feed-post-card__body--inline">
+        <div class="feed-post-card__body feed-post-card__body--inline markdown-content">
           <%= helpers.md(body, allow_images: false) %>
         </div>
       <% end %>
@@ -61,7 +61,7 @@
   </header>
 
   <% if body.present? && !quote_repost? %>
-    <div class="feed-post-card__body">
+    <div class="feed-post-card__body markdown-content">
       <%= helpers.md(body, allow_images: false) %>
     </div>
   <% end %>
@@ -70,28 +70,110 @@
 
   <% if quote_repost? && original_post.present? %>
     <div class="feed-post-card__repost-preview">
-      <%= render Posts::CardComponent.new(
+      <%= render "shared/repost_preview_card",
             post: original_post,
             current_user: current_user,
-            theme: :"repost-preview",
-            compact: true,
-            show_likes: false,
-            show_comments: false,
-            show_reposts: false,
-            show_actions: false
-          ) %>
+            track_engagement: track_engagement,
+            show_views: show_views %>
     </div>
   <% end %>
 
   <% if show_footer? %>
   <footer class="feed-post-card__actions">
     <% if show_comments && interaction_post&.postable_type == "Post::Devlog" %>
-      <%= link_to comment_url,
-            class: "feed-post-card__action",
-            aria: { label: "#{interaction_postable.comments_count} comments" } do %>
-        <%= inline_svg_tag "icons/comment.svg", class: "feed-post-card__action-icon" %>
-        <span id="<%= comments_count_id %>"><%= interaction_postable.comments_count %></span>
-      <% end %>
+      <div class="feed-post-card__comment-action" data-controller="comment-modal">
+        <button type="button"
+                class="feed-post-card__action"
+                aria-label="<%= interaction_postable.comments_count %> comments"
+                data-action="comment-modal#open">
+          <%= inline_svg_tag "icons/comment.svg", class: "feed-post-card__action-icon" %>
+          <span id="<%= comments_count_id %>"><%= interaction_postable.comments_count %></span>
+        </button>
+
+        <dialog class="comment-modal"
+                data-comment-modal-target="dialog"
+                data-action="click->comment-modal#backdropClick turbo:submit-end->comment-modal#formSubmitted"
+                aria-label="Comments">
+          <div class="comment-modal__content">
+            <header class="comment-modal__header">
+              <button type="button" class="comment-modal__close" data-action="comment-modal#close" aria-label="Close">&times;</button>
+            </header>
+
+            <div class="comment-modal__body" data-comment-modal-target="body">
+              <article class="comment-modal__op">
+                <span class="comment-modal__op-eyebrow">Original post</span>
+                <header class="comment-modal__op-head">
+                  <% if author.present? %>
+                    <%= image_tag author.avatar, alt: "", class: "comment-modal__op-avatar" %>
+                  <% end %>
+                  <div class="comment-modal__op-meta">
+                    <span class="comment-modal__op-author">@<%= author_name %></span>
+                    <time class="comment-modal__op-time" datetime="<%= display_post.created_at.iso8601 %>">· <%= time_ago_in_words(display_post.created_at) %> ago</time>
+                  </div>
+                </header>
+                <% if body.present? %>
+                  <div class="comment-modal__op-body markdown-content"><%= helpers.md(body, allow_images: false) %></div>
+                <% end %>
+                <% if attachments.any? %>
+                  <div class="comment-modal__op-media">
+                    <%= render "shared/post_media", attachments: attachments %>
+                  </div>
+                <% end %>
+              </article>
+
+              <p class="comment-modal__replies-label">Replies</p>
+
+              <turbo-frame id="<%= dom_id(post, :comments) %>"
+                           src="<%= helpers.devlog_comments_path(interaction_postable) %>"
+                           loading="lazy"
+                           class="comment-modal__replies"
+                           data-comment-modal-target="repliesFrame"
+                           data-action="turbo:frame-load->comment-modal#repliesLoaded">
+                <p class="comment-modal__replies-loading">Loading replies&hellip;</p>
+              </turbo-frame>
+            </div>
+
+            <% if current_user %>
+              <%# Turbo Drive is off app-wide (application.js); opt this form in so the %>
+              <%# turbo_stream response applies and the modal refreshes in place. %>
+              <%= form_with url: helpers.devlog_comments_path(interaction_postable),
+                            scope: :comment,
+                            class: "comment-modal__composer",
+                            data: { turbo: true } do |f| %>
+                <p class="comment-modal__replying-to">Replying to <span class="comment-modal__replying-to-name">@<%= author_name %></span></p>
+                <div class="comment-modal__thread-reply">
+                  <div class="comment-modal__thread-left">
+                    <%= image_tag current_user.avatar, alt: "", class: "comment-modal__reply-avatar" %>
+                  </div>
+                  <div class="comment-modal__thread-right">
+                    <%= f.text_area :body,
+                          class: "comment-modal__textarea",
+                          placeholder: "Post your reply (type @ to mention someone)",
+                          rows: 2,
+                          maxlength: Comment::BODY_MAX_LENGTH,
+                          data: { comment_modal_target: "textarea",
+                                  controller: "submit-on-meta-enter mention-autocomplete",
+                                  action: "keydown->submit-on-meta-enter#submit keydown->mention-autocomplete#onKeydown input->mention-autocomplete#onInput blur->mention-autocomplete#onBlur" } %>
+                  </div>
+                </div>
+                <div class="comment-modal__footer">
+                  <%= render ActionButtonComponent.new(
+                        text: "Reply",
+                        size: :small,
+                        type: :submit,
+                        variant: :primary,
+                        disable_with: "Posting..."
+                      ) %>
+                </div>
+              <% end %>
+            <% else %>
+              <p class="comment-modal__sign-in">
+                <%= link_to "Sign in", root_path %> to join the conversation.
+              </p>
+            <% end %>
+          </div>
+        </dialog>
+      </div>
     <% end %>
 
     <% if show_reposts %>
@@ -149,7 +231,8 @@
                     simple_mode: true,
                     show_project_chips: false,
                     show_attachments: false,
-                    show_time_preview: false
+                    show_time_preview: false,
+                    quote_preview_post: repost_target
                   ) %>
             </dialog>
           <% else %>
@@ -171,6 +254,15 @@
       <div class="feed-post-card__like">
         <%= render "likes/button", likeable: likeable %>
       </div>
+    <% end %>
+
+    <% if show_views? %>
+      <span class="feed-post-card__action feed-post-card__action--disabled"
+            aria-label="Seen by <%= views_count %> <%= "person".pluralize(views_count) %>"
+            title="Unique viewers">
+        <%= inline_svg_tag "icons/eye.svg", class: "feed-post-card__action-icon" %>
+        <span><%= views_count %></span>
+      </span>
     <% end %>
 
     <% if show_actions %>
@@ -195,7 +287,7 @@
             Copy link to clipboard
           </button>
 
-          <% if current_user.present? %>
+          <% if current_user.present? && track_engagement %>
             <button type="button" class="feed-post-card__menu-item" data-action="post-menu#notInterested">
               Don&apos;t show me posts like this
             </button>
