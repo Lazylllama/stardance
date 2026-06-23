@@ -85,4 +85,3 @@ end
 Rack::Attack.throttle("devlog_reposts", limit: 10, period: 60) do |req|
   user_id.call(req) if req.post? && req.path.match?(%r{^/devlogs/\d+/repost$})
 end
-
