@@ -8,7 +8,9 @@
       <div class="feed-post-card__media-track">
         <% attachments.each do |attachment| %>
           <figure class="feed-post-card__media-slide <%= 'ai-detected' if current_user&.admin? && attachment.blob.metadata["ai_generated"] %>">
-            <% if attachment.variable? %>
+            <% if !attachment_available?(attachment) %>
+              <span class="feed-post-card__file">Attachment unavailable</span>
+            <% elsif attachment.variable? %>
               <%= image_tag attachment.variant(media_variant),
                             alt: "",
                             class: "feed-post-card__image",
