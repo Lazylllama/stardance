@@ -540,7 +540,7 @@ class ProjectsController < ApplicationController
         "hackclub", "gitea", "git", "repo", "code"
       ]
 
-      path = uri.path.downcase
+      path = uri.path.downcase.chomp("/")
       host = uri.host.downcase
 
       is_valid_repo_url = false
