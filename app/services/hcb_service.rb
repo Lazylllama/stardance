@@ -45,9 +45,16 @@ module HCBService
     end
 
     def refresh_token!
-      HCBCredential.transaction do
-        hcb_credentials = HCBCredential.first
-        raise HCBError, "no HCB credentials found" unless hcb_credentials
+      hcb_credentials = HCBCredential.first
+      raise HCBError, "no HCB credentials found" unless hcb_credentials
+
+      # Lock the row before reading the refresh token. HCB refresh tokens are
+      # single-use and rotate on every refresh, so if two requests race here,
+      # whoever reads the token first (before the winner's update commits)
+      # submits an already-consumed token and gets invalid_grant. Locking
+      # forces the loser to wait, then `with_lock` reloads the record so it
+      # reads the winner's freshly-rotated token instead of a stale one.
+      hcb_credentials.with_lock do
         client_id = hcb_credentials.client_id
         client_secret = hcb_credentials.client_secret
         refresh_token = hcb_credentials.refresh_token
@@ -61,6 +68,9 @@ module HCBService
           f.response :json, content_type: /\bjson$/
           f.adapter :net_http
           f.headers["Accept"] = "application/json"
+          # Bounded so a hung HCB request can't hold the row lock open indefinitely.
+          f.options.open_timeout = 5
+          f.options.timeout = 10
         end
 
         message = {
@@ -84,15 +94,43 @@ module HCBService
         new_refresh_token = body && (body["refresh_token"] || body[:refresh_token])
         raise HCBError, "no access_token in response: #{body}" unless access_token
 
-        hcb_credentials.update!(refresh_token: new_refresh_token, access_token: access_token)
+        # HCB has already rotated the refresh token server-side at this point —
+        # the old one is dead regardless of what happens next. Retry the local
+        # save a few times so a transient DB blip doesn't strand us holding
+        # valid tokens we never wrote down.
+        persisted = false
+        persist_error = nil
+        3.times do |attempt|
+          hcb_credentials.update!(refresh_token: new_refresh_token, access_token: access_token)
+          persisted = true
+          break
+        rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished => e
+          # Only retry on transient DB/connection errors. Validation errors
+          # (ActiveRecord::RecordInvalid) are deterministic, so let them raise
+          # immediately instead of retrying a failure that can't change.
+          persist_error = e
+          sleep(0.2 * (attempt + 1)) if attempt < 2
+        end
+
+        unless persisted
+          Sentry.capture_message(
+            "HCB token refresh succeeded but failed to persist new tokens - credentials are now bricked",
+            level: :fatal,
+            extra: { error: persist_error&.message }
+          )
+          raise HCBError, "refreshed HCB tokens but failed to save them: #{persist_error&.message}"
+        end
+
         @conn = nil
 
         true
-      rescue Faraday::Error => e
-        raise HCBError, "token refresh HTTP error: #{e.message}"
-      rescue => e
-        raise HCBError, "token refresh failed: #{e.message}"
       end
+    rescue Faraday::Error => e
+      raise HCBError, "token refresh HTTP error: #{e.message}"
+    rescue HCBError
+      raise
+    rescue => e
+      raise HCBError, "token refresh failed: #{e.message}"
     end
 
     def create_card_grant(email:, amount_cents:, merchant_lock: nil, category_lock: nil, keyword_lock: nil, purpose: nil, pre_authorization_required: false, one_time_use: false, instructions: nil, organization: nil)
