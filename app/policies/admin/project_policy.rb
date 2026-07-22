@@ -1,6 +1,6 @@
 class Admin::ProjectPolicy < ApplicationPolicy
   def index?
-    user.admin? || user.fraud_dept? || user.helper?
+    user&.admin? || user&.fraud_dept? || user&.helper?
   end
 
   def show?
@@ -8,18 +8,18 @@ class Admin::ProjectPolicy < ApplicationPolicy
   end
 
   def view_votes?
-    user.admin?
+    user&.admin?
   end
 
   def restore?
-    user.admin? || user.fraud_dept?
+    user&.admin? || user&.fraud_dept?
   end
 
   def update?
-    user.admin? || user.fraud_dept?
+    user&.admin? || user&.fraud_dept?
   end
 
   def destroy?
-    user.admin? || user.fraud_dept?
+    user&.admin? || user&.fraud_dept?
   end
 end
