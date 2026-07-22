@@ -41,7 +41,8 @@ class ApplicationJob < ActiveJob::Base
               error_message: exception.message,
               error_backtrace: exception.backtrace&.first(5),
               job_arguments: job.arguments,
-              job_id: job.job_id
+              job_id: job.job_id,
+              executions_count: job.executions
             }
           )
         end
