@@ -73,6 +73,11 @@
         <% end %>
       <% end %>
     <% end %>
+    <% if ship.payout_blessing == "blessed" %>
+      <span class="project-show__latest-ship-status project-show__latest-ship-status--approved" title="Blessed (+20% bonus)">✨ Blessed</span>
+    <% elsif ship.payout_blessing == "cursed" %>
+      <span class="project-show__latest-ship-status project-show__latest-ship-status--returned" title="Cursed (-50% reduction)">💀 Cursed</span>
+    <% end %>
   </div>
 
   <header class="feed-post-card__header">
@@ -89,10 +94,8 @@
     <div class="feed-post-card__meta">
       <p class="feed-post-card__byline">
         <% if author %>
-          <%= link_to "@#{author.display_name}",
-                      profile_path(author.display_name),
-                      class: "feed-post-card__author",
-                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= render StreakBadgeComponent.new(user: author) %><%= " ⚡" if author.admin? %>
+          <%= render "shared/username_link", user: author, link_class: "feed-post-card__author",
+                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %>
         <% end %>
         <span class="feed-post-card__context">on</span>
         <%= link_to project.title, project_path(project), class: "feed-post-card__project", data: { turbo_frame: "_top" } %>
@@ -123,6 +126,17 @@
       <%= inline_svg_tag "icons/time.svg", class: "profile-project-card__meta-icon profile-project-card__meta-icon--time" %>
       <span><%= ship_hours %>h<%= " build" if project.hardware? %></span>
     </li>
+    <% if ship.multiplier.present? %>
+      <li class="profile-project-card__meta-item profile-project-card__meta-item--multiplier" title="Quality multiplier">
+        <%= inline_svg_tag "icons/star_fill.svg", class: "profile-project-card__meta-icon" %>
+        <span><%= number_with_precision(ship.multiplier, precision: 2) %>x multiplier</span>
+      </li>
+    <% end %>
+    <% if ship.payout.present? %>
+      <li class="profile-project-card__meta-item profile-project-card__meta-item--payout" title="Stardust payout">
+        <span><%= ship.payout.to_i %> Stardust</span>
+      </li>
+    <% end %>
     <% mission = ship.mission_submission&.mission %>
     <% if mission %>
       <li class="profile-project-card__meta-item profile-project-card__meta-item--mission">

@@ -663,6 +663,7 @@ Rails.application.routes.draw do
         resource :rejection, only: :create
       end
     end
+    resources :workshops
     resources :vote_flags, only: [ :index ] do
       scope module: :vote_flags do
         resource :approval, only: :create
@@ -810,6 +811,11 @@ Rails.application.routes.draw do
     get "mission_reviews", to: "missions/submissions#overview", as: :mission_reviews
 
     namespace :certification do
+      # Integrity review queue — restricted to admins and fraud leads.
+      get "integrity", to: "integrity#index", as: "integrity_reviews"
+      get "integrity/:id", to: "integrity#show", as: "integrity_review"
+      patch "integrity/:id", to: "integrity#update"
+
       # Reviewer stats & payout requests
       scope "/ship" do
         get  "mystats", to: "mystats#show", as: "mystats"
@@ -854,6 +860,7 @@ Rails.application.routes.draw do
       get "review/:id", to: "ysws#show", as: "ysws_review"
       get "review/:id/commits", to: "ysws#commits", as: "ysws_commits"
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
+      delete "review/:id/claim", to: "ysws#unclaim", as: "ysws_claim"
       post "review/:id/complete", to: "ysws#complete", as: "complete_ysws_review"
       post "review/:id/return_to_ship_cert", to: "ysws#return_to_ship_cert", as: "return_to_ship_cert_ysws_review"
 
@@ -898,6 +905,7 @@ Rails.application.routes.draw do
     resources :devlogs, only: %i[show create edit update destroy], module: :projects, shallow: false do
       member do
         get :versions
+        get :hackatime_breakdown
       end
       collection do
         get :preview_time
@@ -941,7 +949,7 @@ Rails.application.routes.draw do
 
   resources :devlogs, only: [] do
     resource :like, only: [ :create, :destroy ]
-    resources :comments, only: [ :index, :create, :destroy ]
+    resources :comments, only: [ :create, :destroy ]
   end
 
   # Public user profiles
@@ -990,6 +998,14 @@ Rails.application.routes.draw do
     member do
       get :guide
       get :gallery
+    end
+  end
+
+  # Workshops (index + show; upcoming ones also surface in the events widget).
+  resources :workshops, only: [ :index, :show ] do
+    scope module: :workshops do
+      resource :rsvp, only: [ :create, :destroy ]
+      resource :attendance, only: [ :create ]
     end
   end
 

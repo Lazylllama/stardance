@@ -29,6 +29,8 @@
 @use "components/tooltip";
 @use "components/like_button";
 @use "components/welcome_tour";
+@use "components/inspector";
+@use "components/username_link";
 @use "components/markdown_content";
 @use "components/guide_content";
 @use "components/guide_code";
@@ -64,6 +66,7 @@
 @use "pages/hardware_funding";
 @use "components/hardware_outpost_modal";
 @use "pages/votes";
+@use "pages/workshops";
 @use "pages/achievements/index" as achievements_index;
 @use "pages/shop/shop";
 @use "pages/shop/hub";

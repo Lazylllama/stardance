@@ -56,9 +56,19 @@
           </button>
         <% end %>
 
-        <button class="btn-action btn-report" data-action="click->certification--ysws--fraud-report#open">
-          🚩 Report to Fraud Squad!
-        </button>
+        <div class="review-detail-header__review-actions">
+          <button class="btn-action btn-report" data-action="click->certification--ysws--fraud-report#open">
+            🚩 Report to Fraud Squad!
+          </button>
+
+          <% if @review.pending? && @review.claimed_by?(current_user) %>
+            <%= button_to "Unclaim review",
+                          admin_certification_ysws_claim_path(@review),
+                          method: :delete,
+                          class: "btn-secondary slim",
+                          form: { class: "review-detail-header__unclaim-form" } %>
+          <% end %>
+        </div>
       </div>
     </div>
   </div>
@@ -222,14 +232,16 @@
             </span>
           </div>
 
-          <% if @review.reviewer %>
-            <div class="detail-item">
-              <span class="detail-key">YSWS Reviewer:</span>
-              <span class="detail-value">
-                <%= link_to (@review.reviewer.display_name || "Unknown"), admin_user_path(@review.reviewer), class: "link-primary" %>
-              </span>
-            </div>
-          <% end %>
+          <div class="detail-item">
+            <span class="detail-key">Reviewed by:</span>
+            <span class="detail-value">
+              <% if @review.reviewer %>
+                <%= link_to (@review.reviewer.display_name.presence || "Unknown"), admin_user_path(@review.reviewer), class: "link-primary" %>
+              <% else %>
+                Not reviewed yet
+              <% end %>
+            </span>
+          </div>
 
           <% if @review.summary_justification.present? %>
             <div class="detail-item">

@@ -48,6 +48,8 @@ module Certification
   class Ysws < ApplicationRecord
     self.table_name = "certification_ysws_reviews"
 
+    has_paper_trail
+
     belongs_to :reviewer, class_name: "User", optional: true
     belongs_to :user
     belongs_to :project, -> { with_deleted }, optional: true
@@ -119,28 +121,55 @@ module Certification
       self[:todo_devlog_count].to_i
     end
 
-    # Estimated stardust a reviewer would earn per reviewed devlog. YSWS
-    # reviewing isn't a real payout source yet (no stardust_earned column), so
-    # the dashboard leaderboard uses this to show a projected payout.
-    STARDUST_PER_DEVLOG = 0.2
-
     # Default per-reviewer target for completed devlog reviews. Shown as a
     # "reviews left until goal reached" widget on the review queue.
     DEFAULT_DEVLOG_REVIEW_GOAL = 222
 
-    # Limited-time bonus rate: devlogs whose parent review was completed within
-    # BONUS_WINDOW pay out at this higher rate instead of STARDUST_PER_DEVLOG.
-    BONUS_STARDUST_PER_DEVLOG = 0.3
+    # Projected stardust per reviewed devlog, tiered by the reviewer's running
+    # devlog-review count: a reviewer's Nth devlog pays the rate for the tier N
+    # falls in. YSWS reviewing isn't a real payout source yet (no
+    # stardust_earned column), so this drives the dashboard leaderboard's
+    # projected payout only.
+    #
+    # Each entry is [threshold, rate]: devlogs *after* `threshold` (up to the
+    # next threshold) pay `rate`.
+    #   1..900     => 0.2
+    #   901..1500  => 0.3
+    #   1501..2100 => 0.35
+    #   2101..     => 0.4
+    DEVLOG_STARDUST_TIERS = [
+      [ 0,    0.2  ],
+      [ 900,  0.3  ],
+      [ 1500, 0.35 ],
+      [ 2100, 0.4  ]
+    ].freeze
+
+    # Limited-time bonus: devlogs whose parent review completed within
+    # BONUS_WINDOW earn this much extra stardust *on top of* their tier rate
+    # (additive, so a reviewer never loses their higher tier rate for reviewing
+    # during the window).
+    BONUS_STARDUST_PER_DEVLOG = 0.1
 
     # 11am EDT July 9 2026 → 4pm EDT July 13 2026 (uses the New York zone so the
     # EDT offset is applied correctly regardless of the app's default zone).
     BONUS_WINDOW = Time.find_zone!("America/New_York").local(2026, 7, 9, 11, 0)..
       Time.find_zone!("America/New_York").local(2026, 7, 13, 16, 0)
 
+    # Projected stardust for a reviewer who has completed `count` devlog
+    # reviews, applying DEVLOG_STARDUST_TIERS cumulatively across the tiers.
+    def self.stardust_for_devlog_count(count)
+      DEVLOG_STARDUST_TIERS.each_with_index.sum do |(threshold, rate), i|
+        upper   = DEVLOG_STARDUST_TIERS[i + 1]&.first || Float::INFINITY
+        in_tier = [ count, upper ].min - threshold
+        in_tier.positive? ? in_tier * rate : 0
+      end.round(2)
+    end
+
     # All-time devlog-review leaderboard. A devlog counts as reviewed once its
     # parent YSWS review is completed (reviewed_at present); completion already
-    # forces every child devlog out of :pending. Devlogs reviewed within
-    # BONUS_WINDOW pay out at the higher BONUS_STARDUST_PER_DEVLOG rate.
+    # forces every child devlog out of :pending. Projected stardust scales with
+    # each reviewer's total via the DEVLOG_STARDUST_TIERS rate tiers, plus a
+    # flat BONUS_STARDUST_PER_DEVLOG for devlogs reviewed within BONUS_WINDOW.
     #   => [{ reviewer_id:, name:, devlogs:, stardust: }, ...] desc by devlogs
     def self.reviewer_devlog_leaderboard
       bonus_sql = sanitize_sql_array([
@@ -149,7 +178,8 @@ module Certification
       ])
 
       # Count devlogs per reviewer, split by whether they fall in the bonus
-      # window, so each bucket can be paid out at its own rate.
+      # window, so tier rates apply to the total while the bonus applies only to
+      # the in-window bucket.
       Certification::Devlog
         .joins(ysws_review: :reviewer)
         .where.not(certification_ysws_reviews: { reviewed_at: nil })
@@ -157,15 +187,15 @@ module Certification
         .count
         .group_by { |(reviewer_id, name, _bonus), _count| [ reviewer_id, name ] }
         .map do |(reviewer_id, name), entries|
-          devlogs  = entries.sum { |_key, count| count }
-          stardust = entries.sum do |(_id, _name, bonus), count|
-            count * (bonus ? BONUS_STARDUST_PER_DEVLOG : STARDUST_PER_DEVLOG)
-          end
+          devlogs     = entries.sum { |_key, count| count }
+          bonus_count = entries.sum { |(_id, _name, bonus), count| bonus ? count : 0 }
+          stardust    = stardust_for_devlog_count(devlogs) +
+                        (bonus_count * BONUS_STARDUST_PER_DEVLOG)
           {
             reviewer_id: reviewer_id,
             name: name,
             devlogs: devlogs,
-            stardust: stardust.round(1)
+            stardust: stardust.round(2)
           }
         end
         .sort_by { |row| [ -row[:devlogs], row[:name] ] }
@@ -218,6 +248,12 @@ module Certification
 
     def claimed_by?(user)
       claim_active? && claimed_by_id == user.id
+    end
+
+    def release_claim!
+      return false unless pending? && claim_active?
+
+      update!(claimed_by: nil, claimed_at: nil)
     end
 
     def approved_minutes_total
