@@ -449,6 +449,10 @@ Rails.application.routes.draw do
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
       resources :ambassador_referrals, only: [ :index, :show ]
+      resources :certification_decisions, only: [ :create ]
+    end
+    namespace :slack do
+      post "events", to: "events#create"
     end
   end
 
@@ -460,21 +464,28 @@ Rails.application.routes.draw do
       member do
         delete :cancel
       end
+      resource :flex_image, only: [ :show ], module: :orders, defaults: { format: :png }
     end
     resource :region, only: [ :update ]
     get "category/:slug", to: "items#category", as: :category
-    resources :suggestions, only: [ :create ]
+    resources :suggestions, only: [ :index, :create ] do
+      resources :votes, only: [ :create ], controller: "suggestion_votes"
+      collection do
+        get :history
+      end
+    end
     post "wishlists/:id", to: "wishlists#create", as: :create_wishlist
     delete "wishlists/:id", to: "wishlists#destroy", as: :wishlist
   end
 
-  # Report Reviews
-  get "report-reviews/review/:token", to: "report_reviews#review", as: :review_report_token
-  get "report-reviews/dismiss/:token", to: "report_reviews#dismiss", as: :dismiss_report_token
-
   # Voting
   get "rate/new", to: "votes#new", as: :new_rate
-  resources :votes, only: [ :new, :create ]
+  resources :ship_events, only: [] do
+    resource :payout_acceptance, only: :create, controller: "ship_events/payout_acceptances"
+  end
+  resources :votes, only: [ :new, :create ] do
+    resource :flag, only: :create, controller: "votes/flags"
+  end
   namespace :votes do
     resource :skip, only: :create
     resources :assignments, only: [] do
@@ -521,10 +532,18 @@ Rails.application.routes.draw do
   get "home", to: "home#index"
   resources :feed_events, only: [ :create ]
   resource :daily_roll, only: [ :create ]
+  post "daily_roll/reroll", to: "daily_rolls#reroll", as: :reroll_daily_roll
+  get "daily_roll/reroll_status", to: "daily_rolls#reroll_status", as: :reroll_status_daily_roll
+  patch "streaks/timezone", to: "streaks#update_timezone"
+  get "streaks/month", to: "streaks#month", as: :streak_month
   get "rng", to: "daily_rolls#leaderboard", as: :rng
   get "rng/history", to: "daily_rolls#history", as: :rng_history
   delete "daily_roll/clear", to: "daily_rolls#clear", as: :clear_daily_roll if Rails.env.development? || Rails.env.test?
   namespace :home do
+    resource :discover_rail, only: [] do
+      get :streak, on: :member
+      get :certificate, on: :member
+    end
     resource :feed, only: [ :show ]
   end
 
@@ -537,6 +556,13 @@ Rails.application.routes.draw do
   # Events — listing of missions and (eventually) other themed events.
   resources :events, only: [ :index ]
 
+  # Certificate: request your own (≥30 approved hours) + public code verification.
+  resource :certificate, only: [ :show, :create, :update ] do
+    get :download
+    patch :regenerate
+    resource :og_image, only: [ :show ], module: :certificates, defaults: { format: :png }
+  end
+
   # My
   namespace :my do
     resource :balance, only: [ :show ]
@@ -544,6 +570,7 @@ Rails.application.routes.draw do
       post :streamer_mode, on: :member, action: :toggle_streamer_mode
     end
     resources :dismissals, only: [ :create ]
+    resources :reports, only: [ :index ]
     post "verification/refresh", to: "verifications#refresh", as: :verification_refresh
     post "dev/pretend_idv", to: "dev_tools#pretend_idv", as: :pretend_idv_dev
     resources :notifications, only: [ :index ] do
@@ -630,6 +657,21 @@ Rails.application.routes.draw do
         get  :votes
       end
     end
+    resources :certificates, only: [ :index ] do
+      scope module: :certificates do
+        resource :approval, only: :create
+        resource :rejection, only: :create
+      end
+    end
+    resources :workshops
+    resources :vote_flags, only: [ :index ] do
+      scope module: :vote_flags do
+        resource :approval, only: :create
+        resource :rejection, only: :create
+      end
+    end
+    resources :payout_reviews, only: [ :index, :show ]
+    resources :ledger_entries, only: [ :index ]
     get "super_stars", to: "super_stars#show", as: :super_stars
     get "user-perms", to: "users#user_perms"
     resource :support, only: [ :show ], controller: "support/dashboards"
@@ -698,19 +740,30 @@ Rails.application.routes.draw do
           post :force_state
         end
       end
-      resources :suggestions, only: [ :index ] do
+      resources :suggestions, only: [] do
         member do
-          post :dismiss
-          post :disable_for_user
+          post :accept
+          post :reject
+          delete :delete
         end
       end
     end
     resources :messages, only: [ :index, :create ]
+    resources :email_templates, only: [ :index, :create, :destroy ]
     resources :support_vibes, only: [ :index, :create ]
     resources :sw_vibes, only: [ :index ]
     resources :suspicious_votes, only: [ :index ]
     resources :audit_logs, only: [ :index, :show ]
     resources :fulfillment_payouts, only: [ :index, :show ] do
+      member do
+        post :approve
+        post :reject
+      end
+      collection do
+        post :trigger
+      end
+    end
+    resources :fraud_payouts, only: [ :index, :show ] do
       member do
         post :approve
         post :reject
@@ -745,9 +798,24 @@ Rails.application.routes.draw do
       resource  :step_ordering,  only: [ :create ],                  controller: "missions/step_orderings"
       resources :prizes,         only: [ :create, :update, :destroy ], controller: "missions/prizes"
       resources :shop_unlocks,   only: [ :create, :destroy ],          controller: "missions/shop_unlocks"
+      resources :submissions,    only: [ :index, :show, :update ],     controller: "missions/submissions" do
+        collection do
+          get :next
+        end
+        member do
+          post :claim
+          post :undo
+        end
+      end
     end
+    get "mission_reviews", to: "missions/submissions#overview", as: :mission_reviews
 
     namespace :certification do
+      # Integrity review queue — restricted to admins and fraud leads.
+      get "integrity", to: "integrity#index", as: "integrity_reviews"
+      get "integrity/:id", to: "integrity#show", as: "integrity_review"
+      patch "integrity/:id", to: "integrity#update"
+
       # Reviewer stats & payout requests
       scope "/ship" do
         get  "mystats", to: "mystats#show", as: "mystats"
@@ -760,17 +828,26 @@ Rails.application.routes.draw do
           get :logs
           get :monitor, to: "ships/monitor#show"
         end
+        patch :set_project_type, on: :member
+        post :report_fraud, on: :member
         scope module: :ships do
           resource :claim, only: [ :create, :destroy ]
         end
       end
 
-      resources :funding_requests, path: "funding", only: [ :index, :show, :update ] do
-        collection do
-          get :next
-        end
+      resources :funding_requests, path: "funding", only: [ :update ] do
         scope module: :funding_requests do
           resource :claim, only: [ :create, :destroy ]
+        end
+      end
+
+      # Unified hardware review surface: one queue and one project page covering
+      # both design funding requests and build ship certifications. Verdicts and
+      # claims reuse the funding/ship mutation endpoints above so PaperTrail and
+      # existing audit behavior stay attached to the underlying records.
+      resources :hardware_reviews, path: "hardware", param: :project_id, only: [ :index, :show ] do
+        collection do
+          get :next
         end
       end
 
@@ -779,6 +856,7 @@ Rails.application.routes.draw do
       get "devlogs/:devlog_id/commits", to: "devlog_commits#index", as: "devlog_commits"
 
       get "review", to: "ysws#index", as: "ysws_reviews"
+      get "review/dashboard", to: "ysws/dashboard#show", as: "ysws_dashboard"
       get "review/:id", to: "ysws#show", as: "ysws_review"
       get "review/:id/commits", to: "ysws#commits", as: "ysws_commits"
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
@@ -794,9 +872,6 @@ Rails.application.routes.draw do
       end
 
       resources :reports, path: "report", only: [ :index, :show ] do
-        collection do
-          post :process_demo_broken
-        end
         member do
           post :review
           post :dismiss
@@ -829,6 +904,7 @@ Rails.application.routes.draw do
     resources :devlogs, only: %i[show create edit update destroy], module: :projects, shallow: false do
       member do
         get :versions
+        get :hackatime_breakdown
       end
       collection do
         get :preview_time
@@ -845,6 +921,7 @@ Rails.application.routes.draw do
     resource :og_image, only: [ :show ], module: :projects, defaults: { format: :png }
     resource :ships, only: [ :create ], module: :projects
     resource :recertification, only: [ :create ], module: :projects
+    resource :mission_resubmission, only: [ :create ], module: :projects
     resource :funding_request, only: [ :create ], module: :projects
     resource :mission, only: [ :create, :destroy ], module: :projects, controller: "missions"
     resource :magic, only: [ :create, :destroy ], module: :projects, controller: "magic"
@@ -905,6 +982,8 @@ Rails.application.routes.draw do
 
   get "edu", to: "landing#edu", as: :edu
 
+  get "emails/:name", to: "email_templates#show", as: :public_email_template
+  get "emails/:name/content", to: "email_templates#content", as: :public_email_template_content
   # Resources (formerly "guides"). Served at /resources; the guides_path /
   # guide_path helpers are retained. Old /guides links redirect here.
   resources :guides, only: [ :index, :show ], path: "resources"
@@ -921,13 +1000,18 @@ Rails.application.routes.draw do
     end
   end
 
+  # Workshops (index + show; upcoming ones also surface in the events widget).
+  resources :workshops, only: [ :index, :show ] do
+    scope module: :workshops do
+      resource :rsvp, only: [ :create, :destroy ]
+      resource :attendance, only: [ :create ]
+    end
+  end
+
   # Reviewer queue.
-  resources :mission_submissions, only: [ :index, :show ] do
+  resources :mission_submissions, only: [] do
     member do
-      post :approve
-      post :reject
-      post :undo
-      get  :redeem
+      get :redeem
     end
   end
 

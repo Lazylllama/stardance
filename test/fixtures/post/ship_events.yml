@@ -20,6 +20,7 @@
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
 #  payout_basis_percentile    :decimal(5, 2)
+#  payout_basis_vote_ids      :bigint           default([]), not null, is an Array
 #  payout_blessing            :string
 #  payout_curve_version       :string
 #  review_instructions        :text

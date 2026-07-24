@@ -36,7 +36,6 @@ const DEFAULT_BY_SHORTCODE = new Map(
 
 let customEmotes = [];
 let customById = new Map();
-let customCategory = [];
 let customEmotesPromise = null;
 
 function normalizeEmote(emote) {
@@ -80,19 +79,14 @@ async function loadCustomEmotes() {
       customById = new Map(
         customEmotes.map((emote) => [emote.id.toLowerCase(), emote]),
       );
-      customCategory = customEmotes.length
-        ? [{ id: "slack", name: "Slack", emojis: customEmotes }]
-        : [];
     });
 
   return customEmotesPromise;
 }
 
 export default class extends Controller {
-  static targets = ["editor", "trigger", "popover", "textarea"];
+  static targets = ["editor", "popover", "textarea"];
 
-  #picker = null;
-  #pickerOpen = false;
   #menu = null;
   #matches = [];
   #selected = 0;
@@ -109,54 +103,8 @@ export default class extends Controller {
   }
 
   disconnect() {
-    this.close();
     this.#hideSuggestions();
-    this.#picker = null;
     this.#menu = null;
-  }
-
-  toggle() {
-    this.hasPopoverTarget && !this.popoverTarget.hidden
-      ? this.close()
-      : this.open();
-  }
-
-  async open() {
-    if (!this.hasPopoverTarget) return;
-
-    this.#hideSuggestions();
-    await loadCustomEmotes();
-    if (!this.#picker) {
-      const { Picker } = await import("emoji-mart");
-      const data = (await import("@emoji-mart/data")).default;
-
-      this.#picker = new Picker({
-        data,
-        custom: customCategory,
-        onEmojiSelect: (emoji) =>
-          this.#insertEmote(emoji.native || (emoji.id ? `:${emoji.id}:` : "")),
-        theme: "dark",
-        set: "native",
-        previewPosition: "none",
-        skinTonePosition: "search",
-        maxFrequentRows: 2,
-      });
-
-      this.popoverTarget.appendChild(this.#picker);
-    }
-
-    this.#setPickerOpen(true);
-    document.addEventListener("click", this.#outsideClick, true);
-    document.addEventListener("keydown", this.#escHandler);
-  }
-
-  close() {
-    this.#pickerOpen = false;
-    if (this.#picker) this.#picker.hidden = true;
-    if (this.#menu) this.#menu.hidden = true;
-    if (this.hasPopoverTarget) this.popoverTarget.hidden = true;
-    document.removeEventListener("click", this.#outsideClick, true);
-    document.removeEventListener("keydown", this.#escHandler);
   }
 
   async editorInput() {
@@ -199,20 +147,6 @@ export default class extends Controller {
     setTimeout(() => this.#hideSuggestions(), 120);
   }
 
-  #outsideClick = (event) => {
-    if (
-      this.hasPopoverTarget &&
-      !this.popoverTarget.contains(event.target) &&
-      !this.triggerTarget.contains(event.target)
-    ) {
-      this.close();
-    }
-  };
-
-  #escHandler = (event) => {
-    if (event.key === "Escape") this.close();
-  };
-
   async #refreshSuggestions(cursor) {
     await loadCustomEmotes();
     const range = this.#shortcodeRange(cursor);
@@ -247,7 +181,6 @@ export default class extends Controller {
         `,
       )
       .join("");
-    this.#setPickerOpen(false);
     this.popoverTarget.hidden = false;
     menu.hidden = false;
   }
@@ -450,19 +383,11 @@ export default class extends Controller {
     return `<span class="feed-composer__emote-suggestion-native">${emote.native}</span>`;
   }
 
-  #setPickerOpen(open) {
-    this.#pickerOpen = open;
-    if (this.#picker) this.#picker.hidden = !open;
-    if (this.hasPopoverTarget) {
-      this.popoverTarget.hidden = !open && !this.#suggestionsVisible();
-    }
-  }
-
   #hideSuggestions() {
     if (this.#menu) this.#menu.hidden = true;
     this.#matches = [];
     this.#range = null;
-    this.#setPickerOpen(this.#pickerOpen);
+    if (this.hasPopoverTarget) this.popoverTarget.hidden = true;
   }
 
   #suggestionsVisible() {

@@ -2,56 +2,58 @@
 #
 # Table name: users
 #
-#  id                             :bigint           not null, primary key
-#  age_attestation                :string
-#  approx_balance                 :integer          default(0), not null
-#  approx_total_earned            :integer          default(0), not null
-#  banned                         :boolean          default(FALSE), not null
-#  banned_at                      :datetime
-#  banned_reason                  :text
-#  bio                            :text
-#  display_name                   :string
-#  email                          :string
-#  enriched_ref                   :string
-#  experience_level               :string
-#  first_name                     :string
-#  geocoded_country               :string
-#  geocoded_lat                   :float
-#  geocoded_lon                   :float
-#  geocoded_subdivision           :string
-#  granted_roles                  :string           default([]), not null, is an Array
-#  guest_email                    :string
-#  has_gotten_free_stickers       :boolean          default(FALSE)
-#  has_pending_achievements       :boolean          default(FALSE), not null
-#  hcb_email                      :string
-#  interests                      :string           default([]), is an Array
-#  internal_notes                 :text
-#  ip_address                     :string
-#  last_name                      :string
-#  manual_outpost_ticket_approval :string
-#  manual_ysws_override           :boolean
-#  mission_review_notifications   :boolean          default(TRUE), not null
-#  onboarded_at                   :datetime
-#  outpost_discount_stardust      :integer          default(0), not null
-#  outpost_email_sent_at          :datetime
-#  ref                            :string
-#  regions                        :string           default([]), is an Array
-#  session_token                  :string
-#  shop_region                    :enum
-#  shop_tutorial_completed_at     :datetime
-#  shop_tutorial_started_at       :datetime
-#  synced_at                      :datetime
-#  things_dismissed               :string           default([]), not null, is an Array
-#  user_agent                     :string
-#  user_ref                       :string
-#  verification_checked_at        :datetime
-#  verification_status            :string           default("needs_submission"), not null
-#  vote_balance                   :integer          default(0), not null
-#  votes_count                    :integer
-#  ysws_eligible                  :boolean          default(FALSE), not null
-#  created_at                     :datetime         not null
-#  updated_at                     :datetime         not null
-#  slack_id                       :string
+#  id                           :bigint           not null, primary key
+#  age_attestation              :string
+#  approx_balance               :integer          default(0), not null
+#  approx_total_earned          :integer          default(0), not null
+#  banned                       :boolean          default(FALSE), not null
+#  banned_at                    :datetime
+#  banned_reason                :text
+#  bio                          :text
+#  current_streak               :integer          default(0), not null
+#  display_name                 :string
+#  email                        :string
+#  enriched_ref                 :string
+#  experience_level             :string
+#  first_name                   :string
+#  geocoded_country             :string
+#  geocoded_lat                 :float
+#  geocoded_lon                 :float
+#  geocoded_subdivision         :string
+#  granted_roles                :string           default([]), not null, is an Array
+#  guest_email                  :string
+#  has_gotten_free_stickers     :boolean          default(FALSE)
+#  has_pending_achievements     :boolean          default(FALSE), not null
+#  hcb_email                    :string
+#  interests                    :string           default([]), is an Array
+#  internal_notes               :text
+#  ip_address                   :string
+#  last_name                    :string
+#  manual_ysws_override         :boolean
+#  mission_review_notifications :boolean          default(TRUE), not null
+#  onboarded_at                 :datetime
+#  outpost_discount_stardust    :integer          default(0), not null
+#  outpost_email_sent_at        :datetime
+#  ref                          :string
+#  regions                      :string           default([]), is an Array
+#  session_token                :string
+#  shop_region                  :enum
+#  shop_tutorial_completed_at   :datetime
+#  shop_tutorial_started_at     :datetime
+#  streak_synced_at             :datetime
+#  synced_at                    :datetime
+#  things_dismissed             :string           default([]), not null, is an Array
+#  timezone                     :string
+#  user_agent                   :string
+#  user_ref                     :string
+#  verification_checked_at      :datetime
+#  verification_status          :string           default("needs_submission"), not null
+#  vote_balance                 :integer          default(0), not null
+#  votes_count                  :integer
+#  ysws_eligible                :boolean          default(FALSE), not null
+#  created_at                   :datetime         not null
+#  updated_at                   :datetime         not null
+#  slack_id                     :string
 #
 # Indexes
 #
@@ -68,6 +70,10 @@
 class User < ApplicationRecord
   include SemanticSearchIndexable
   include Gorse::SyncableUser
+
+  # Dropped in favour of the manual_outpost_ticket_approval achievement row.
+  # Kept ignored so a cached schema can't reference it mid-deploy.
+  self.ignored_columns += [ "manual_outpost_ticket_approval" ]
 
   has_paper_trail ignore: [ :votes_count, :updated_at, :shop_region, :ip_address, :user_agent ], on: [ :update, :destroy ]
   semantic_search_indexable type: "user"
@@ -217,7 +223,6 @@ class User < ApplicationRecord
   validates :display_name, format: { with: USERNAME_FORMAT, message: "can only contain letters, numbers, hyphens, and underscores" }, if: :display_name_changed?
   validates :hcb_email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
   validates :user_ref, length: { maximum: 100 }, allow_blank: true
-  validates :manual_outpost_ticket_approval, format: { with: /\Ahttps?:\/\/.+\z/i, message: "must be an HTTP(S) URL" }, allow_blank: true
 
   include User::Notifications
   include User::Roles
@@ -235,6 +240,9 @@ class User < ApplicationRecord
   include User::Profile
   include User::Preferences
   include User::UsernameBloomSync
+  include User::Streakable
+  include User::Funnel
+  include User::Certificates
 
   # Tracks platform signups/verifications for the raffle referral program
   # (no-ops unless the signup carried a raffle referral code). See the engine.

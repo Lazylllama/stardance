@@ -6,6 +6,7 @@ class User
     self::ALL = [
       new(0, :super_admin, "Can assign other users admin"),
       new(1, :admin, "Can do everything except assign or remove admin"),
+      new(10, :fraud_lead, "Senior fraud team member"),
       new(2, :fraud_dept, "Can issue negative payouts, cancel grants & shop orders, but not reject or ban users; access to Blazer; access to read-only admin User w/o PII"),
       new(3, :project_certifier, "Approve/reject if project work meets Shipwright standards"),
       new(4, :guardian_of_integrity, "Can approve/reject projects for YSWS DB"),
@@ -13,7 +14,8 @@ class User
       new(6, :helper, "Support team with read-only access to users (no PII), projects, and shop orders"),
       new(7, :shop_manager, "Can create/edit draft shop items and view orders without PII"),
       new(8, :mission_reviewer, "Can review submissions for any mission across the platform"),
-      new(9, :raffle_admin, "Can manage the referral raffle: weeks, draws, participants, and referrals")
+      new(9, :raffle_admin, "Can manage the referral raffle: weeks, draws, participants, and referrals"),
+      new(11, :workshop_manager, "Can create and manage workshops and see their RSVPs and attendees")
     ].freeze
 
     self::SLUGGED = self::ALL.index_by(&:name).freeze

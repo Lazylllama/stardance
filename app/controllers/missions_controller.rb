@@ -3,7 +3,7 @@ class MissionsController < ApplicationController
   before_action :set_mission, only: [ :show, :guide, :gallery ]
   before_action -> { @active_nav_slug = "missions" }
 
-  discover_rail_widgets :upcoming_events
+  discover_rail_widgets :certificate, :upcoming_events
 
   def index
     authorize Mission
@@ -25,6 +25,7 @@ class MissionsController < ApplicationController
   def show
     authorize @mission
     @ordered_prizes       = @mission.prizes.ordered.includes(:shop_item).to_a
+    @shop_unlocks         = @mission.shop_unlocks.includes(:shop_item).to_a
     @guide_outline        = @mission.guide_sections
     @stats                = mission_stats(@mission)
     @gallery_projects     = @mission.showcase_projects(limit: 13)

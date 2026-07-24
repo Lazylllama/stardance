@@ -2,9 +2,10 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
   include ActiveModel::Conversion
   extend ActiveModel::Naming
 
-  self::CATEGORY_ORDER = %i[outpost shipping craft program].freeze
+  self::CATEGORY_ORDER = %i[stardance_101 outpost shipping craft program].freeze
 
   self::CATEGORY_LABELS = {
+    stardance_101: "Stardance 101",
     shipping: "Shipping",
     craft: "Craft",
     program: "Program",
@@ -70,13 +71,22 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       related: %i[github_repository great_readme]
     ),
     new(
+      slug: :hackatime,
+      title: "Hackatime isn't working?",
+      description: "Troubleshooting Hackatime: linking your account, time not showing up, and common fixes.",
+      category: :craft,
+      icon: "info",
+      reading_minutes: 4,
+      related: %i[devlogs how_to_ship]
+    ),
+    new(
       slug: :devlogs,
       title: "Devlogs that get noticed",
       description: "What to put in a devlog, how often to post, and why this affects voting.",
       category: :craft,
       icon: "edit",
       reading_minutes: 4,
-      related: %i[what_is_shipping]
+      related: %i[what_is_shipping hackatime]
     ),
     new(
       slug: :why_we_ask,
@@ -98,10 +108,21 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       markdown: "outpost/outpost.md"
     ),
     new(
+      slug: :now_what,
+      title: "I've set up my account. Now what?",
+      description: "Just signed up? Here's the whole Stardance loop — from your first project to spending Stardust — in one place.",
+      category: :stardance_101,
+      icon: "compass_fill",
+      reading_minutes: 3,
+      related: %i[software hardware what_is_shipping],
+      markdown: "now_what.md",
+      hidden: true
+    ),
+    new(
       slug: :hardware,
       title: "Hardware in Stardance 101",
       description: "Step-by-step on how to make hardware projects in Stardance!",
-      category: :outpost,
+      category: :stardance_101,
       icon: "rocket",
       reading_minutes: 2,
       related: %i[outpost starting-hardware outpost-faq],
@@ -167,6 +188,16 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       reading_minutes: 3,
       related: %i[outpost outpost-tiers how_to_ship],
       hidden: true
+    ),
+    new(
+      slug: :software,
+      title: "Software in Stardance 101",
+      description: "Step-by-step on how to make software projects in Stardance!",
+      category: :stardance_101,
+      icon: "rocket",
+      reading_minutes: 2,
+      related: %i[github_repository hackatime good_git_commits devlogs what_is_shipping how_to_ship],
+      markdown: "software.md"
     )
   ].freeze
 

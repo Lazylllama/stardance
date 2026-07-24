@@ -21,6 +21,13 @@
     &:focus-visible {
       color: var(--accent);
     }
+
+    // Secondary cross-link (e.g. to the combined hardware review) shown beside
+    // the back link.
+    &--alt {
+      margin-left: var(--space-m);
+      color: var(--color-brand-lilac);
+    }
   }
 
   &__header {
@@ -124,6 +131,18 @@
     color: var(--muted);
   }
 
+  &__link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-m);
+    margin-top: var(--space-m);
+
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+  }
+
   &__links,
   &__meta {
     display: grid;
@@ -219,22 +238,71 @@
     font-style: italic;
   }
 
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-s);
+
+    .action-btn,
+    form,
+    select {
+      width: 100%;
+    }
+
+    select {
+      text-align: center;
+    }
+
+    .action-btn {
+      justify-content: center;
+    }
+  }
+
+  &__fraud-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+
+    &[hidden] {
+      display: none;
+    }
+
+    &__input {
+      width: 100%;
+      padding: var(--space-s);
+      font-family: inherit;
+      font-size: var(--font-size-m);
+      color: var(--color-space-text);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 141, 157, 0.35);
+      border-radius: 8px;
+      resize: vertical;
+
+      &:focus-visible {
+        outline: 2px solid var(--color-brand-salmon);
+        outline-offset: 1px;
+      }
+    }
+
+    &__footer {
+      display: flex;
+      gap: var(--space-xs);
+
+      .action-btn {
+        flex: 1;
+      }
+    }
+  }
+
   &__badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.55rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    border-radius: 999px;
+    font-weight: 600;
 
     &--yes {
-      color: #08061e;
-      background: var(--color-brand-mint);
+      color: var(--color-brand-mint);
     }
 
     &--no {
-      color: var(--muted);
-      background: rgba(255, 255, 255, 0.08);
+      color: var(--color-brand-salmon);
     }
   }
 
@@ -611,11 +679,6 @@
     background: rgba(255, 255, 255, 0.07);
   }
 
-  &--accepted {
-    border-style: solid;
-    border-color: var(--color-brand-mint);
-  }
-
   &--error {
     border-color: var(--color-brand-salmon);
   }
@@ -741,4 +804,13 @@
   50% {
     box-shadow: 0 0 0 4px rgba(129, 255, 255, 0.18);
   }
+}
+
+// Verdict confirmation preview reuses the shared `.modal` shell + `.status-pill`
+// + `.action-btn`; only the feedback body needs custom rules so the reviewer's
+// line breaks survive and a long note scrolls instead of blowing out the modal.
+.verdict-preview__feedback {
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
 }

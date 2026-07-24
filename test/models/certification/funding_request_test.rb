@@ -10,6 +10,7 @@
 #  decided_at                :datetime
 #  discount_stardust_awarded :integer
 #  feedback                  :text
+#  hcb_grant_hashid          :string
 #  internal_reason           :text
 #  lock_version              :integer          default(0), not null
 #  requested_amount_cents    :integer          not null
@@ -39,6 +40,8 @@
 require "test_helper"
 
 class Certification::FundingRequestTest < ActiveSupport::TestCase
+  HCB_GRANT_RESPONSE = { "id" => "test_grant_123" }.freeze
+
   def setup
     Flipper.enable(:hardware_flow)
     @owner = User.create!(
@@ -69,33 +72,40 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
     )
-    fr.update!(reviewer: @reviewer, status: :approved)
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      fr.update!(reviewer: @reviewer, status: :approved)
+    end
 
     assert_equal "build", @project.reload.hardware_stage
-    # tier 3 (S) max $180, approved $60 => $120 unused * 2 = 240
-    assert_equal 240, @owner.reload.outpost_discount_stardust
+    # tier 3 (S) => flat 100% discount on the 300✦ Outpost Ticket = 300
+    assert_equal 300, @owner.reload.outpost_discount_stardust
     assert_equal Certification::FundingRequest::REVIEW_BOUNTY, fr.reload.stardust_earned
+    assert_equal "test_grant_123", fr.reload.hcb_grant_hashid
   end
 
-  test "reviewer can approve for less than requested, increasing the discount" do
+  test "approving for less than requested still grants the full flat tier discount" do
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 3, requested_amount_cents: 10_000, status: :pending
     )
-    fr.update!(reviewer: @reviewer, status: :approved, approved_amount_dollars: 40)
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      fr.update!(reviewer: @reviewer, status: :approved, approved_amount_dollars: 40)
+    end
 
-    # approved $40 of $180 (S) max => $140 unused * 2 = 280
-    assert_equal 280, @owner.reload.outpost_discount_stardust
+    # flat per-tier discount: the approved amount no longer affects it; tier 3 (S) = 300
+    assert_equal 300, @owner.reload.outpost_discount_stardust
   end
 
   test "discount accrual is idempotent across re-saves" do
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
     )
-    fr.update!(reviewer: @reviewer, status: :approved)
-    assert_equal 240, @owner.reload.outpost_discount_stardust
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      fr.update!(reviewer: @reviewer, status: :approved)
+    end
+    assert_equal 300, @owner.reload.outpost_discount_stardust
 
     fr.update!(feedback: "nice work")
-    assert_equal 240, @owner.reload.outpost_discount_stardust
+    assert_equal 300, @owner.reload.outpost_discount_stardust
   end
 
   test "returned requests leave the project and discount untouched" do
@@ -112,7 +122,9 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
     )
-    fr.update!(reviewer: @reviewer, status: :approved)
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      fr.update!(reviewer: @reviewer, status: :approved)
+    end
     @project.reload
 
     label = "Post at least one build devlog before shipping"

@@ -63,6 +63,7 @@ class Project < ApplicationRecord
     "Desktop App (Windows)", "Desktop App (Linux)", "Desktop App (macOS)",
     "Minecraft Mods", "Hardware", "Android App", "iOS App", "Other"
   ].freeze
+  USER_SELECTABLE_TYPES = (AVAILABLE_CATEGORIES - [ "Hardware" ]).freeze
 
   # Hardware projects carry a build/design stage; software projects leave
   # hardware_stage nil. Drives the Lookout screen-recording flow on the project
@@ -106,6 +107,7 @@ class Project < ApplicationRecord
   has_many :reports, class_name: "Project::Report", dependent: :destroy
   has_many :ship_reviews, class_name: "Certification::Ship", dependent: :restrict_with_exception
   has_many :certification_funding_requests, class_name: "Certification::FundingRequest", dependent: :destroy
+  has_many :integrity_checks, through: :ship_events, source: :integrity_check
   has_many :skips, class_name: "Project::Skip", dependent: :destroy
   has_many :project_follows, dependent: :destroy
   has_many :followers, through: :project_follows, source: :user
@@ -257,11 +259,31 @@ class Project < ApplicationRecord
   # allows nil, but not "").
   normalizes :hardware_stage, with: ->(value) { value.presence }
   validates :hardware_stage, inclusion: { in: HARDWARE_STAGES }, allow_nil: true
+  validates :project_type, inclusion: { in: AVAILABLE_CATEGORIES }, allow_nil: true
   validate :hardware_stage_locked_after_funding_request
+  validate :hardware_required_by_current_mission
+
+  # Set by Certification::FundingRequest#apply_verdict_to_project! to let the
+  # approval flow advance the stage; the lock below stays closed for everyone else.
+  attr_accessor :advancing_via_funding_approval
 
   def hardware_stage_locked_after_funding_request
     return unless hardware_stage_changed? && has_any_funding_request?
+    # The certification flow advances design → build when a funding request is
+    # approved. Allow only that in-process action, while still locking any
+    # owner-initiated stage change.
+    return if advancing_via_funding_approval
     errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
+  end
+
+  # A project on a hardware mission can't drop back to software while attached —
+  # the mission only accepts hardware projects (Mission#hardware?). Detach first.
+  # Only queries the mission when the project is actually leaving hardware.
+  def hardware_required_by_current_mission
+    return unless hardware_stage_changed? && !hardware?
+    return unless current_mission&.hardware?
+
+    errors.add(:hardware_stage, "can't be software while attached to the #{current_mission.name} hardware mission")
   end
 
   def validate_repo_cloneable
@@ -296,7 +318,34 @@ class Project < ApplicationRecord
       errors.add(:base, "Cannot delete a project that has been shipped")
       raise ActiveRecord::RecordInvalid.new(self)
     end
-    update!(deleted_at: Time.current)
+
+    transaction do
+      now = Time.current
+      update!(deleted_at: now)
+
+      devlogs.find_each { |d| d.update_columns(deleted_at: now) }
+
+      Post::Repost.unscoped.where(original_post_id: posts.pluck(:id)).find_each do |repost|
+        repost.update_columns(deleted_at: now)
+      end
+    end
+  end
+
+  def restore!
+    transaction do
+      deleted_at_was = deleted_at
+      update!(deleted_at: nil)
+
+      Post::Devlog.unscoped.where(deleted_at: deleted_at_was)
+                  .where(id: posts.of_devlogs.pluck(:postable_id))
+                  .update_all(deleted_at: nil)
+
+      repost_ids = Post::Repost.unscoped.where(deleted_at: deleted_at_was)
+                               .where(original_post_id: posts.pluck(:id))
+                               .pluck(:id)
+
+      Post::Repost.unscoped.where(id: repost_ids).update_all(deleted_at: nil)
+    end
   end
 
   def shipped?
@@ -369,6 +418,13 @@ class Project < ApplicationRecord
     )
   end
 
+  # Where the current devlog window opened: the previous devlog, or for the
+  # first devlog the earlier of project creation and season start.
+  def devlog_window_start(at)
+    previous_devlog = devlogs.where("post_devlogs.created_at < ?", at).order("post_devlogs.created_at desc").first
+    previous_devlog&.created_at || [ created_at, Date.parse(HackatimeService::START_DATE).beginning_of_day ].min
+  end
+
   aasm column: :ship_status do
     state :draft, initial: true
     state :submitted
@@ -378,10 +434,10 @@ class Project < ApplicationRecord
     state :rejected
 
     event :submit_for_review do
-      transitions from: [ :draft, :submitted, :under_review, :needs_changes, :approved, :rejected ], to: :submitted, guard: :shippable?
-      after do
-        self.shipped_at = Time.current # I moved this logic to the ships controller as there's differences in how we handle reships - @AVD
-      end
+      transitions from: [ :draft, :submitted, :under_review, :needs_changes, :approved, :rejected ],
+                  to: :submitted,
+                  guard: :shippable?,
+                  after: -> { self.shipped_at = Time.current }
     end
 
     event :start_review do
@@ -397,7 +453,7 @@ class Project < ApplicationRecord
     end
 
     event :return_for_changes do
-      transitions from: :under_review, to: :needs_changes
+      transitions from: [ :under_review, :approved ], to: :needs_changes
     end
 
     event :resubmit_for_review do
@@ -690,17 +746,16 @@ class Project < ApplicationRecord
     response.code.to_i
   end
 
-  def devlog_window_start(at)
-    previous_devlog = devlogs.where("post_devlogs.created_at < ?", at).order("post_devlogs.created_at desc").first
-    previous_devlog&.created_at || [ created_at, Date.parse(HackatimeService::START_DATE).beginning_of_day ].min
-  end
-
   def previous_ship_event_has_payout?
     return true if last_ship_event.nil?
     return true if last_ship_event.payout.present?
+    # Only an approved ship that is still awaiting its payout should block the
+    # next ship. A ship that's pending, returned for changes, or rejected isn't
+    # a "previous ship awaiting payout" — it's the one currently being
+    # (re-)certified, so it must not block re-certification.
+    return true unless last_ship_event.certification_status == "approved"
     sub = last_ship_event.mission_submission
     return true if sub&.payout_path == "static_prize"
-    return true if sub&.rejected?
     false
   end
 

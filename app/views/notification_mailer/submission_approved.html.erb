@@ -21,7 +21,7 @@
 
 <% if @record %>
   <div style="margin:24px 0 4px;">
-    <a href="<%= mission_submission_url(@record) %>" style="display:inline-block;padding:11px 22px;background:#1a1a2e;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:600;font-size:14px;line-height:1;">View submission</a>
+    <a href="<%= @record.ship_event&.post&.project ? project_url(@record.ship_event.post.project) : root_url %>" style="display:inline-block;padding:11px 22px;background:#1a1a2e;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:600;font-size:14px;line-height:1;">View project</a>
     <a href="<%= my_balance_url %>" style="display:inline-block;padding:11px 22px;background:#ffffff;color:#1a1a2e;text-decoration:none;border:1px solid #d9d5c5;border-radius:999px;font-weight:600;font-size:14px;line-height:1;margin-left:6px;">View balance</a>
   </div>
 <% end %>

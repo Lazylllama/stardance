@@ -61,6 +61,31 @@ class VotesControllerTest < ActionDispatch::IntegrationTest
       assert submitted.properties.key?("score_average")
     end
 
+    test "submitting a vote stores readable telemetry on the vote" do
+      get new_rate_url
+      assignment = current_assignment
+      assignment.update_columns(first_viewed_at: 75.seconds.ago, last_viewed_at: 10.seconds.ago)
+      assignment.ship_event.project.update_columns(
+        demo_url: "https://demo.example.com",
+        repo_url: "https://github.com/acme/widget"
+      )
+
+      get demo_votes_assignment_path(assignment)
+      get repo_votes_assignment_path(assignment)
+
+      assert_difference -> { Vote.count }, 1 do
+        post votes_path, params: {
+          vote_assignment_id: assignment.id,
+          vote: valid_scores.merge(reason: VotesControllerTest::VALID_REASON)
+        }
+      end
+
+      vote = Vote.order(:created_at).last
+      assert_operator vote.time_taken_to_vote_in_seconds, :>=, 75
+      assert_predicate vote, :demo_opened?
+      assert_predicate vote, :repo_opened?
+    end
+
     test "skipping records a skip event and timestamp" do
       get new_rate_url
       assignment = current_assignment

@@ -1,6 +1,74 @@
 {
   "ignored_warnings": [
     {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 4,
+      "fingerprint": "0217f708c95628d98fe6a7375ac2c460c8440149cfefd5f2fbb0b0f7f2476af5",
+      "check_name": "LinkToHref",
+      "message": "Potentially unsafe model attribute in `link_to` href",
+      "file": "app/views/projects/show.html.erb",
+      "line": 1037,
+      "link": "https://brakemanscanner.org/docs/warning_types/link_to_href",
+      "code": "link_to(\"See source code \\u2192\", Project.find(params[:id]).repo_url, :target => \"_blank\", :rel => \"noopener\", :class => \"project-show__latest-ship-btn\")",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "ProjectsController",
+          "method": "show",
+          "line": 33,
+          "file": "app/controllers/projects_controller.rb",
+          "rendered": {
+            "name": "projects/show",
+            "file": "app/views/projects/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "projects/show"
+      },
+      "user_input": "Project.find(params[:id]).repo_url",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "External user-set project URL (demo_url/repo_url) rendered with rel=noopener; same pattern already ignored for the show_hackpad variant."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 4,
+      "fingerprint": "0bc9acbc1659e5d40512d5434cff5a30f82559df6362688d5e5789763ea7021a",
+      "check_name": "LinkToHref",
+      "message": "Potentially unsafe model attribute in `link_to` href",
+      "file": "app/views/projects/show.html.erb",
+      "line": 1032,
+      "link": "https://brakemanscanner.org/docs/warning_types/link_to_href",
+      "code": "link_to((if Project.find(params[:id]).hardware? then\n  \"Video of Project \\u2192\"\nelse\n  \"Try project \\u2192\"\nend), Project.find(params[:id]).demo_url, :target => \"_blank\", :rel => \"noopener\", :class => \"project-show__latest-ship-btn project-show__latest-ship-btn--primary\")",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "ProjectsController",
+          "method": "show",
+          "line": 33,
+          "file": "app/controllers/projects_controller.rb",
+          "rendered": {
+            "name": "projects/show",
+            "file": "app/views/projects/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "projects/show"
+      },
+      "user_input": "Project.find(params[:id]).demo_url",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "External user-set project URL (demo_url/repo_url) rendered with rel=noopener; same pattern already ignored for the show_hackpad variant."
+    },
+    {
       "warning_type": "SQL Injection",
       "warning_code": 0,
       "fingerprint": "6554659cfed6052983bd9d5d78a2dc018078472e922b9d769c79dce5cb7f34ba",
@@ -18,76 +86,10 @@
       },
       "user_input": null,
       "confidence": "High",
-      "cwe_id": [89],
+      "cwe_id": [
+        89
+      ],
       "note": "Values interpolated via connection.quote are from a frozen constant (SANKEY_STEPS), not user input"
-    },
-    {
-      "warning_type": "Cross-Site Scripting",
-      "warning_code": 4,
-      "fingerprint": "e89e919b80f13b3e34709fd2b9a374e2408b0434505b2166ece1e156ca7c56a3",
-      "check_name": "LinkToHref",
-      "message": "Potentially unsafe model attribute in `link_to` href",
-      "file": "app/views/projects/show_hackpad.html.erb",
-      "line": 848,
-      "link": "https://brakemanscanner.org/docs/warning_types/link_to_href",
-      "code": "link_to((if Project.find(params[:id]).hardware? then \"Video of Project \\u2192\" else \"Try project \\u2192\" end), Project.find(params[:id]).demo_url, :target => \"_blank\", :rel => \"noopener\", :class => \"project-show__latest-ship-btn project-show__latest-ship-btn--primary\")",
-      "render_path": [
-        {
-          "type": "controller",
-          "class": "ProjectsController",
-          "method": "show",
-          "line": 29,
-          "file": "app/controllers/projects_controller.rb",
-          "rendered": {
-            "name": "projects/show_hackpad",
-            "file": "app/views/projects/show_hackpad.html.erb"
-          }
-        }
-      ],
-      "location": {
-        "type": "template",
-        "template": "projects/show_hackpad"
-      },
-      "user_input": "Project.find(params[:id]).demo_url",
-      "confidence": "Weak",
-      "cwe_id": [
-        79
-      ],
-      "note": ""
-    },
-    {
-      "warning_type": "Cross-Site Scripting",
-      "warning_code": 4,
-      "fingerprint": "f9b55899dd94c5ddbaff853fb9716c1135cc957e6d349a250d090221b4f3dca6",
-      "check_name": "LinkToHref",
-      "message": "Potentially unsafe model attribute in `link_to` href",
-      "file": "app/views/projects/show_hackpad.html.erb",
-      "line": 811,
-      "link": "https://brakemanscanner.org/docs/warning_types/link_to_href",
-      "code": "link_to(\"See source code \\u2192\", Project.find(params[:id]).repo_url, :target => \"_blank\", :rel => \"noopener\", :class => \"project-show__latest-ship-btn\")",
-      "render_path": [
-        {
-          "type": "controller",
-          "class": "ProjectsController",
-          "method": "show",
-          "line": 29,
-          "file": "app/controllers/projects_controller.rb",
-          "rendered": {
-            "name": "projects/show_hackpad",
-            "file": "app/views/projects/show_hackpad.html.erb"
-          }
-        }
-      ],
-      "location": {
-        "type": "template",
-        "template": "projects/show_hackpad"
-      },
-      "user_input": "Project.find(params[:id]).repo_url",
-      "confidence": "Weak",
-      "cwe_id": [
-        79
-      ],
-      "note": ""
     },
     {
       "warning_type": "Command Injection",
@@ -111,6 +113,14 @@
         77
       ],
       "note": "False positive: Open3.capture2(*cmd) uses the multi-arg array form (no shell); the interpolated values are a frozen format string and iso8601 timestamps, each a single --flag=value arg"
+    },
+    {
+      "fingerprint": "160ee353d49154f06a9d66f7e7499992370cd6e087eda407ddabcd54f5ca48a3",
+      "note": "Admin-entered workshop zoom_link, model-validated to start with https:// (no javascript: scheme possible); rendered as a plain link on the admin show page."
+    },
+    {
+      "fingerprint": "b3bc2171440b421e9e327dea883e5351727f11a9c2550dad8e63761e207a9d73",
+      "note": "Intentional external redirect: the Join button sends attendees to the workshop's Zoom call. zoom_link is admin-entered and model-validated to be an https:// URL."
     }
   ],
   "brakeman_version": "8.0.5"

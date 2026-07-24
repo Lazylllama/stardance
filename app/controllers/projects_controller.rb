@@ -9,6 +9,7 @@ class ProjectsController < ApplicationController
   before_action :set_project_minimal, only: [ :edit, :update, :destroy ]
   before_action :set_project, only: [ :show, :readme, :add_test_time ]
   before_action :redirect_guest_owner_to_link!, only: [ :show, :readme, :edit, :update ]
+  before_action :redirect_hardware_creation_to_outpost, only: [ :create ]
 
   def show
     authorize @project
@@ -28,14 +29,18 @@ class ProjectsController < ApplicationController
 
     prepare_project_show_context
 
-    render :show_hackpad if @project_onboarding_mission&.slug == "hackpad"
+    if params[:embed].present?
+      @hide_sidebar = true
+      render layout: "embed"
+    end
   end
 
   def prepare_project_show_context
     @members = @project.users.where(banned: false).to_a
     @is_member = current_user && @members.include?(current_user)
     @active_nav_slug = @is_member ? "projects" : "home"
-    @can_edit_project = @is_member && policy(@project).update?
+    @can_edit_project = policy(@project).update?
+    @admin_editing_project = !@is_member && current_user&.admin?
     @follower_count = @project.project_follows.size
     @viewer_follow = current_user && @project.project_follows.find_by(user_id: current_user.id)
     @total_hours = (@project.duration_seconds / 3600.0).round
@@ -53,6 +58,9 @@ class ProjectsController < ApplicationController
         @all_hackatime_projects = current_user.hackatime_projects
         result = current_user.try_sync_hackatime_data!
         @hackatime_times = result&.dig(:projects) || {}
+        @hackatime_token_stale = current_user.hackatime_token_stale?
+        identity = current_user.hackatime_identity
+        @unposted_seconds = @project.seconds_coded_in_devlog_window(identity.uid, access_token: identity.access_token).to_i
 
         linked_ids = @linked_hackatime_projects.map(&:id).to_set
         taken_project_ids = @all_hackatime_projects.map(&:project_id).compact.uniq - [ @project.id ]
@@ -83,9 +91,19 @@ class ProjectsController < ApplicationController
         scope = scope.joins("LEFT JOIN post_devlogs ON posts.postable_type = 'Post::Devlog' AND posts.postable_id = post_devlogs.id")
                      .where("posts.postable_type != 'Post::Devlog' OR post_devlogs.deleted_at IS NULL")
       end
-      posts = scope.select { |post| post.postable.present? }
-      preload_timeline_postables(posts, project_context: true)
-      posts
+
+      build_posts = -> {
+        posts = scope.select { |post| post.postable.present? }
+        preload_timeline_postables(posts, project_context: true)
+        posts
+      }
+
+      # Post::Devlog has its own default_scope (SoftDeletable), which the
+      # preloader above respects regardless of the SQL filter toggled just
+      # above — without unscoping, a deleted devlog's postable silently
+      # comes back nil and gets dropped, even when the viewer is authorized
+      # to see it.
+      include_deleted_devlogs ? Post::Devlog.unscoped(&build_posts) : build_posts.call
     }
 
     @posts = if policy(@project).view_deleted_devlogs?
@@ -127,21 +145,6 @@ class ProjectsController < ApplicationController
       []
     end
 
-    @show_project_tour = params[:welcome] == "1" && current_user.present? && @is_member &&
-                         current_user.projects.count == 1 && !session[:project_tour_seen]
-
-    session[:project_tour_seen] = true if @show_project_tour
-
-    # Drives the post-Hackatime-link onboarding overlay: the user linked
-    # Hackatime at the account level, this is their first/only project, but
-    # they haven't attached a Hackatime project to it yet. Stateful (no
-    # session flag) so it keeps prompting until the user links a project.
-    @show_first_hackatime_tour = current_user.present? && @is_member &&
-                                 @hackatime_linked &&
-                                 current_user.projects.count == 1 &&
-                                 @project.hackatime_keys.blank? &&
-                                 !@show_project_tour
-
     if current_user
       devlog_ids = @posts.select { |p| p.postable_type == "Post::Devlog" }.map(&:postable_id)
       @liked_devlog_ids = Like.where(user: current_user, likeable_type: "Post::Devlog", likeable_id: devlog_ids).pluck(:likeable_id).to_set
@@ -155,16 +158,21 @@ class ProjectsController < ApplicationController
     end
 
     @latest_ship_post = @posts.find { |post| post.postable_type == "Post::ShipEvent" }
-    latest_ship_event = @latest_ship_post&.postable
+    latest_ship_event = @project.ship_events.where(certification_status: "approved").first
+
+    @rejected_mission_sub = @posts
+      .select { |p| p.postable_type == "Post::ShipEvent" }
+      .lazy.map { |p| p.postable&.mission_submission }
+      .find { |sub| sub&.rejected? }
 
     @votes_for_payout = nil
     if current_user.present?
-      is_owner = @project.memberships.where(role: :owner, user_id: current_user.id).exists?
+      can_review_payout = @is_member || current_user.admin?
 
-      if is_owner &&
+      if Post::ShipEvent.payout_feature_enabled?(current_user) &&
+          can_review_payout &&
           latest_ship_event.present? &&
           latest_ship_event.certification_status == "approved" &&
-          latest_ship_event.payout.blank? &&
           !latest_ship_event.mission_submission&.rejected?
 
         is_static = latest_ship_event.mission_submission&.payout_path == "static_prize"
@@ -174,16 +182,23 @@ class ProjectsController < ApplicationController
         remaining = [ required - current, 0 ].max
 
         ratings_total = Post::ShipEvent::VOTE_COST_PER_SHIP
-        ratings_remaining = [ -current_user.vote_balance, 0 ].max
+        ratings_remaining = [ -latest_ship_event.payout_recipient.vote_balance, 0 ].max
         ratings_given = ratings_total - ratings_remaining
 
         @votes_for_payout = {
+          ship_event: latest_ship_event,
           current: current,
           required: required,
           remaining: remaining,
           ratings_given: ratings_given,
           ratings_total: ratings_total,
-          static_prize: is_static
+          static_prize: is_static,
+          paid_out: latest_ship_event.payout.present?,
+          estimated_payout: latest_ship_event.estimated_payout,
+          review_open: latest_ship_event.payout_review_open?,
+          review_deadline: latest_ship_event.payout_review_deadline,
+          reason_votes: latest_ship_event.payout_basis_locked_at? ? latest_ship_event.payout_counted_votes : [],
+          admin_view: current_user.admin? && !@is_member
         }
       end
     end
@@ -230,7 +245,11 @@ class ProjectsController < ApplicationController
   end
 
   def new
-    if current_user&.projects&.none?
+    # First-timers get bounced to the setup wizard — except when a blocked
+    # hardware create sent them here to see the Outpost popup (?hardware=outpost),
+    # which lives on this page. Bouncing then would drop the param (no popup) and
+    # could ping-pong with the wizard's own hardware redirect.
+    if current_user&.projects&.none? && params[:hardware] != "outpost"
       # /projects/new just bounces to setup for first-timers — pop it from the
       # back-stack so the idea step's back button skips over it.
       if session[:previous_pages].is_a?(Array)
@@ -287,6 +306,9 @@ class ProjectsController < ApplicationController
       project_hours = @project.total_hackatime_hours
 
       if (slug = params[:mission_slug].presence) && (mission = Mission.find_by(slug: slug)) && mission.prerequisites_met_by?(current_user)
+        # A project created for a hardware mission is born hardware (design
+        # stage) so it satisfies the mission's hardware-only requirement.
+        @project.update!(hardware_stage: "design") if mission.hardware? && !@project.hardware?
         @project.missions << mission
         attrs = {}
         if @project.title.blank? || @project.title == "Untitled"
@@ -318,11 +340,16 @@ class ProjectsController < ApplicationController
   def update
     authorize @project
 
-    @project.assign_attributes(project_params)
-    validate_urls
-    success = @project.errors.empty? && @project.save
+    whodunnit = impersonating? ? real_user&.id : current_user&.id
+    success = nil
 
-    link_hackatime_projects if success
+    PaperTrail.request(whodunnit: whodunnit) do
+      @project.assign_attributes(project_params)
+      validate_urls
+      success = @project.errors.empty? && @project.save
+
+      link_hackatime_projects if success
+    end
     # 2nd check w/ @project.errors.empty? is not redudant. this is ensures that hackatime is linked!
     if success && @project.errors.empty?
       respond_to do |format|
@@ -458,6 +485,22 @@ class ProjectsController < ApplicationController
     return unless @project&.memberships&.exists?(user_id: current_user.id, role: :owner)
 
     redirect_to projects_setup_link_account_path, alert: "Finish setting up your account to keep working on your project."
+  end
+
+  # Hardware projects live on Outpost now, not Stardance. Intercept any attempt
+  # to create one here — the /projects/new hardware form posts a hardware_stage,
+  # and a hardware mission_slug would also make the project hardware — and bounce
+  # back to the new-project page with the Outpost popup open.
+  def redirect_hardware_creation_to_outpost
+    return unless Flipper.enabled?(:hardware_to_outpost, current_user)
+    # Guests can't create a project anyway (ProjectPolicy#new?/#create? require an
+    # HCA-linked user), so don't bounce them to /projects/new — that would just
+    # 403 before the popup shows. Let the normal auth flow handle them.
+    return unless current_user&.hca_linked?
+
+    creating_hardware = params.dig(:project, :hardware_stage).present? ||
+      (params[:mission_slug].present? && Mission.find_by(slug: params[:mission_slug])&.hardware?)
+    redirect_to new_project_path(hardware: "outpost") if creating_hardware
   end
 
   def project_params

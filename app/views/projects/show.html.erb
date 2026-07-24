@@ -20,15 +20,24 @@
   viewer_follow = @viewer_follow
   total_hours = @total_hours || (@project.duration_seconds / 3600.0).round
   can_edit_project = @can_edit_project
+  admin_editing_project = @admin_editing_project
   # Only highlight the unfinished sections when the user arrived via the
   # "Complete project info" button (which adds ?complete=1).
   highlight_incomplete_fields = (can_edit_project && params[:complete].present?) ? @project.incomplete_info_fields : []
+  can_delete_project = policy(@project).destroy? && (!@project.shipped? || policy(@project).force_destroy?)
 %>
 
 <div class="app-layout" data-controller="profile-modal">
   <div class="app-layout__main">
+    <%= render "shared/inspector", record: @project %>
     <%= turbo_frame_tag "project_hero" do %>
+    <% if can_delete_project %>
+      <%= form_with(url: project_path(@project), method: :delete, id: "delete-project-form", style: "display: none;") do %>
+      <% end %>
+    <% end %>
+
     <% if can_edit_project && (params[:editing].present? || @project.errors.any?) %>
+
       <%= form_with(model: @project,
                     url: project_path(@project),
                     method: :patch,
@@ -84,6 +93,12 @@
                                       "project-form-target": "title"
                                     } %>
 
+                <% if admin_editing_project %>
+                  <%= admin_tool do %>
+                    <p class="project-show__admin-edit-notice">You're editing <strong><%= @project.title %></strong> — this isn't your project just remember that.</p>
+                  <% end %>
+                <% end %>
+
                 <div class="project-show__byline">
                   <% if members.any? %>
                     <ul class="project-show__avatars" aria-hidden="true">
@@ -103,7 +118,8 @@
                   <p class="project-show__authors">
                     By
                     <% members.each_with_index do |m, i| %>
-                      <%= " and " if i > 0 && i == members.length - 1 %><%= link_to "@#{m.display_name}", profile_path(m.display_name), class: "project-show__author", data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= "," if i < members.length - 2 && members.length > 2 %>
+                      <%= " and " if i > 0 && i == members.length - 1 %><%= render "shared/username_link", user: m, link_class: "project-show__author",
+                          data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= "," if i < members.length - 2 && members.length > 2 %>
                     <% end %>
                   </p>
                 </div>
@@ -241,23 +257,34 @@
                       </div>
 
                       <div class="project-show__hackatime-dropdown" data-hackatime-link-target="dropdown" hidden>
-                        <% @hackatime_dropdown_items.reject { |i| i[:linked] }.each do |item| %>
-                          <button type="button"
-                                  class="project-show__hackatime-dropdown-item<%= " project-show__hackatime-dropdown-item--taken" if item[:taken] %>"
-                                  data-action="hackatime-link#select"
-                                  data-id="<%= item[:id] %>"
-                                  data-name="<%= item[:name] %>"
-                                  data-hours="<%= item[:hours] %>"
-                                  <%= "disabled" if item[:taken] %>>
-                            <span class="project-show__hackatime-dropdown-name"><%= item[:name] %></span>
-                            <span class="project-show__hackatime-dropdown-time"><%= format_seconds(item[:seconds]) %></span>
-                            <% if item[:taken] %>
-                              <span class="project-show__hackatime-dropdown-taken">linked to <%= item[:taken_by] %></span>
-                            <% end %>
-                          </button>
-                        <% end %>
+                        <div class="project-show__hackatime-dropdown-items">
+                          <% @hackatime_dropdown_items.reject { |i| i[:linked] }.each do |item| %>
+                            <button type="button"
+                                    class="project-show__hackatime-dropdown-item<%= " project-show__hackatime-dropdown-item--taken" if item[:taken] %>"
+                                    data-action="hackatime-link#select"
+                                    data-id="<%= item[:id] %>"
+                                    data-name="<%= item[:name] %>"
+                                    data-hours="<%= item[:hours] %>"
+                                    <%= "disabled" if item[:taken] %>>
+                              <span class="project-show__hackatime-dropdown-name"><%= item[:name] %></span>
+                              <span class="project-show__hackatime-dropdown-time"><%= format_seconds(item[:seconds]) %></span>
+                              <% if item[:taken] %>
+                                <span class="project-show__hackatime-dropdown-taken">linked to <%= item[:taken_by] %></span>
+                              <% end %>
+                            </button>
+                          <% end %>
+                        </div>
+                        <%= link_to "CAN'T FIND YOUR PROJECT? →", guide_path(:hackatime), class: "project-show__hackatime-dropdown-help", data: { turbo_frame: "_top" } %>
                       </div>
                     </div>
+                  </div>
+                <% end %>
+                <% if @hackatime_token_stale %>
+                  <div class="project-show__hackatime-stale">
+                    <span>Your Hackatime connection may be outdated — hours might be inaccurate.</span>
+                    <button type="button" class="project-show__hackatime-reconnect" onclick="document.getElementById('settings-modal').showModal()">
+                      Reconnect in settings →
+                    </button>
                   </div>
                 <% end %>
               </div>
@@ -341,6 +368,11 @@
               <% if @project.fire? %>
                 <span class="project-show__badge project-show__badge--fire">⭐ Super Star Project</span>
               <% end %>
+              <% if can_delete_project %>
+                <button type="button"
+                        class="project-show__pill project-show__pill--destructive"
+                        onclick="document.getElementById('delete-project-modal').showModal()">Delete project</button>
+              <% end %>
               <%= link_to "Discard changes", project_path(@project), class: "project-show__pill project-show__pill--outline", data: { turbo_frame: "project_hero" } %>
               <%= form.submit "Save", class: "project-show__pill project-show__pill--save", data: { "project-form-target": "submit" } %>
             </div>
@@ -376,6 +408,9 @@
                   <% if @project.hardware? %>
                     <span class="project-show__tag project-show__tag--hardware">Hardware</span>
                   <% end %>
+                  <%= admin_tool(compact: true, roles: [ :fraud_dept ]) do %>
+                    <%= link_to "🔨", admin_project_path(@project), class: "project-show__admin-link", data: { turbo_frame: "_top" }, "aria-label": "View #{@project.title} in admin" %>
+                  <% end %>
                 </div>
                 <div class="project-show__byline">
                   <% if members.any? %>
@@ -396,7 +431,8 @@
                   <p class="project-show__authors">
                     By
                     <% members.each_with_index do |m, i| %>
-                      <%= " and " if i > 0 && i == members.length - 1 %><%= link_to "@#{m.display_name}", profile_path(m.display_name), class: "project-show__author", data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= "," if i < members.length - 2 && members.length > 2 %>
+                      <%= " and " if i > 0 && i == members.length - 1 %><%= render "shared/username_link", user: m, link_class: "project-show__author",
+                          data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= "," if i < members.length - 2 && members.length > 2 %>
                     <% end %>
                   </p>
                 </div>
@@ -429,10 +465,31 @@
               <div class="project-show__panel-actions">
                 <%= render "projects/fire_controls", project: @project %>
 
+                <% if (safe_repo_url = safe_external_url(@project.repo_url)) %>
+                  <%= link_to safe_repo_url,
+                              class: "project-show__pill project-show__pill--outline project-show__pill--github",
+                              target: "_blank",
+                              rel: "noopener noreferrer",
+                              aria: { label: "View source on GitHub" } do %>
+                    <%= inline_svg_tag "icons/github.svg", class: "project-show__github-icon" %>
+                    Source
+                  <% end %>
+                <% end %>
+
                 <% if can_edit_project %>
-                  <%= link_to "Edit project", project_path(@project, editing: true),
-                              class: "project-show__pill project-show__pill--outline",
-                              data: { turbo_frame: "project_hero" } %>
+                  <% edit_project_link = capture do %>
+                    <%= link_to "Edit project", project_path(@project, editing: true),
+                                class: "project-show__pill project-show__pill--outline",
+                                data: { turbo_frame: "project_hero" } %>
+                  <% end %>
+
+                  <% if admin_editing_project %>
+                    <%= admin_tool do %>
+                      <%= edit_project_link %>
+                    <% end %>
+                  <% else %>
+                    <%= edit_project_link %>
+                  <% end %>
                 <% end %>
 
                 <% if current_user && !is_member %>
@@ -444,6 +501,8 @@
                                 turbo_frame: "_top"
                               } %>
                 <% end %>
+
+                <%= render "projects/report_button", project: @project, is_member: is_member %>
               </div>
             </div>
           </div>
@@ -456,8 +515,7 @@
       <% if @hackatime_linked || @test_time_granted %>
         <%
           no_hackatime_project = @project.hackatime_keys.blank? && !@test_time_granted
-          live_seconds = @project.hackatime_keys.sum { |k| @hackatime_times[k].to_i }
-          unposted_seconds = [ live_seconds - @project.duration_seconds, 0 ].max
+          unposted_seconds = @unposted_seconds.to_i
           enough_time = !no_hackatime_project && (unposted_seconds >= 15 * 60 || @test_time_granted)
           devlog_disabled_message = "Edit this project to add a Hackatime project" if no_hackatime_project
           # Only call it the primary action when devlogging is actually
@@ -467,7 +525,7 @@
           devlog_modifier_class = devlog_primary ? "project-show__action--primary" : "project-show__action--secondary"
         %>
         <nav class="project-show__actions" aria-label="Project actions">
-          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
+          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !Flipper.enabled?(:lookout, current_user) %>
             <%= render "projects/record_timelapse_button",
                        project: @project,
                        disabled_message: (@hackatime_linked ? nil : "Link your Hackatime account to start recording") %>
@@ -626,9 +684,23 @@
           <% end %>
           <% end %>
         </nav>
+        <% if unposted_seconds >= Post::ShipEvent::DEVLOG_CAP_WARNING_SECONDS %>
+          <%
+            unposted_time = format_hours_minutes(unposted_seconds)
+            over_cap = unposted_seconds > Post::ShipEvent::MAX_PAYOUT_SECONDS_PER_DEVLOG
+          %>
+          <p class="<%= class_names("project-show__devlog-cap-warning", "project-show__devlog-cap-warning--over" => over_cap) %>">
+            <%= inline_svg_tag "icons/warning.svg", class: "project-show__devlog-cap-warning-icon", aria: { hidden: true } %>
+            <% if over_cap %>
+              <span>You have <strong><%= unposted_time %></strong> without a devlog- only <%= Post::ShipEvent::MAX_PAYOUT_HOURS_PER_DEVLOG %>h of it can count toward your ship payout. Post a devlog now so you don't lose more!</span>
+            <% else %>
+              <span>You have <strong><%= unposted_time %></strong> without a devlog. Only <%= Post::ShipEvent::MAX_PAYOUT_HOURS_PER_DEVLOG %>h per devlog counts toward your ship payout- post one soon!</span>
+            <% end %>
+          </p>
+        <% end %>
       <% else %>
         <nav class="project-show__actions" aria-label="Project actions">
-          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
+          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !Flipper.enabled?(:lookout, current_user) %>
             <%= render "projects/record_timelapse_button",
                        project: @project,
                        disabled_message: "Link your Hackatime account to start recording" %>
@@ -655,17 +727,14 @@
 
     <% if is_member && params[:just_shipped].present? %>
       <%
-        latest_submission = @project.posts
-          .where(postable_type: "Post::ShipEvent")
-          .order(created_at: :desc)
-          .first&.postable&.mission_submission
+        latest_submission = @latest_ship_post&.postable&.mission_submission
         is_fixed_payout = latest_submission&.payout_path == "static_prize" &&
                           latest_submission&.mission&.fixed_stardust_payout&.positive?
 
         ship_tour_text = if is_fixed_payout
           "Your ship is now in review. Once it's approved, you'll earn the mission's prizes!"
         else
-          "Yay congrats on your first ship! To get your payout, you need to vote at least #{Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT} times on other people's projects."
+          "Yay congrats on your first ship! To get your payout, you need to vote at least #{Post::ShipEvent::VOTE_COST_PER_SHIP} times on other people's projects."
         end
 
         ship_tour_steps = [
@@ -721,40 +790,70 @@
     <% end %>
 
     <% if @show_project_onboarding %>
+      <% onboarding_mission = @project_onboarding_mission %>
+      <% verb = @project.hardware? ? "build" : "code" %>
+      <% time_kind = @project.hardware? ? "timelapse" : "coding" %>
       <section class="project-show__onboarding" aria-labelledby="project-show-onboarding-title">
         <header class="project-show__onboarding-header">
-          <% verb = @project.hardware? ? "build" : "code" %>
-          <% time_kind = @project.hardware? ? "timelapse" : "coding" %>
+          <% onboarding_banner = onboarding_mission&.banner&.attached? %>
+          <% onboarding_image = onboarding_banner ? onboarding_mission.banner : onboarding_mission&.icon %>
+          <% if onboarding_image&.attached? %>
+            <%= image_tag onboarding_image, alt: "", class: class_names("project-show__onboarding-image", "project-show__onboarding-image--icon" => !onboarding_banner) %>
+          <% end %>
+
+          <h2 class="project-show__onboarding-header-title" id="project-show-onboarding-title">
+            <%= onboarding_mission ? onboarding_mission.name : (@hackatime_linked ? "You're all set — go #{verb}!" : "Welcome to your new project!") %>
+          </h2>
+
+          <%# Time-tracking nudge — shown for every new project, mission or not.
+              Suppressed under :lookout; the Track-your-time card owns this message. %>
+          <% unless Flipper.enabled?(:lookout, current_user) %>
           <% if !@hackatime_linked %>
-            <h2 class="project-show__onboarding-header-title" id="project-show-onboarding-title">Welcome to your new project!</h2>
             <p class="project-show__onboarding-header-body">
-              Link Hackatime to start tracking your time. Once you do and post a devlog, you'll unlock free stickers in the shop!
+              <% if onboarding_mission&.has_guide? %>
+                First, link Hackatime to make sure your time is logged, and then open the guide to get started!
+              <% else %>
+                First, link Hackatime to make sure your time is logged, then get started building!
+              <% end %>
             </p>
           <% elsif @project.hackatime_keys.present? %>
-            <h2 class="project-show__onboarding-header-title" id="project-show-onboarding-title">You're all set — go <%= verb %>!</h2>
             <p class="project-show__onboarding-header-body">
-              Once you have 15 minutes of <%= time_kind %> time, come back and write your first devlog!
+              Once you have 15 minutes of <%= time_kind %> time, come back and write your first devlog! Keep posting devlogs as you build- only up to <%= Post::ShipEvent::MAX_PAYOUT_HOURS_PER_DEVLOG %> hours per devlog counts toward your payout when you ship.
             </p>
           <% elsif @all_hackatime_projects.present? %>
-            <h2 class="project-show__onboarding-header-title" id="project-show-onboarding-title">You're all set — go <%= verb %>!</h2>
             <p class="project-show__onboarding-header-body">
               We found Hackatime projects on your account — <%= link_to "edit your project", project_path(@project, editing: true), class: "project-show__onboarding-header-link", data: { turbo_frame: "project_hero" } %> to link one. Once you have 15 minutes of <%= time_kind %> time, write your first devlog!
             </p>
           <% else %>
-            <h2 class="project-show__onboarding-header-title" id="project-show-onboarding-title">You're all set — go <%= verb %>!</h2>
             <p class="project-show__onboarding-header-body">
               Start coding with Hackatime running. Once you have 15 minutes, <%= link_to "edit your project", project_path(@project, editing: true), class: "project-show__onboarding-header-link", data: { turbo_frame: "project_hero" } %> to link your Hackatime project, then write your first devlog!
             </p>
           <% end %>
+          <% end %>
         </header>
 
-        <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
+        <%# Prominent guide CTA: the mission's own guide when on a mission,
+            otherwise the hardware getting-started guide for hardware projects. %>
+        <% if onboarding_mission&.has_guide? %>
+          <% guide_href = onboarding_mission.external_guide? ? onboarding_mission.guide_url : guide_mission_path(onboarding_mission.slug) %>
+          <%= link_to guide_href,
+                      class: "action-btn action-btn--large action-btn--primary project-show__onboarding-cta",
+                      target: onboarding_mission.external_guide? ? "_blank" : nil,
+                      rel: onboarding_mission.external_guide? ? "noopener" : nil,
+                      data: { turbo: false } do %>
+            Open the guide!<%= inline_svg_tag "icons/right-arrow.svg", class: "action-btn__icon action-btn__icon--trailing", aria: { hidden: true } %>
+          <% end %>
+        <% elsif Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
           <%= link_to guide_path("hardware"),
                       class: "action-btn action-btn--large action-btn--primary project-show__onboarding-cta",
                       target: "_blank", rel: "noopener",
                       data: { turbo: false } do %>
             Read on how to start your hardware project!<%= inline_svg_tag "icons/right-arrow.svg", class: "action-btn__icon action-btn__icon--trailing", aria: { hidden: true } %>
           <% end %>
+        <% end %>
+
+        <% if Flipper.enabled?(:lookout, current_user) %>
+          <%= render "projects/track_time_card", project: @project, hackatime_linked: @hackatime_linked %>
         <% end %>
       </section>
     <% end %>
@@ -765,68 +864,43 @@
         <% ship_index = 0 %>
         <% @timeline_entries.each do |entry| %>
           <% if entry.is_a?(Certification::Ship) %>
-            <%= render "projects/ship_decision_card", decision: entry %>
+            <%= render "projects/ship_decision_card", decision: entry, is_member: is_member, project: @project %>
           <% elsif entry.postable_type == "Post::ShipEvent" %>
             <% ship_index += 1 %>
             <% recert_id = ((is_member || current_user&.can_review?) && @project.needs_changes? && ship_index == 1) ? "recert-modal-#{@project.id}" : nil %>
+            <%
+              mission_sub = entry.postable&.mission_submission
+              mission_modal_id = if (is_member || current_user&.admin?) && @rejected_mission_sub && mission_sub == @rejected_mission_sub
+                "mission-resubmit-modal-#{@project.id}"
+              end
+            %>
             <%= render "projects/ship_card",
                        post: entry,
                        project: @project,
                        ship_number: ship_count - ship_index + 1,
-                       recert_modal_id: recert_id %>
+                       recert_modal_id: recert_id,
+                       is_member: is_member,
+                       payout_review: entry.postable == @votes_for_payout&.dig(:ship_event) ? @votes_for_payout : nil,
+                       mission_resubmit_modal_id: mission_modal_id %>
           <% else %>
-            <%= render PostComponent.new(post: entry, current_user: current_user, theme: :profile_dark) %>
+            <%= render PostComponent.new(post: entry, current_user: current_user, theme: :profile_dark, lazy_media: true) %>
           <% end %>
         <% end %>
       </section>
     <% end %>
 
-    <% if current_user.present? && (!is_member || Rails.env.development?) %>
-      <%= render layout: "shared/modal", locals: { id: "project-report-modal", title: "Report project?" } do %>
-        <h2>We want good, high quality projects in Stardance. If you believe this project violates our community guidelines, please let us know why:</h2>
-
-        <%= form_with model: Project::Report.new, url: project_reports_path(@project), local: true do |f| %>
-          <div class="form-field">
-            <div class="form-checkbox">
-              <%= f.radio_button :reason, "low_effort", id: "project_report_reason_low_effort", required: true %>
-              <%= f.label :reason, "Low-effort project", for: "project_report_reason_low_effort" %>
-            </div>
-            <div class="form-checkbox">
-              <%= f.radio_button :reason, "undeclared_ai", id: "project_report_reason_undeclared_ai" %>
-              <%= f.label :reason, "Uses AI but it's undeclared", for: "project_report_reason_undeclared_ai" %>
-            </div>
-            <div class="form-checkbox">
-              <%= f.radio_button :reason, "demo_broken", id: "project_report_reason_demo_broken" %>
-              <%= f.label :reason, "Demo does not work", for: "project_report_reason_demo_broken" %>
-            </div>
-            <div class="form-checkbox">
-              <%= f.radio_button :reason, "other", id: "project_report_reason_other" %>
-              <%= f.label :reason, "Other", for: "project_report_reason_other" %>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <%= f.text_area :details,
-                  rows: 4,
-                  minlength: 20,
-                  required: true,
-                  class: "form-field",
-                  placeholder: "Share a short explanation (20+ characters)." %>
-            <small>Why are you reporting this project? (20+ characters)</small>
-          </div>
-
-          <div class="modal__actions">
-            <%= f.submit "Submit", class: "modal__actions-close" %>
-            <button type="button" class="modal__actions-close" onclick="document.getElementById('project-report-modal').close()">Cancel</button>
-          </div>
-        <% end %>
-      <% end %>
+    <% if @votes_for_payout&.dig(:review_deadline) %>
+      <%= render "projects/payout_review_modal", payout_review: @votes_for_payout %>
     <% end %>
 
   </div>
 
   <% if (is_member || current_user&.can_review?) && @project.needs_changes? %>
     <%= render "projects/recert_modal", project: @project, is_member: is_member %>
+  <% end %>
+
+  <% if (is_member || current_user&.admin?) && @rejected_mission_sub %>
+    <%= render "projects/mission_resubmit_modal", project: @project, submission: @rejected_mission_sub, is_member: is_member %>
   <% end %>
 
   <% if is_member && @composer_devlog && @composer_projects %>
@@ -846,7 +920,7 @@
 
   <% if is_member && @hackatime_linked && @project.has_devlog_since_last_ship? %>
     <%
-      ship_warn_seconds = [ @project.hackatime_keys.sum { |k| @hackatime_times[k].to_i } - @project.duration_seconds, 0 ].max
+      ship_warn_seconds = @unposted_seconds.to_i
       ship_warn_hours = ship_warn_seconds / 3600
       ship_warn_minutes = (ship_warn_seconds % 3600) / 60
       ship_warn_time = ship_warn_hours > 0 ? "#{ship_warn_hours}h #{ship_warn_minutes}m" : "#{ship_warn_minutes}m"
@@ -926,7 +1000,6 @@
             <p class="ship-modal__mission-heading">
               Shipping to <strong><%= ship_mission.name %></strong>
             </p>
-            <%= hidden_field_tag :mission_payout_path, "static_prize" %>
             <% if ship_mission.submission_guide.present? %>
               <div class="ship-modal__mission-guide">
                 <%= render MarkdownContentComponent.new(markdown: ship_mission.submission_guide, flavor: :guide) %>
@@ -1046,7 +1119,7 @@
         <%= form_with url: project_funding_request_path(@project),
                       method: :post,
                       data: { turbo: false },
-                      html: { class: "ship-modal__form", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json, stardust_per_dollar: Certification::FundingRequest::DISCOUNT_STARDUST_PER_DOLLAR } } do |form| %>
+                      html: { class: "ship-modal__form", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json, tier_discounts: Certification::FundingRequest.tier_discount_summary.to_json } } do |form| %>
           <div class="ship-modal__panel funding-modal__panel">
             <header class="funding-modal__header">
               <%= image_tag "outpost.png", alt: "Outpost", class: "funding-modal__logo" %>
@@ -1076,9 +1149,14 @@
             <p class="funding-modal__discount" role="status" hidden></p>
 
             <p class="funding-modal__note">
-              Spend less than your tier and the rest becomes Stardust toward the Outpost Ticket.
+              Get your design approved to earn Stardust toward the Outpost Ticket — higher tiers cover more of it.
               <%= link_to "How tiers work", guide_path("tiers"), class: "funding-modal__guide-link", target: "_blank", rel: "noopener" %>
             </p>
+
+            <label class="funding-modal__bom-check">
+              <input type="checkbox" required onchange="fundingValidate(this.form)">
+              <span>I have a <code>BOM.csv</code> in my repository</span>
+            </label>
 
             <div class="ship-modal__actions">
               <button type="button"
@@ -1095,7 +1173,7 @@
         function fundingValidate(form) {
           if (!form) return;
           var maxes = JSON.parse(form.dataset.tierMaxes || "{}");
-          var perDollar = parseInt(form.dataset.stardustPerDollar || "0", 10);
+          var discounts = JSON.parse(form.dataset.tierDiscounts || "{}");
           var tier = form.querySelector('[name="complexity_tier"]:checked');
           var amountEl = form.querySelector('[name="requested_amount"]');
           var err = form.querySelector(".funding-request__error");
@@ -1106,18 +1184,19 @@
           var max = tier ? maxes[tier.value] : null;
           if (max != null) amountEl.max = max;
 
+          var bomCheck = form.querySelector('.funding-modal__bom-check input[type="checkbox"]');
+          var bomMissing = bomCheck && !bomCheck.checked;
           var over = max != null && !isNaN(amount) && amount > max;
           err.textContent = over ? "This tier funds up to $" + max + ". Lower your request or pick a higher tier." : "";
           err.hidden = !over;
-          submit.disabled = over;
+          submit.disabled = over || bomMissing;
 
           if (discountEl) {
-            if (max != null && !isNaN(amount) && amount >= 1 && amount <= max) {
-              var unused = max - amount;
-              var stardust = unused * perDollar;
-              discountEl.textContent = unused > 0
-                ? "Leaving $" + unused + " unrequested earns ✦ " + stardust + " toward the Outpost Ticket."
-                : "Requesting your full tier, so no Outpost Ticket discount this time.";
+            var d = tier ? discounts[tier.value] : null;
+            if (d) {
+              discountEl.textContent = d.pct >= 100
+                ? "Approved at " + d.code + " tier = a free Outpost Ticket (✦ " + d.sd + ", 100% off)."
+                : "Approved at " + d.code + " tier = " + d.pct + "% off the Outpost Ticket (✦ " + d.sd + ").";
               discountEl.hidden = false;
             } else {
               discountEl.hidden = true;
@@ -1183,6 +1262,18 @@
 
   <%= render DiscoverRailComponent.new %>
 
+  <dialog id="delete-project-modal" class="delete-project-modal" data-controller="modal">
+    <div class="delete-project-modal__body">
+      <h3 class="delete-project-modal__title">Delete project?</h3>
+      <p class="delete-project-modal__text">Are you sure you want to permanently delete this project? This action cannot be undone.</p>
+      <p class="delete-project-modal__warning">All devlogs, followers, and associated data will be removed.</p>
+      <div class="delete-project-modal__actions">
+        <button type="button" class="delete-project-modal__btn delete-project-modal__btn--cancel" onclick="document.getElementById('delete-project-modal').close()">Cancel</button>
+        <button type="submit" form="delete-project-form" class="delete-project-modal__btn delete-project-modal__btn--delete">Yes, delete it</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="followers-modal"
           class="followers-modal"
           data-profile-modal-target="dialog"
@@ -1195,4 +1286,5 @@
       <p class="followers-modal__loading">Loading…</p>
     </div>
   </dialog>
+
 </div>

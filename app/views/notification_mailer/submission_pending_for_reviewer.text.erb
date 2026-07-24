@@ -9,5 +9,5 @@ Ready for your review!
 Approve, request revisions, or reject — payout's on hold until you do.
 
 <% if @record %>
-Review submission: <%= mission_submission_url(@record) %>
+Review submission: <%= admin_mission_submission_url(@record.mission.slug, @record) %>
 <% end %>

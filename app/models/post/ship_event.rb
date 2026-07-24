@@ -18,6 +18,7 @@
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
 #  payout_basis_percentile    :decimal(5, 2)
+#  payout_basis_vote_ids      :bigint           default([]), not null, is an Array
 #  payout_blessing            :string
 #  payout_curve_version       :string
 #  review_instructions        :text
@@ -35,14 +36,21 @@
 class Post::ShipEvent < ApplicationRecord
   include Postable
   include Ledgerable
+  include Post::ShipEvent::Payouts
   include SemanticSearchIndexable
   semantic_search_indexable type: "ship"
 
   VOTES_REQUIRED_FOR_PAYOUT = 12
   VOTES_TO_LEAVE_POOL = VOTES_REQUIRED_FOR_PAYOUT
   VOTE_COST_PER_SHIP = 15
+  MAX_PAYOUT_HOURS_PER_DEVLOG = 10
+  MAX_PAYOUT_SECONDS_PER_DEVLOG = MAX_PAYOUT_HOURS_PER_DEVLOG.hours.to_i
+  # Un-devlogged time at which the UI and DevlogCapWarningJob start nudging
+  # users to post before they hit the per-devlog payout cap.
+  DEVLOG_CAP_WARNING_SECONDS = 8.hours.to_i
   BODY_MAX_LENGTH = Post::Devlog::BODY_MAX_LENGTH
   REVIEW_INSTRUCTIONS_MAX_LENGTH = 2_000
+  RETURN_REASON_MAX_LENGTH = 1_000
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
 
@@ -67,12 +75,18 @@ class Post::ShipEvent < ApplicationRecord
                                inverse_of: :ship_event,
                                dependent: :destroy
 
+  has_one :integrity_check, class_name: "Certification::Integrity",
+                            foreign_key: :ship_event_id,
+                            inverse_of: :ship_event,
+                            dependent: :destroy
+
   after_update :sync_mission_submission_status, if: :saved_change_to_certification_status?
 
   scope :voteable, -> {
     where(certification_status: "approved", payout: nil)
-      .where("post_ship_events.votes_count < ?", VOTES_TO_LEAVE_POOL)
+      .where(Vote.countable_count_lt(VOTES_TO_LEAVE_POOL))
       .where("post_ship_events.hours_at_ship > 0")
+      .where.not(id: Mission::Submission.with_deleted.where(payout_path: "static_prize").select(:ship_event_id))
   }
   scope :paid_out, -> { where(certification_status: "approved").where.not(payout: nil) }
 
@@ -97,11 +111,21 @@ class Post::ShipEvent < ApplicationRecord
   end
 
   def capture_hours_at_ship
-    reload.recalculate_hours_at_ship
+    association(:post).reset
+    association(:project).reset
+    recalculate_hours_at_ship
   end
 
   def recalculate_hours_at_ship
     update!(hours_at_ship: hours_logged_in_ship_window)
+  end
+
+  # All non-deleted devlogs in this ship's window, regardless of phase —
+  # unlike hours_at_ship, which only counts build-phase devlogs on hardware.
+  def window_devlogs_count
+    return 0 unless post&.project && post.created_at
+
+    window_devlogs.count
   end
 
   private
@@ -109,11 +133,17 @@ class Post::ShipEvent < ApplicationRecord
   def hours_logged_in_ship_window
     return 0 unless post&.project && post.created_at
 
+    devlogs_in_ship_window.sum("post_devlogs.duration_seconds").to_f / 3600
+  end
+
+  def devlogs_in_ship_window
+    window_devlogs.then { |scope| project.hardware? ? scope.where(post_devlogs: { phase: "build" }) : scope }
+  end
+
+  def window_devlogs
     project.posts.of_devlogs(join: true)
            .where("posts.created_at >= ? AND posts.created_at <= ?", ship_window_start_time, post.created_at)
            .where(post_devlogs: { deleted_at: nil })
-           .sum("post_devlogs.duration_seconds")
-           .to_f / 3600
   end
 
   def ship_window_start_time

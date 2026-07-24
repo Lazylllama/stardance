@@ -2,17 +2,25 @@ class Projects::DevlogsController < ApplicationController
   TEST_TIME_SECONDS = 15.minutes.to_i
 
   before_action :set_project
-  before_action :set_devlog, only: %i[show edit update destroy versions]
+  before_action :set_devlog_including_deleted, only: %i[hackatime_breakdown]
+  before_action :set_devlog, only: %i[edit update destroy versions]
   before_action :require_hackatime_project, only: %i[create]
   before_action :sync_hackatime_projects, only: %i[create]
 
   skip_before_action :remember_page, only: %i[preview_time]
 
   def show
+    @post = @project.posts.visible_to(current_user)
+                    .find_by!(postable_type: "Post::Devlog", postable_id: params[:id])
+    @devlog = @post.postable
     authorize @devlog
     @body_class = "app-layout-page"
-    @post = @project.posts.visible_to(current_user).find_by!(postable: @devlog)
-    @comments = @devlog.comments.not_deleted.joins(:user).where(users: { banned: false }).includes(:user).order(created_at: :asc)
+    @comments = @devlog.comments.for_thread
+
+    if turbo_frame_request_id == "post-panel-comments"
+      render partial: "projects/devlogs/panel", layout: false,
+             locals: { media_variant: panel_media_variant, panel_post: panel_post }
+    end
   end
 
   def create
@@ -49,12 +57,12 @@ class Projects::DevlogsController < ApplicationController
     authorize @project, :create_devlog?
     load_preview_time
     respond_to do |format|
-      format.html { render partial: "projects/devlogs/preview_time", locals: { preview_time: @preview_time, preview_seconds: @preview_seconds, hardware: @project.hardware? } }
+      format.html { render partial: "projects/devlogs/preview_time", locals: { preview_time: @preview_time, preview_seconds: @preview_seconds, hardware: @project.hardware?, token_stale: @token_stale } }
       format.json { render json: { preview_time: @preview_time } }
     end
   rescue Pundit::NotAuthorizedError
     respond_to do |format|
-      format.html { render partial: "projects/devlogs/preview_time", locals: { preview_time: nil, preview_seconds: 0, hardware: @project.hardware? }, status: :forbidden }
+      format.html { render partial: "projects/devlogs/preview_time", locals: { preview_time: nil, preview_seconds: 0, hardware: @project.hardware?, token_stale: false }, status: :forbidden }
       format.json { render json: { error: "Not authorized" }, status: :forbidden }
     end
   end
@@ -148,7 +156,34 @@ class Projects::DevlogsController < ApplicationController
     @versions = @devlog.versions.order(version_number: :desc)
   end
 
+  def hackatime_breakdown
+    authorize @devlog
+    @breakdown = @devlog.hackatime_project_breakdown
+    render layout: false
+  end
+
   private
+
+  # Match the variant the originating feed rendered so the panel's images hit
+  # the browser cache instead of refetching.
+  def panel_media_variant
+    variant = params[:media_variant]
+    %w[small medium large].include?(variant) ? variant.to_sym : :large
+  end
+
+  # The clicked card may be a quote-repost of this devlog; render that post's
+  # card so the quoter's commentary survives the placeholder swap. Only this
+  # devlog's own post or a repost of it is trusted.
+  def panel_post
+    return @post if params[:panel_post].blank?
+
+    candidate = Post.visible_to(current_user).find_by(id: params[:panel_post])
+    return @post if candidate.nil? || candidate == @post
+
+    reposts_devlog = candidate.postable.is_a?(Post::Repost) &&
+      candidate.postable.original_post == @post
+    reposts_devlog ? candidate : @post
+  end
 
   def set_project
     @project = Project.find(params[:project_id])
@@ -159,6 +194,24 @@ class Projects::DevlogsController < ApplicationController
                       .where(postable_type: "Post::Devlog")
                       .find_by!(postable_id: params[:id])
                       .postable
+  end
+
+  # Post::Devlog has its own default_scope (SoftDeletable) — .postable on a
+  # deleted devlog's Post would otherwise silently return nil (default_scope
+  # applies to the preloader/association fetch regardless of the Post row
+  # itself being found), which then blows up `authorize` with
+  # Pundit::NotDefinedError for nil. Only used by hackatime_breakdown, which
+  # is already admin-only (Post::DevlogPolicy#hackatime_breakdown?) — unlike
+  # set_devlog's other callers (show, edit, ...), whose policies don't check
+  # deleted status themselves and rely on set_devlog silently failing to find
+  # deleted records as their only protection.
+  def set_devlog_including_deleted
+    @devlog = Post::Devlog.unscoped do
+      @project.posts
+              .where(postable_type: "Post::Devlog")
+              .find_by!(postable_id: params[:id])
+              .postable
+    end
   end
 
   def require_hackatime_project
@@ -197,6 +250,7 @@ class Projects::DevlogsController < ApplicationController
 
   def load_preview_time
     @preview_seconds = 0
+    @token_stale = false
     @project.reload
     hackatime_keys = @project.hackatime_keys
 
@@ -205,7 +259,11 @@ class Projects::DevlogsController < ApplicationController
 
     seconds = @project.seconds_coded_in_devlog_window(current_user.hackatime_identity&.uid, access_token: current_user.hackatime_identity&.access_token)
     return apply_test_time_preview if test_time_granted? && seconds.nil?
-    return @preview_time = nil if seconds.nil?
+
+    if seconds.nil?
+      @token_stale = current_user.hackatime_token_stale?
+      return @preview_time = nil
+    end
 
     @preview_seconds = seconds
     apply_test_time_preview if test_time_granted? && @preview_seconds < TEST_TIME_SECONDS
@@ -225,9 +283,7 @@ class Projects::DevlogsController < ApplicationController
   end
 
   def format_preview_time(seconds)
-    hours = seconds / 3600
-    minutes = (seconds % 3600) / 60
-    "#{hours}h #{minutes}m"
+    helpers.format_hours_minutes(seconds)
   end
 
   def test_time_granted?

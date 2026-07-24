@@ -19,6 +19,6 @@
 
 <% if @record %>
   <div style="margin:24px 0 4px;">
-    <a href="<%= mission_submission_url(@record) %>" style="display:inline-block;padding:11px 22px;background:#1a1a2e;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:600;font-size:14px;line-height:1;">Review submission</a>
+    <a href="<%= admin_mission_submission_url(@record.mission.slug, @record) %>" style="display:inline-block;padding:11px 22px;background:#1a1a2e;color:#ffffff;text-decoration:none;border-radius:999px;font-weight:600;font-size:14px;line-height:1;">Review submission</a>
   </div>
 <% end %>

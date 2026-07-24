@@ -2,12 +2,11 @@ class Admin::Users::PresentableHardwareFlagsController < Admin::ApplicationContr
   before_action -> { head :not_found unless Flipper.enabled?(:hardware_flow, current_user) }
   before_action :set_user
 
-  # Granted after a showcase project (forms.hackclub.com/submit-showcase-project)
-  # has been reviewed. Unlocks the Outpost Ticket via the achievement gate.
+  # Manual toggle: an admin grants this once a hardware project is presentable.
+  # Awards the achievement that unlocks the Outpost Ticket via the shop gate.
   def create
     authorize @user, :manage_feature_flags?
 
-    @user.update!(manual_outpost_ticket_approval: params[:approval_url])
     @user.award_achievement!(:manual_outpost_ticket_approval, notified: true)
     log_change(true)
 
@@ -18,8 +17,7 @@ class Admin::Users::PresentableHardwareFlagsController < Admin::ApplicationContr
   def destroy
     authorize @user, :manage_feature_flags?
 
-    @user.update!(manual_outpost_ticket_approval: nil)
-    @user.achievements.where(achievement_slug: "manual_outpost_ticket_approval").destroy_all
+    @user.revoke_achievement!(:manual_outpost_ticket_approval)
     log_change(false)
 
     redirect_to admin_user_path(@user),
@@ -38,7 +36,7 @@ class Admin::Users::PresentableHardwareFlagsController < Admin::ApplicationContr
       item_id: @user.id,
       event: enabled ? "presentable_hardware_enable" : "presentable_hardware_disable",
       whodunnit: current_user.id,
-      object_changes: { manual_outpost_ticket_approval: [ !enabled, enabled ] }.to_json
+      object_changes: { outpost_ticket_approved: [ !enabled, enabled ] }.to_json
     )
   end
 end

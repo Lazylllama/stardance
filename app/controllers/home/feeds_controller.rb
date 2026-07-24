@@ -1,9 +1,11 @@
 class Home::FeedsController < ApplicationController
   include OnboardingResumable
 
-  FEED_LIMIT = 20
+  FEED_LIMIT = 10
+  FIRST_PAGE_LIMIT = 3
   RECOMMENDATION_POOL = 100 # after this, we fallback to SQL
-  TABS = %w[for_you following popular newest].freeze
+  GORSE_TIMEOUT = 0.75
+  TABS = %w[for_you following popular newest new_builders].freeze
   FeedPage = Struct.new(:page, :limit, :offset, :next, keyword_init: true)
 
   skip_before_action :remember_page
@@ -22,10 +24,11 @@ class Home::FeedsController < ApplicationController
 
   def load_feed
     case @current_tab
-    when "following"  then load_following_feed
-    when "popular"    then paginate_and_filter(popular_scope, "popular")
-    when "newest"     then paginate_and_filter(newest_scope, "newest")
-    else                   load_for_you_feed
+    when "following"     then load_following_feed
+    when "popular"       then paginate_and_filter(popular_scope, "popular")
+    when "newest"        then paginate_and_filter(newest_scope, "newest")
+    when "new_builders"  then paginate_and_filter(new_builders_scope, "new_builders")
+    else                      load_for_you_feed
     end
 
     @liked_devlog_ids = liked_devlog_ids_for(@feed_posts)
@@ -93,6 +96,26 @@ class Home::FeedsController < ApplicationController
     feed_scope.reorder(created_at: :desc)
   end
 
+  def new_builders_scope
+    first_devlog_ids = Post.where(postable_type: "Post::Devlog")
+      .joins("INNER JOIN post_devlogs ON post_devlogs.id = posts.postable_id")
+      .where(post_devlogs: { deleted_at: nil })
+      .group(:user_id)
+      .select("MIN(posts.id)")
+
+    feed_scope
+      .where(postable_type: "Post::Devlog")
+      .joins("INNER JOIN post_devlogs ON post_devlogs.id = posts.postable_id")
+      .where(id: first_devlog_ids)
+      .where(post_devlogs: { deleted_at: nil })
+      .where("post_devlogs.duration_seconds > 0")
+      .where("posts.created_at >= ?", 7.days.ago)
+      .reorder(Arel.sql(<<~SQL.squish))
+        (post_devlogs.likes_count + post_devlogs.comments_count) ASC,
+        posts.created_at DESC
+      SQL
+  end
+
   def visible_post?(post)
     return false unless post.postable.present?
     return true unless post.repost?
@@ -101,12 +124,14 @@ class Home::FeedsController < ApplicationController
   end
 
   def recommended_posts
-    Gorse::Recommendations.new(user: current_user).posts(limit: RECOMMENDATION_POOL)
+    recommendations.posts(limit: RECOMMENDATION_POOL)
   end
 
   def feed_pagy
     page = [ params[:page].to_i, 1 ].max
-    FeedPage.new(page: page, limit: FEED_LIMIT, offset: (page - 1) * FEED_LIMIT)
+    limit = page == 1 ? FIRST_PAGE_LIMIT : FEED_LIMIT
+    offset = page == 1 ? 0 : FIRST_PAGE_LIMIT + (page - 2) * FEED_LIMIT
+    FeedPage.new(page: page, limit: limit, offset: offset)
   end
 
   def compose_feed(recommended, backfill, pagy)
@@ -117,7 +142,12 @@ class Home::FeedsController < ApplicationController
     remaining = page_candidate_limit - rec_slice.size
     if remaining.positive?
       sql_offset = [ pagy.offset - recommended.size, 0 ].max
-      backfill.offset(sql_offset).limit(remaining).each do |post|
+      backfill_posts = backfill.offset(sql_offset).limit(remaining).to_a
+      # Batch-load postables up front: the visibility filter below reads
+      # `post.postable` on every candidate, which would otherwise fire one
+      # query per post. preload_feed_associations later deep-loads from here.
+      preload(backfill_posts, :postable)
+      backfill_posts.each do |post|
         next unless post.postable.present?
         next if post.repost? && !post.visible_repost_original_for?(current_user)
 
@@ -231,7 +261,6 @@ class Home::FeedsController < ApplicationController
   end
 
   def load_recommended_projects
-    recommendations = Gorse::Recommendations.new(user: current_user)
     projects = recommendations.projects(limit: 6)
 
     @recommended_projects =
@@ -246,5 +275,12 @@ class Home::FeedsController < ApplicationController
 
   def first_page?
     @pagy.nil? || @pagy.page == 1
+  end
+
+  def recommendations
+    @recommendations ||= Gorse::Recommendations.new(
+      user: current_user,
+      client: Gorse::Client.new(timeout_seconds: GORSE_TIMEOUT)
+    )
   end
 end

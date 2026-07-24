@@ -2,7 +2,7 @@ class Shop::ItemsController < Shop::BaseController
   skip_before_action :refresh_identity_on_portal_return, only: [ :index, :category ]
 
   discover_rail_widgets :shop_orders, :shop_updates, :shop_wishlist,
-    context: -> { { sidebar_orders: @sidebar_orders || [], user_balance: @user_balance || 0 } }
+    context: -> { { sidebar_orders: @sidebar_orders || [], user_balance: @user_balance || 0, user_region: @user_region || "US" } }
 
   def index
     if params[:q].present?
@@ -38,10 +38,8 @@ class Shop::ItemsController < Shop::BaseController
       return
     end
 
-    if @mission_submission.nil? && @shop_item.mission_locked_for?(current_user)
-      redirect_to shop_path, alert: "This item is locked behind a mission you haven't completed yet."
-      return
-    end
+    @mission_locked = @mission_submission.nil? && @shop_item.mission_locked_for?(current_user)
+    @unlocking_missions = @mission_locked ? @shop_item.unlocking_missions : []
 
     @user_region = user_region
 
@@ -83,8 +81,7 @@ class Shop::ItemsController < Shop::BaseController
   def prepare_shop_chrome
     @shop_open = Flipper.enabled?(:shop_open, current_user)
     @hardware_flow_enabled = Flipper.enabled?(:hardware_flow, current_user)
-    @show_shop_suggestion_modal = current_user && Flipper.enabled?(:shop_suggestion_box, current_user) && !current_user.has_dismissed?("shop_suggestion_box")
-    @user_region = user_region
+@user_region = user_region
     @body_class = "shop-page"
     @region_options = Shop::Regionalizable::REGIONS.map do |code, config|
       { label: config[:name], value: code }

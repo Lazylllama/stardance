@@ -2,10 +2,15 @@
     The button inside the verdict form references it via the HTML `form` attribute. %>
 <%= form_with url: admin_certification_ship_claim_path(ship), method: :delete,
       id: "unclaim-form-#{ship.id}" do %>
+  <%# Rendered on the combined hardware page so unclaiming returns there. %>
+  <% if local_assigns[:redirect_to_hardware] %>
+    <%= hidden_field_tag :redirect_to_hardware, ship.project_id %>
+  <% end %>
 <% end %>
 
-<%# The video-drop controller sits on the form (not the drop zone) so its
-    submitBtn target is in scope and it can block submits mid-upload. %>
+<div data-controller="certification--verdict-preview"
+     data-action="submit->certification--verdict-preview#intercept">
+
 <%= form_with model: ship, url: admin_certification_ship_path(ship), method: :patch, class: "review-form",
       data: { controller: "certification--video-drop certification--feedback-templates",
               action: "submit->certification--video-drop#guardSubmit",
@@ -14,7 +19,11 @@
               "certification--video-drop-done-class": "video-drop--done",
               "certification--video-drop-error-class": "video-drop--error",
               "certification--video-drop-direct-upload-url-value": rails_direct_uploads_url } do |f| %>
-<% if ship.claim_expires_at.present? %>
+<% if local_assigns[:redirect_to_hardware] %>
+  <%# Sends the verdict back to the combined hardware review page. %>
+  <%= hidden_field_tag :redirect_to_hardware, ship.project_id %>
+<% end %>
+<% if can_review && ship.claim_expires_at.present? %>
   <div class="review-form__claim-banner">
     <span>Claim active</span>
     <span class="review-form__countdown"
@@ -115,12 +124,44 @@
   <div class="review-form__actions">
     <%= f.submit "Submit verdict", class: "action-btn action-btn--large action-btn--primary",
           data: { "certification--video-drop-target": "submitBtn" } %>
-    <%= link_to "Skip and get next", next_admin_certification_ships_path(skip: ship.id),
-          class: "action-btn action-btn--small action-btn--secondary" %>
-    <button type="submit" form="unclaim-form-<%= ship.id %>"
-            class="action-btn action-btn--small action-btn--destructive">
-      Unclaim review
-    </button>
-    <%= link_to "Back to queue", admin_certification_ships_path, class: "review-form__back" %>
+    <% if local_assigns[:redirect_to_hardware] %>
+      <%= link_to "Skip and get next", next_admin_certification_hardware_reviews_path(skip: "ship:#{ship.id}"),
+            class: "action-btn action-btn--small action-btn--secondary" %>
+    <% else %>
+      <%= link_to "Skip and get next", next_admin_certification_ships_path(skip: ship.id),
+            class: "action-btn action-btn--small action-btn--secondary" %>
+    <% end %>
   </div>
 <% end %>
+
+<%# Reuses the shared .modal shell + `modal` controller (backdrop, esc,
+    scroll-lock); the verdict-preview controller only builds the preview and
+    re-submits on confirm. %>
+<dialog class="modal verdict-preview" data-controller="modal"
+        data-certification--verdict-preview-target="modal"
+        aria-labelledby="verdict-preview-title">
+  <h3 id="verdict-preview-title" class="modal__title">
+    Confirm verdict
+    <span class="status-pill" data-certification--verdict-preview-target="verdict"></span>
+  </h3>
+  <p class="modal__description">Take one last look before this is sent to the user.</p>
+
+  <div class="modal__field" data-certification--verdict-preview-target="feedbackBlock">
+    <label>Feedback</label>
+    <p class="modal__description verdict-preview__feedback" data-certification--verdict-preview-target="feedback"></p>
+  </div>
+  <p class="modal__description" data-certification--verdict-preview-target="noFeedback">No feedback written.</p>
+
+  <div class="modal__actions">
+    <button type="button" class="action-btn action-btn--secondary"
+            data-action="click->modal#close">
+      Go back
+    </button>
+    <button type="button" class="action-btn action-btn--primary" autofocus
+            data-action="click->certification--verdict-preview#confirm">
+      Confirm &amp; submit
+    </button>
+  </div>
+</dialog>
+
+</div>

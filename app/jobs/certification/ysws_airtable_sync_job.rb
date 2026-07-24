@@ -32,11 +32,8 @@ module Certification
       # Check if user is banned
       rejection_info = check_user_status(review)
 
-      # Generate AI summary of devlog justifications (optional)
-      ai_summary = generate_ai_summary(review)
-
       # Build Airtable fields
-      fields = build_airtable_fields(review, ai_summary, rejection_info)
+      fields = build_airtable_fields(review, rejection_info)
 
       # Upsert to Airtable
       table.upsert(fields, "ship_cert_id")
@@ -62,6 +59,16 @@ module Certification
         .find_by(id: ysws_review_id)
     end
 
+    # Both certification_ysws_reviews and certification_integrities key
+    # uniquely on the ship event, so a review maps 1-1 to an integrity check.
+    # Every synced review must have one — a missing record is a data error.
+    # Raises StandardError (not RecordNotFound, which this job discards) so
+    # the rescue_from handler reports it to Sentry.
+    def integrity_check_for(review)
+      Certification::Integrity.find_by(ship_event_id: review.post_ship_event_id) ||
+        raise(StandardError, "No certification integrity for ship event ##{review.post_ship_event_id} (ysws_review ##{review.id})")
+    end
+
     def check_stardance_review_submitted_unified(review)
       # Fetch existing Airtable record by review_id
       existing_record = table.all(filter: "{review_id} = '#{review.id}'").first
@@ -82,6 +89,11 @@ module Certification
         {
           rejected: true,
           rejection_reason: "User banned: #{user.banned_reason || 'No reason provided'}"
+        }
+      elsif integrity_check_for(review).banned?
+        {
+          rejected: true,
+          rejection_reason: "Manual fraud check rejected"
         }
       else
         { rejected: false, rejection_reason: nil }
@@ -148,7 +160,7 @@ module Certification
       nil # Gracefully fall back to nil if AI fails
     end
 
-    def build_airtable_fields(review, ai_summary, rejection_info)
+    def build_airtable_fields(review, rejection_info)
       user = review.user
       project = review.project
       devlog_reviews = review.devlog_reviews.to_a
@@ -157,21 +169,27 @@ module Certification
       user_data = extract_user_data(user)
       primary_address = user_data[:addresses]&.first || {}
 
-      # Calculate minutes
+      integrity_check = integrity_check_for(review)
+
+      # Calculate minutes. When the fraud department deducted hours during
+      # integrity review, those come off the reviewer-approved total before we
+      # report the override hours to Airtable.
       total_original_minutes = devlog_reviews.sum { |dr| dr.original_minutes.to_i }
       total_approved_minutes = review.approved_minutes_total
-      hours_spent = (total_approved_minutes / 60.0).round(2)
+      deducted_minutes = integrity_check.deducted? ? integrity_check.deduction_minutes.to_i : 0
+      net_approved_minutes = [ total_approved_minutes - deducted_minutes, 0 ].max
+      hours_spent = (net_approved_minutes / 60.0).round(2)
 
       # Check if all devlogs rejected OR under threshold
       all_rejected = devlog_reviews.all? { |dr| dr.rejected? }
       under_min_threshold = total_approved_minutes < ::Certification::Ysws::MIN_APPROVED_MINUTES
 
       # Determine final rejection status
-      final_rejected = review.review_rejected?
+      final_rejected = review.review_rejected? || rejection_info[:rejected]
       final_rejection_reason = if rejection_info[:rejected]
         rejection_info[:rejection_reason]
       elsif all_rejected
-        summary = ai_summary.presence || review.summary_justification.presence || ""
+        summary = generate_ai_summary(review).presence || review.summary_justification.presence || ""
         "Rejected by YSWS reviewer because: #{summary}".strip
       elsif under_min_threshold
         "Rejected because under #{::Certification::Ysws::MIN_APPROVED_MINUTES} approved minutes."
@@ -193,11 +211,12 @@ module Certification
       # Build justification using the ideal format
       justification = build_justification(
         review: review,
+        integrity_check: integrity_check,
         devlog_reviews: devlog_reviews,
         total_original_minutes: total_original_minutes,
         total_approved_minutes: total_approved_minutes,
+        deducted_minutes: deducted_minutes,
         ship_certifier_name: ship_certifier_name,
-        ai_summary: ai_summary,
         approved_orders: approved_orders
       )
 
@@ -270,6 +289,12 @@ module Certification
         # Report status
         "report_status" => report_status(review),
 
+        # Certification integrity
+        "integrity_id" => integrity_check.id.to_s,
+        "integrity_status" => integrity_check.status,
+        "integrity_flags" => integrity_check.flags,
+        "fraud_data" => integrity_check.fraud_detection_data&.to_json,
+
         # Double-dip flag
         "flagged_double_dipped" => double_dipped?(project.repo_url)
       }
@@ -296,7 +321,17 @@ module Certification
       }
     end
 
-    def build_justification(review:, devlog_reviews:, total_original_minutes:, total_approved_minutes:, ship_certifier_name:, ai_summary:, approved_orders:)
+    # One line per Certification::Integrity status, embedded in the
+    # justification. Uses fetch so an unmapped new status fails loudly.
+    INTEGRITY_JUSTIFICATION_NOTES = {
+      "auto_passed" => "Passed automatic heartbeat checks.",
+      "pending" => "Waiting for manual heartbeat review.",
+      "manually_passed" => "Passed manual heartbeat review.",
+      "deducted" => "Hours deducted during manual review.",
+      "banned" => "Project rejected due to manual review of heartbeats."
+    }.freeze
+
+    def build_justification(review:, integrity_check:, devlog_reviews:, total_original_minutes:, total_approved_minutes:, deducted_minutes:, ship_certifier_name:, approved_orders:)
       project_id = review.project_id
       ysws_review_id = review.id
       ship_cert_id = review.ship_cert_id
@@ -305,32 +340,53 @@ module Certification
       # Format minutes
       original_formatted = format_minutes(total_original_minutes)
       approved_formatted = format_minutes(total_approved_minutes)
+      adjusted_note = total_original_minutes == total_approved_minutes ? "" : " (This was adjusted to #{approved_formatted} after review.)"
 
-      # Build devlog approval list
-      approved_devlogs = devlog_reviews.select { |dr| dr.approved? }
-      devlog_list = approved_devlogs.map do |dr|
-        "devlog #{dr.post_devlog_id}: #{dr.approved_minutes} min"
+      # Devlog tallies for the summary line
+      approved_count = devlog_reviews.count(&:approved?)
+      rejected_count = devlog_reviews.count(&:rejected?)
+      approval_summary = "Of which #{approved_count} #{approved_count == 1 ? "was" : "were"} approved"
+      approval_summary += " and #{rejected_count} rejected" if rejected_count.positive?
+
+      # Per-devlog breakdown: minutes, status, and the reviewer's justification
+      devlog_list = devlog_reviews.map do |dr|
+        minutes = dr.approved_minutes || 0
+        devlog_note = dr.justification.presence
+        line = "devlog #{dr.post_devlog_id}: #{minutes} min #{dr.status}"
+        line += ": \"#{devlog_note}\"" if devlog_note
+        line
       end.join("\n")
 
-      ysws_justification = review.summary_justification.presence
-      goi_note = ai_summary.present? ? "\n#{ai_summary}" : ""
-      project_update_note = review.project.update_description.present? ? "\nProject update: #{review.project.update_description}" : ""
+      # A review counts as a project update when it carries an update description
+      # or an earlier review of the same project exists (a reship).
+      project_updated = review.project&.update_description.present? || prior_review?(review)
+
+      intro = "The user logged #{original_formatted} on hackatime.#{adjusted_note}"
+      intro += "\n#{commit_activity_sentence(review, total_original_minutes)}"
+      intro += "\nThis is a project update." if project_updated
+      if deducted_minutes.positive?
+        deducted_hours = (deducted_minutes / 60.0).round(2)
+        deduction_explanation = "Further deducted by #{deducted_hours} hours by the fraud department for hour fraud."
+        deduction_explanation += " Reason: #{integrity_check.decision_justification}" if integrity_check.decision_justification.present?
+        intro += "\n#{deduction_explanation}"
+      end
+
+      integrity_note = INTEGRITY_JUSTIFICATION_NOTES.fetch(integrity_check.status)
 
       justification = <<~JUSTIFICATION
-        The user logged #{original_formatted} on hackatime. #{total_original_minutes == total_approved_minutes ? "" : "(This was adjusted to #{approved_formatted} after review.)"}.
-        #{project_update_note}
-        #{goi_note}
+        #{intro}
 
-        In this time they wrote #{devlog_reviews.count} devlogs.
+        In this time they wrote #{devlog_reviews.count} devlogs. #{approval_summary}.
 
         This project was initially ship certified by #{ship_certifier_name}.
 
-        Following this it was YSWS reviewed by #{reviewer_name}#{ysws_justification.present? ? "\n\nwho mentioned: #{ysws_justification}" : ""}
-
-        and approved:
+        Following this it was YSWS reviewed by #{reviewer_name}
 
         #{devlog_list}
         ====================================================
+
+        #{integrity_note}
+
         The Stardance project can be found at https://stardance.hackclub.com/projects/#{project_id}
 
         The Full YSWS Review + devlogs are at https://stardance.hackclub.com/admin/certification/review/#{ysws_review_id}
@@ -353,7 +409,42 @@ module Certification
         end
       end
 
+      # List the Hackatime project names linked to this project
+      hackatime_project_names = review.project&.hackatime_projects&.pluck(:name) || []
+      justification += if hackatime_project_names.any?
+        "\n\nUser's Hackatime Project Names: #{hackatime_project_names.join(", ")}"
+      else
+        "\n\nNo hackatime projects linked :cry:"
+      end
+
       justification.strip
+    end
+
+    # Rates whole-project commit activity against total logged hours: all repo
+    # commits between project creation and this ship event, over the hours
+    # derived from the summed devlog-review original minutes (the same raw
+    # baseline shown at the front of the justification). Degrades to an
+    # "unavailable" line instead of raising — git-host flakiness or a missing
+    # repo URL shouldn't block the sync.
+    def commit_activity_sentence(review, total_original_minutes)
+      project = review.project
+      provider = GitHost::Base.for(project&.repo_url)
+      return "Commit activity could not be checked (no supported repo URL)." unless provider
+
+      commit_count = provider.fetch_commits(
+        since: project.created_at,
+        before: review.post_ship_event&.created_at || Time.current
+      ).size
+      hours = total_original_minutes / 60.0
+      return "They had #{commit_count} commits, but no logged hours to compare against." unless hours.positive?
+
+      per_hour = commit_count / hours
+      rating = per_hour > 1 ? "good" : per_hour > 0.8 ? "okay" : "BAD"
+
+      "They had #{commit_count} commits, which compared to the original #{hours.round(1)} logged hours is \"#{rating}\" (#{per_hour.round(2)} commits/hour)."
+    rescue StandardError => e
+      Rails.logger.warn "[YswsAirtableSyncJob] commit activity check failed: #{e.class}: #{e.message}"
+      "Commit activity could not be checked (fetch failed)."
     end
 
     def format_minutes(minutes)
@@ -491,6 +582,15 @@ module Certification
     rescue StandardError => e
       Rails.logger.error "[YswsAirtableSyncJob] double-dip check error: #{e.class}: #{e.message}"
       false
+    end
+
+    # True when an earlier review exists for the same project (i.e. this is a
+    # reship). Mirrors the prior-review lookup on the YSWS review page.
+    def prior_review?(review)
+      Certification::Ysws
+        .where(project_id: review.project_id)
+        .where("id < ?", review.id)
+        .exists?
     end
 
     def prior_ship_event(review)
