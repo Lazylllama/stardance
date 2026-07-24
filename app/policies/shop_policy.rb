@@ -1,6 +1,6 @@
 class ShopPolicy < ApplicationPolicy
   def index?
-    true
+    signed_in_any?
   end
 
   def show?
@@ -12,6 +12,10 @@ class ShopPolicy < ApplicationPolicy
   end
 
   def cancel?
+    signed_in_any?
+  end
+
+  def flex_image?
     signed_in_any?
   end
 

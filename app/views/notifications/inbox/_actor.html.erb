@@ -1,0 +1,7 @@
+<%# The notification's actor as a profile link, or a fallback label when the
+    actor is missing (e.g. a deleted account). Pass `fallback:` to override. %>
+<% if notification.actor %>
+  <%= render "shared/username_link", user: notification.actor, link_class: "notifications-item__actor" %>
+<% else %>
+  <span class="notifications-item__actor"><%= local_assigns.fetch(:fallback, "Someone") %></span>
+<% end %>

@@ -17,7 +17,7 @@ module User::Roles
 
   def can_review? = admin? || has_role?(:project_certifier)
 
-  def can_see_deleted_devlogs? = admin? || has_role?(:fraud_dept)
+  def can_nominate_super_star? = can_review? || has_role?(:guardian_of_integrity)
 
   def highest_role
     roles.min_by { |role| User::Role.all_slugs.index(role) }&.to_s&.titleize || "User"

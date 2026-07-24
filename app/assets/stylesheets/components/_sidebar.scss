@@ -166,6 +166,28 @@
   z-index: 0;
 }
 
+.sidebar__nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--color-brand-salmon);
+  color: var(--color-space-bg);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-text);
+  font-weight: 700;
+  line-height: 1;
+  margin-left: auto;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 button.sidebar__nav-link {
   background: transparent;
   border: 0;
@@ -176,28 +198,6 @@ button.sidebar__nav-link {
 
 .sidebar__nav-link--inert {
   cursor: default;
-}
-
-.sidebar__nav-link--locked {
-  opacity: 0.55;
-  cursor: help;
-
-  &:hover,
-  &:focus-visible {
-    opacity: 0.75;
-  }
-}
-
-.sidebar__nav-lock {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-}
-
-.sidebar__nav-lock-icon {
-  width: 1em;
-  height: 1em;
-  color: inherit;
 }
 
 .sidebar__nav-link {
@@ -325,10 +325,23 @@ button.sidebar__nav-link {
   overflow: hidden;
 }
 
+.sidebar__user-handle-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-xxs);
+  min-width: 0;
+
+  .tools-do--inline {
+    flex-shrink: 0;
+  }
+}
+
 .sidebar__user-meta-handle {
+  flex-shrink: 1;
   font-weight: 700;
   font-size: var(--font-size-m);
   color: inherit;
+  min-width: 0;
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;

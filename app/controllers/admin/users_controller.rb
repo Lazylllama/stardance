@@ -9,18 +9,24 @@ class Admin::UsersController < Admin::ApplicationController
       users = users.where("email ILIKE ? OR display_name ILIKE ? OR slack_id ILIKE ?", q, q, q)
     end
 
-    @pagy, @users = pagy(:offset, users.order(:id))
+    # Pin the viewing admin's own row to the top of the (first page of the) list.
+    users = users.order(Arel.sql(User.sanitize_sql_array([ "(id = ?) DESC", current_user.id ]))).order(:id)
+
+    @pagy, @users = pagy(:offset, users)
   end
 
   def show
-    @user = User.includes(:identities).find(params[:id])
+    @user = find_user(User.includes(:identities))
+
     authorize @user
 
     @all_projects = @user.projects.with_deleted.order(deleted_at: :desc)
+    @audit_pagy, @audit_versions = pagy(:offset, @user.versions.order(created_at: :desc), limit: 25)
   end
 
   def update
-    @user = User.find(params[:id])
+    @user = find_user
+
     authorize @user
 
     old_regions = @user.regions.dup
@@ -53,6 +59,18 @@ class Admin::UsersController < Admin::ApplicationController
   end
 
   private
+
+  def find_user(scope = User)
+    id = params[:id]
+
+    if id.starts_with?("@")
+      scope.find_by!("LOWER(display_name) = ?", id[1..].downcase)
+    elsif id.match?(/\A\d+\z/)
+      scope.find(id)
+    else
+      scope.find_by!(slack_id: id)
+    end
+  end
 
   def user_params
     params.require(:user).permit(:internal_notes, regions: [])

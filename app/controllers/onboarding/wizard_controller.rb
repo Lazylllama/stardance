@@ -32,19 +32,12 @@ class Onboarding::WizardController < ApplicationController
         redirect_to onboarding_age_gate_path and return
       end
 
-      if existing.onboarded_at.nil?
-        session[:user_id] = existing.id
-        redirect_to onboarding_resume_path(existing) and return
-      end
-
-      # OmniAuth 2.x with omniauth-rails_csrf_protection blocks GET, so we
-      # render an auto-submitting POST form instead of redirecting.
       @login_hint = normalized
       return render :redirecting_to_hca
     end
 
     if existing
-      session[:user_id] = existing.id
+      sign_in_user(existing)
 
       if onboarding_in_progress?(existing)
         if onboarding_fresh?(existing)
@@ -65,7 +58,7 @@ class Onboarding::WizardController < ApplicationController
     end
 
     user = create_guest!(normalized)
-    session[:user_id] = user.id
+    sign_in_user(user)
     UserMailer.onboarding_start(user).deliver_later
     track_event "onboarding_started", { user_id: user.id }
 
@@ -179,7 +172,7 @@ class Onboarding::WizardController < ApplicationController
       current_user.update_column(:ref, rsvp.ref)
     end
 
-    redirect_to onboarding_name_path and return if current_user.user_ref.present?
+    redirect_to onboarding_name_path and return if current_user.user_ref.present? and !params[:back]
 
     @suggested_user_ref = rsvp&.user_ref.presence
   end
@@ -254,7 +247,7 @@ class Onboarding::WizardController < ApplicationController
     owner&.update!(guest_email: nil)
 
     user = create_guest!(claimed_email)
-    session[:user_id] = user.id
+    sign_in_user(user)
     redirect_to onboarding_welcome_path
   end
 

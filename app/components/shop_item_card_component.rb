@@ -53,7 +53,7 @@ class ShopItemCardComponent < ViewComponent::Base
     return "".html_safe unless mission_locked && unlocking_mission_names.any?
 
     sentence = unlocking_mission_names.to_sentence(two_words_connector: " or ", last_word_connector: ", or ")
-    helpers.content_tag(:div, "Unlocked by completing #{sentence}", class: "shop-item-card__mission-requirement")
+    helpers.content_tag(:div, "Unlock by completing the #{sentence} mission", class: "shop-item-card__mission-requirement")
   end
 
   def achievement_requirement_html
@@ -73,7 +73,7 @@ class ShopItemCardComponent < ViewComponent::Base
   end
 
   def order_url
-    logged_in ? helpers.shop_item_path(item_id) : "/"
+    helpers.shop_item_path(item_id)
   end
 
   def display_price

@@ -24,24 +24,21 @@ class SidebarComponent < ViewComponent::Base
   #                     - String basename (e.g. "home") -> icons/home.svg, inline-SVG tinted via currentColor
   #                     - Hash { idle:, active: } -> two PNGs in icons/, swapped when nav link is active
   #                     - :avatar -> user's profile picture
-  #   locked:         when truthy, render as a locked <button> with a tooltip
-  #   locked_message: tooltip copy for locked items
   #   active_prefix:  optional path prefix that overrides default match (used to
   #                   highlight "my projects" on any /users/* route)
   def nav_items
     items = [
       { slug: "home",          label: "home",          path: helpers.home_path,
         icon: { idle: "rocket", active: "rocket_active" } }
-      # { slug: "notifications", label: "notifications", path: "#",
-      #   icon: { idle: "bell", active: "bell_active" } }
     ]
 
-    if signed_in?
-      items << { slug: "rate",    label: "rate",          path: helpers.new_rate_path,
-        icon: { idle: "box", active: "box_active" },
-        locked: !user.shipped_projects.exists?,
-        locked_message: "The Vote tab unlocks once you ship your first project!" }
+    if signed_in? && Notification.enabled_for?(user)
+      items << { slug: "notifications", label: "notifications", path: helpers.my_notifications_path,
+        icon: { idle: "bell", active: "bell_active" }, badge: unread_notifications_count }
     end
+
+    items << { slug: "rate",    label: "rate",          path: helpers.new_rate_path,
+      icon: { idle: "box", active: "box_active" } }
 
     items.concat([
       { slug: "missions",      label: "missions",      path: helpers.missions_path,
@@ -56,6 +53,11 @@ class SidebarComponent < ViewComponent::Base
     if signed_in?
       items << { slug: "projects", label: "my projects",   path: helpers.profile_projects_path(user.display_name),
         icon: :avatar, active_prefix: "/@" }
+    end
+
+    # Guardians of integrity only (not admins): YSWS certification review queue.
+    if signed_in? && user.guardian_of_integrity?
+      items << { slug: "guard", label: "Lets go GOI", path: helpers.admin_certification_ysws_reviews_path, icon: "eye" }
     end
 
     # items << { slug: "support", label: "support", path: helpers.admin_support_path, icon: "help" } if helpers.admin_policy(:support_dashboard).show?
@@ -89,5 +91,14 @@ class SidebarComponent < ViewComponent::Base
 
   def link_classes_for(item)
     [ "sidebar__nav-link", ("sidebar__nav-link--active" if active?(item)) ].compact.join(" ")
+  end
+
+  def unread_notifications_count
+    return 0 unless user
+    return 0 unless Notification.table_exists?
+
+    # First-render value only; ActionCable pushes live updates after the page
+    # loads, so a brief staleness here is invisible to the user.
+    @unread_notifications_count ||= Notification.unread_count_for(user)
   end
 end

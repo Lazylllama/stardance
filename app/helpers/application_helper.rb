@@ -1,6 +1,30 @@
 module ApplicationHelper
   def in_beta? = request.host.include?("beta")
 
+  # Memoized per request: the feed renders dozens of post cards and Flipper
+  # memoization is disabled app-wide, so a per-card check would hit
+  # flipper_gates once per card.
+  def show_post_views?
+    return @show_post_views if defined?(@show_post_views)
+    @show_post_views = Flipper.enabled?(:week_2_release, current_user)
+  end
+
+  def main_app_base_url
+    host = request.host.sub(/\Araffle\./, "")
+    port = request.port
+    scheme = request.scheme
+    port_suffix = [ 80, 443 ].include?(port) ? "" : ":#{port}"
+    "#{scheme}://#{host}#{port_suffix}"
+  end
+
+  def raffle_base_url
+    host = request.host.sub(/\Araffle\./, "")
+    port = request.port
+    scheme = request.scheme
+    port_suffix = [ 80, 443 ].include?(port) ? "" : ":#{port}"
+    "#{scheme}://raffle.#{host}#{port_suffix}"
+  end
+
   def stardust_icon(extra_class: nil)
     image_tag "icons/stardust.png", alt: "Stardust", class: [ "currency-icon", extra_class ].compact.join(" ")
   end
@@ -19,10 +43,27 @@ module ApplicationHelper
       data: { controller: "count-up", count_up_target_value: n })
   end
 
-  def admin_tool(&block)
-    if current_user&.admin?
-      content_tag(:div, class: "admin tools-do", &block)
-    end
+  # compact: true renders an inline <span> with no dashed box, for markers
+  # that sit inside a line of text (e.g. a username byline) rather than
+  # wrapping a standalone block of debug content.
+  #
+  # roles: lets specific call sites (e.g. the "view in admin" hammer link)
+  # opt additional roles into an otherwise admin-only marker, without
+  # loosening every other admin_tool usage (comment delete, super star
+  # controls, profile/project edit) to those roles too.
+  #
+  # Uses real_user rather than current_user while impersonating, so the
+  # admin retains their own debug tooling instead of losing it to whatever
+  # role the impersonated account happens to have.
+  def admin_tool(compact: false, extra_class: nil, roles: [], &block)
+    acting_user = impersonating? ? real_user : current_user
+    allowed = acting_user&.admin? || roles.any? { |role| acting_user&.has_role?(role) }
+    return unless allowed && Flipper.enabled?(:shigimi_eyes, acting_user)
+
+    classes = [ "admin", "tools-do" ]
+    classes << "tools-do--inline" if compact
+    classes << extra_class if extra_class.present?
+    content_tag(compact ? :span : :div, class: classes.join(" "), &block)
   end
 
   def sign(num)
@@ -50,6 +91,21 @@ module ApplicationHelper
     hours = minutes / 60
     mins = minutes % 60
     format("%d:%02d", hours, mins)
+  end
+
+  # Whole-seconds duration as a media clock: H:MM:SS past an hour, else M:SS.
+  # Used by the Lapse/Lookout recording galleries on the hardware funding review.
+  def format_clock(seconds)
+    hours, rem = seconds.to_i.divmod(3600)
+    mins, secs = rem.divmod(60)
+    hours.positive? ? format("%d:%02d:%02d", hours, mins, secs) : format("%d:%02d", mins, secs)
+  end
+
+  # ie: 9h 0m. Hour/minute wall format shared by the devlog time preview,
+  # the un-devlogged time banner, and the devlog-cap notification.
+  def format_hours_minutes(seconds)
+    seconds = seconds.to_i
+    "#{seconds / 3600}h #{(seconds % 3600) / 60}m"
   end
 
   def format_seconds(seconds, include_days: false)
@@ -97,7 +153,16 @@ module ApplicationHelper
     nil
   end
 
+  def certification_verdict_video_src(cert)
+    return if cert.nil?
+    return url_for(cert.verdict_video) if cert.verdict_video.attached?
+
+    safe_external_url(cert.proof_video_url)
+  end
+
   def achievement_icon(icon_name, earned: true, **options)
+    return image_tag(icon_name, **options) if icon_name.respond_to?(:attached?)
+
     asset_path = find_achievement_asset(icon_name)
 
     if earned
@@ -133,7 +198,6 @@ module ApplicationHelper
     end
   end
 
-
   def cache_stats
     hits = Thread.current[:cache_hits] || 0
     misses = Thread.current[:cache_misses] || 0
@@ -146,8 +210,13 @@ module ApplicationHelper
   end
 
   def active_users_stats
-    counts = ActiveUserTracker.counts
-    "#{counts[:signed_in]} signed in, #{counts[:anonymous]} visitors"
+    Rails.cache.fetch("active_users_stats", expires_in: 30.seconds) do
+      counts = ActiveUserTracker.counts
+      "#{counts[:signed_in]} signed in, #{counts[:anonymous]} visitors"
+    end
+  rescue RedisClient::ReadTimeoutError, Redis::TimeoutError, Redis::CannotConnectError => e
+    Rails.logger.warn("ActiveUserTracker: #{e.class} - #{e.message}")
+    "unavailable"
   end
 
   private

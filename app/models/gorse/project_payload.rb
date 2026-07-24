@@ -15,6 +15,7 @@ class Gorse::ProjectPayload
            .where("LOWER(projects.title) NOT IN (?)", PLACEHOLDER_TITLES)
            .where("LOWER(projects.title) NOT LIKE ?", "untitled%")
            .where("projects.devlogs_count > 0 OR projects.shipped_at IS NOT NULL OR projects.duration_seconds > 0")
+           .joins("INNER JOIN active_storage_attachments asa ON asa.record_id = projects.id AND asa.record_type = 'Project' AND asa.name = 'banner'")
   end
 
   def to_h
@@ -36,12 +37,11 @@ class Gorse::ProjectPayload
     attr_reader :project
 
     def categories
-      [ "project", project.project_type, project.project_categories ].flatten.compact_blank.uniq
+      [ "project", project.project_type ].compact_blank.uniq
     end
 
     def labels
       Gorse::Labels.cast(
-        project_categories: project.project_categories,
         project_type: project.project_type,
         ship_status: project.ship_status,
         tutorial: project.tutorial?,
