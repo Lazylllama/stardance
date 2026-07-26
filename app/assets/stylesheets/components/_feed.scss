@@ -449,9 +449,18 @@
     }
   }
 
-  &__tools {
+  &__controls,
+  &__assist {
     display: flex;
     align-items: center;
+    min-width: 0;
+  }
+
+  &__controls {
+    gap: var(--space-xxs);
+  }
+
+  &__assist {
     gap: var(--space-xxs);
   }
 
@@ -590,6 +599,71 @@
 
     &--warn {
       color: var(--color-brand-salmon);
+    }
+  }
+
+  @media (max-width: 640px) {
+    &__toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "assist assist"
+        "tabs submit";
+      align-items: center;
+      column-gap: var(--space-xs);
+      row-gap: var(--space-xs);
+      margin-left: 0;
+    }
+
+    &__controls {
+      display: contents;
+    }
+
+    &__tabs {
+      grid-area: tabs;
+      justify-self: start;
+    }
+
+    &__assist {
+      grid-area: assist;
+      min-width: 0;
+    }
+
+    &__info,
+    &__info-wrap,
+    &__info-text {
+      min-width: 0;
+    }
+
+    &__info-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &__submit-group {
+      grid-area: submit;
+      justify-self: end;
+    }
+  }
+
+  @media (min-width: 641px) {
+    &__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-left: calc(var(--feed-content-offset) - 8px);
+    }
+
+    &__controls {
+      display: flex;
+    }
+
+    &__tabs,
+    &__assist,
+    &__submit-group {
+      grid-area: auto;
+      justify-self: auto;
     }
   }
 
