@@ -80,25 +80,23 @@
         <p class="admin-user-show__muted">No members.</p>
       <% end %>
 
-      <% if policy(current_user).view_order_full_details? %>
-        <h2 class="admin-user-show__section-title" style="margin-top: var(--space-m);">Hackatime Keys</h2>
-        <% if @project.hackatime_projects.any? %>
-          <ul>
-            <% @project.hackatime_projects.each do |hp| %>
-              <li class="admin-project__member">
-                <code><%= hp.name %></code>
-                <small class="admin-user-show__muted">(<%= link_to hp.user.display_name, admin_user_path(hp.user) %>)</small>
-                <% if (hackatime_uid = hp.user.identities.find { |i| i.provider == "hackatime" }&.uid) %>
-                  <%= link_to "Joe ↗",
-                        "https://joe.fraud.hackclub.com/billy/overview?u=#{hackatime_uid}&d=#{@project.created_at.strftime("%Y-%m-%d")}&projects=#{ERB::Util.url_encode(hp.name)}",
-                        target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
-                <% end %>
-              </li>
-            <% end %>
-          </ul>
-        <% else %>
-          <p class="admin-user-show__muted">No hackatime keys linked.</p>
-        <% end %>
+      <h2 class="admin-user-show__section-title" style="margin-top: var(--space-m);">Hackatime Keys</h2>
+      <% if @project.hackatime_projects.any? %>
+        <ul>
+          <% @project.hackatime_projects.each do |hp| %>
+            <li class="admin-project__member">
+              <code><%= hp.name %></code>
+              <small class="admin-user-show__muted">(<%= link_to hp.user.display_name, admin_user_path(hp.user) %>)</small>
+              <% if (hackatime_uid = hp.user.identities.find { |i| i.provider == "hackatime" }&.uid) %>
+                <%= link_to "Joe ↗",
+                      "https://joe.fraud.hackclub.com/billy/overview?u=#{hackatime_uid}&d=#{@project.created_at.strftime("%Y-%m-%d")}&projects=#{ERB::Util.url_encode(hp.name)}",
+                      target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
+              <% end %>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p class="admin-user-show__muted">No hackatime keys linked.</p>
       <% end %>
     </div>
   </div>
