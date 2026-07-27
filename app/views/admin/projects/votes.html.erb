@@ -125,7 +125,7 @@
 
     if (toggleDiscarded  || ToggleLastShip) {
       const setVisibility = () => {
-        const lastShipId = <%= @project.ship_events.maximum(:id) || "null" %>;
+        const lastShipId = <%= @project.ship_events.maximum(:id).to_json %>;
         document.querySelectorAll("tr").forEach((row) => {
           const statusCell = row.querySelector("td:nth-child(8)");
           const shipIdCell = row.querySelector("td:nth-child(1)");
