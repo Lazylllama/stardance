@@ -442,6 +442,25 @@ class ProjectsController < ApplicationController
     end
   end
 
+  # /projects/latest — permalink to the newest project on Stardance.
+  #
+  # Ordered by created_at rather than updated_at: "latest" here means most
+  # recently started, and updated_at churns on every edit, hour sync and
+  # counter-cache bump, which would make the target jump around.
+  #
+  # Project's default_scope excludes soft-deleted records, so this can't land on
+  # one. It's redirect-only, so the usual project-page authorization runs on the
+  # target itself when show renders.
+  def latest
+    project = Project.order(created_at: :desc).first
+
+    if project
+      redirect_to project_path(project)
+    else
+      redirect_to root_path, alert: "There aren't any projects yet!"
+    end
+  end
+
   def followers
     @project = Project.find(params[:id])
     authorize @project, :show?

@@ -899,6 +899,10 @@ Rails.application.routes.draw do
     get  "setup/welcome",       to: "setup#welcome",       as: :setup_welcome
   end
 
+  # Permalink to the most recently created project. Mounted before
+  # `resources :projects` so "latest" isn't swallowed as a project id.
+  get "projects/latest", to: "projects#latest", as: :latest_project
+
   # Projects — public index lives on the user profile projects section; only
   # show/new/edit/update/destroy and the nested resources are exposed here.
   resources :projects, shallow: true, except: [ :index ] do
