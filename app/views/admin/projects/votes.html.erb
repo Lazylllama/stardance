@@ -98,7 +98,7 @@
           <td>
             <strong>Median scores (of counted votes):</strong>
           </td>
-          <td/><td/>
+          <td /><td />
           <% @score_medians.each do |category, median| %>
           <td>
             <span>(<%= median || "—" %>)</span>
@@ -122,7 +122,6 @@
     const toggleReasons = document.getElementById("toggle-reasons");
     const toggleDiscarded = document.getElementById("toggle-discarded");
     const ToggleLastShip = document.getElementById("toggle-last-ship");
-
 
     if (toggleDiscarded  || ToggleLastShip) {
       const setVisibility = () => {
