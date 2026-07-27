@@ -9,7 +9,7 @@
   </label>
   <label>
     <input type="checkbox" id="toggle-discarded" checked>
-    Show discarded votes (<%= @project.votes.count - @project.votes.payout_countable.count %>)
+    Show discarded votes (<%= @project.votes.discarded_count %>)
   </label>
   <label>
     <input type="checkbox" id="toggle-last-ship">
@@ -123,40 +123,33 @@
     const toggleDiscarded = document.getElementById("toggle-discarded");
     const ToggleLastShip = document.getElementById("toggle-last-ship");
 
-    if (ToggleLastShip) {
-      const setLastShipVisibility = (visible) => {
+
+    if (toggleDiscarded  || ToggleLastShip) {
+      const setVisibility = () => {
         const lastShipId = <%= @project.ship_events.maximum(:id) || "null" %>;
         document.querySelectorAll("tr").forEach((row) => {
-          const shipIdCell = row.querySelector("td:nth-child(1)");
-          if (
-            shipIdCell
-            && shipIdCell.textContent.trim() !== lastShipId?.toString()
-            && !shipIdCell.textContent.trim().includes("Median"))
-          {
-            row.style.display = visible ? "none" : "";
-          }
-        });
-      };
-
-      setLastShipVisibility(ToggleLastShip.checked);
-      ToggleLastShip.addEventListener("change", function() {
-        setLastShipVisibility(this.checked);
-      });
-    }
-
-    if (toggleDiscarded) {
-      const setDiscardedVisibility = (visible) => {
-        document.querySelectorAll("tr").forEach((row) => {
           const statusCell = row.querySelector("td:nth-child(8)");
-          if (statusCell && statusCell.textContent.trim() === "Discarded") {
-            row.style.display = visible ? "" : "none";
+          const shipIdCell = row.querySelector("td:nth-child(1)");
+
+          if (toggleDiscarded.checked && statusCell && statusCell.textContent.trim() === "Discarded") {
+            row.style.display = "";
+          } else if (!toggleDiscarded.checked && statusCell && statusCell.textContent.trim() === "Discarded") {
+            row.style.display = "none";
+          } else if (ToggleLastShip.checked && shipIdCell && shipIdCell.textContent.trim() !== lastShipId?.toString() && !shipIdCell.textContent.trim().includes("Median")) {
+            row.style.display = "none";
+          } else {
+            row.style.display = "";
           }
         });
       };
 
-      setDiscardedVisibility(toggleDiscarded.checked);
+      setVisibility();
+
       toggleDiscarded.addEventListener("change", function() {
-        setDiscardedVisibility(this.checked);
+        setVisibility();
+      });
+      ToggleLastShip.addEventListener("change", function() {
+        setVisibility();
       });
     }
 

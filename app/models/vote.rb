@@ -51,6 +51,10 @@ class Vote < ApplicationRecord
     storytelling: :storytelling_score
   }.freeze
 
+  def self.discarded_count
+    where(discarded: true).count
+  end
+
   def self.score_columns = SCORE_COLUMNS_BY_CATEGORY.values
 
   def self.medians_by_category(scope = all)
