@@ -90,6 +90,11 @@
   --color-set-1-bg: #08061e;
   --color-set-2-bg: #343651;
   --color-set-3-bg: #606684;
+  // Set secondary foregrounds — muted text on that set, and the border color
+  // of its 2px-bordered container variant (docs/branding.md §1.1, §3). Only
+  // the ones in use are defined; add the others when first needed.
+  --color-set-1-fg-secondary: #83828d;
+  --color-set-3-fg-secondary: #afb2c1;
   // Set 4 is the highlighted-container fill. Numerically it's the canonical
   // highlight cream (#FEFCE7) at ~40% alpha composited over set 1, giving a
   // warm-gray that pairs with the cream highlight border used on
@@ -145,6 +150,9 @@
 
   // Yellow/Gold
   --color-yellow-200: hsl(52, 60%, 83%);
+
+  // Amber — traffic-light amber, used to signal a "pending" / in-review state.
+  --color-amber-500: hsl(40, 100%, 45%);
 
   // Brand palette (Figma — eight swatches + orange admin marker)
   --color-brand-mint: #81ffff;

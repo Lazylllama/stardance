@@ -23,6 +23,21 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     assert_select "turbo-frame#home_feed[src=?]", home_feed_path
   end
 
+  test "for you candidate selection keeps authors and projects diverse" do
+    posts = [
+      Post.new(id: 1, user_id: 1, project_id: 1, postable_type: "Post::Devlog"),
+      Post.new(id: 2, user_id: 1, project_id: 2, postable_type: "Post::Devlog"),
+      Post.new(id: 3, user_id: 2, project_id: 1, postable_type: "Post::Devlog"),
+      Post.new(id: 4, user_id: 2, project_id: 2, postable_type: "Post::Devlog"),
+      Post.new(id: 5, user_id: 3, project_id: 3, postable_type: "Post::Devlog")
+    ]
+    candidates = posts.map { |post| [ post, "recommended" ] }
+
+    selected, = Home::FeedsController.new.send(:select_diverse_candidates, candidates, limit: 3)
+
+    assert_equal [ 1, 4, 5 ], selected.map(&:id)
+  end
+
   private
 
   def create_devlog(body:)

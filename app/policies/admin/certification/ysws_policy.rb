@@ -7,11 +7,19 @@ class Admin::Certification::YswsPolicy < ApplicationPolicy
     index?
   end
 
+  def dashboard?
+    index?
+  end
+
   def update?
     index?
   end
 
   def report_fraud?
     index?
+  end
+
+  def unclaim?
+    user.present? && index? && record.pending? && record.claimed_by?(user)
   end
 end

@@ -7,6 +7,7 @@ class ApplicationController < ActionController::Base
   include Pagy::Method
   include Achievementable
   include Trackable
+  include OutpostEmailing
 
   before_action :store_referral_code
   before_action :remember_page
@@ -102,13 +103,14 @@ class ApplicationController < ActionController::Base
   def sign_in_user(user, auth_level: "guest")
     session[:user_id] = user.id
     session[:auth_level] = auth_level
+    AnonymousRoll.new(cookies).clear!
   end
 
   # https://stackoverflow.com/questions/70960161/ruby-on-rails-back-button-that-will-take-you-back-to-the-previous-page
   # improvised a bit. a linked list sorta..
   def remember_page
     return unless request.get? && request.format.html?
-    return if request.xhr?
+    return if request.xhr? || turbo_frame_request?
 
     current_path = request.path
     pages = session[:previous_pages] ||= []
