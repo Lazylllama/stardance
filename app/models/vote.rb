@@ -53,6 +53,18 @@ class Vote < ApplicationRecord
 
   def self.score_columns = SCORE_COLUMNS_BY_CATEGORY.values
 
+  def self.medians_by_category(scope = all)
+    SCORE_COLUMNS_BY_CATEGORY.transform_values { |column| median(scope.pluck(column)) }
+  end
+
+  def self.median(values)
+    sorted = values.compact.sort
+    return nil if sorted.empty?
+
+    midpoint = sorted.length / 2
+    sorted.length.odd? ? sorted[midpoint] : (sorted[midpoint - 1] + sorted[midpoint]) / 2.0
+  end
+
   def self.countable_count_for_ship_events
     votes = arel_table
     vote_events = Vote::Event.arel_table

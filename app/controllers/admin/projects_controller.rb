@@ -35,6 +35,12 @@ class Admin::ProjectsController < Admin::ApplicationController
     @pagy, @votes = pagy(
       @project.votes.includes(:user, :events).order(created_at: :desc)
     )
+    @score_medians = Vote.medians_by_category(@project.votes.payout_countable)
+
+    if Post::ShipEvent.payout_feature_enabled?(current_user)
+      sample = Post::ShipEvent.payout_score_sample
+      @ship_event_payouts = @project.ship_events.map { |ship_event| [ ship_event, ship_event.payout_preview(sample) ] }
+    end
   end
 
   def restore

@@ -7,6 +7,10 @@ class Admin::ProjectPolicy < ApplicationPolicy
     index?
   end
 
+  def view_payout_reviews?
+    user.admin? || user.nda_helper?
+  end
+
   def view_votes?
     user.admin? || user.nda_helper?
   end

@@ -9,15 +9,50 @@
   </label>
   <label>
     <input type="checkbox" id="toggle-discarded" checked>
-    Show discarded votes
+    Show discarded votes (<%= @project.votes.count - @project.votes.payout_countable.count %>)
+  </label>
+  <label>
+    <input type="checkbox" id="toggle-last-ship">
+    Show only last ship
   </label>
 </div>
+
+<% if @ship_event_payouts.present? %>
+  <div>
+    <strong>Estimated payouts:</strong>
+    <ul>
+      <% @ship_event_payouts.each do |ship_event, preview| %>
+        <li>
+          <% if policy(@project).view_payout_reviews? %>
+            <%= link_to "Ship ##{ship_event.id}", admin_payout_review_path(ship_event) %>
+          <% else %>
+            Ship #<%= ship_event.id %>
+          <% end %>
+          (<%= ship_event.payout_recipient&.display_name || "Unknown" %>):
+          <strong><%= preview[:estimated_payout] || "—" %> stardust</strong>
+          <% if preview[:estimated_payout] && preview[:hours].to_f.positive? %>
+            <span>(<%= number_with_precision(preview[:estimated_payout] / preview[:hours], precision: 1) %> stardust/hr)</span>
+          <% end %>
+          <% if ship_event.payout.present? %>
+            <span>— already paid <%= ship_event.payout %> stardust</span>
+          <% else %>
+            <span>
+              (<%= preview[:votes_count] %>/<%= Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT %> votes,
+              <%= preview[:percentile] ? "#{number_with_precision(preview[:percentile], precision: 1)}th percentile" : "no percentile yet" %>)
+            </span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
 
 <div>
   <% if @votes.any? %>
     <table>
       <thead>
         <tr>
+          <th>Ship ID</th>
           <th>Time</th>
           <th>Voter</th>
           <th>Orig.</th>
@@ -31,6 +66,7 @@
       <tbody>
         <% @votes.each do |vote| %>
           <tr>
+            <td><%= vote.ship_event_id %></td>
             <td><%= time_ago_in_words(vote.created_at) %> ago</td>
             <td>
               <% if vote.user %>
@@ -57,6 +93,19 @@
           </tr>
         <% end %>
       </tbody>
+      <tfoot>
+        <tr>
+          <td>
+            <strong>Median scores (of counted votes):</strong>
+          </td>
+          <td/><td/>
+          <% @score_medians.each do |category, median| %>
+          <td>
+            <span>(<%= median || "—" %>)</span>
+          </td>
+          <% end %>
+        </tr>
+      </tfoot>
     </table>
     <% if @pagy.pages > 1 %>
       <div>
@@ -72,11 +121,33 @@
   (function() {
     const toggleReasons = document.getElementById("toggle-reasons");
     const toggleDiscarded = document.getElementById("toggle-discarded");
+    const ToggleLastShip = document.getElementById("toggle-last-ship");
+
+    if (ToggleLastShip) {
+      const setLastShipVisibility = (visible) => {
+        const lastShipId = <%= @project.ship_events.maximum(:id) || "null" %>;
+        document.querySelectorAll("tr").forEach((row) => {
+          const shipIdCell = row.querySelector("td:nth-child(1)");
+          if (
+            shipIdCell
+            && shipIdCell.textContent.trim() !== lastShipId?.toString()
+            && !shipIdCell.textContent.trim().includes("Median"))
+          {
+            row.style.display = visible ? "none" : "";
+          }
+        });
+      };
+
+      setLastShipVisibility(ToggleLastShip.checked);
+      ToggleLastShip.addEventListener("change", function() {
+        setLastShipVisibility(this.checked);
+      });
+    }
 
     if (toggleDiscarded) {
       const setDiscardedVisibility = (visible) => {
         document.querySelectorAll("tr").forEach((row) => {
-          const statusCell = row.querySelector("td:nth-child(7)");
+          const statusCell = row.querySelector("td:nth-child(8)");
           if (statusCell && statusCell.textContent.trim() === "Discarded") {
             row.style.display = visible ? "" : "none";
           }
