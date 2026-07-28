@@ -1,8 +1,10 @@
 # Project tiers!
 
-Here are the different tiers of projects! If you're unsure, ask around in [#outpost](https://hackclub.enterprise.slack.com/archives/C0B04RP43TQ)
+Hardware projects in Stardance are funded via tiers!
 
-### B tier ($25 funding, 30% Stardust off Outpost ticket)
+All hardware projects still need to follow the shipping requirements in order to qualify!
+
+### B tier, up to $25 in funding
 
 This is the most basic tier! For small stuff like macropads, basic PCBs, etc!
 

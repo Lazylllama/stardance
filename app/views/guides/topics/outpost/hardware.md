@@ -20,7 +20,7 @@ Alternatively, if you are unable to use Lookout, you may document your changes i
 
 ## 2. Build your hardware projects, get Stardust!
 
-Once you finish building your projects, record a demo video and ship it! It'll get peer-rated and you'll get Stardust based on the # of hours you spent on the project + how it does in rating!
+Once you finish building your projects, record a demo video and ship it! You'll get a fixed payout based on the # of hours you spend in Stardance
 
 ## 3. Spend your Stardust in the Shop!
 

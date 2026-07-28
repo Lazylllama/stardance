@@ -1,6 +1,6 @@
 # Starting your hardware project
 
-Hey there! This page covers how to get started with your hardware project and some advice for working on it. This is especially
+Hey there! This page covers how to get started with your hardware project and some advice for working on it!
 
 ## 1. Coming up with an idea
 
@@ -31,7 +31,7 @@ Once you've got everything set up, start working away! As mentioned in the [Hard
 ![image](https://cdn.hackclub.com/019ed754-f542-78e8-9f98-ba11070e40e8/paste-1781729129346.png)
 _hit this button to record your progress!_
 
-If you're having issues with look, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
+If you're having issues with lapse, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
 
 One resource you should definitely check out is the [Hardware Codex](https://codex.hackclub.com) - it's a collection of design resources to help you along your journey making projects!
 
