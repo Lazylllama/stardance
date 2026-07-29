@@ -30,6 +30,16 @@ module HCBService
       hcb_credentials&.slug.presence || "stardance"
     end
 
+    # A development database has no HCB tokens, so every call goes out to the
+    # real HCB with a blank bearer token, comes back 401, and then dies in the
+    # refresh. Answer locally instead, so the hardware and shop flows can be
+    # exercised without a live grant. Storing real credentials in development
+    # switches this back off, and it never applies outside development: test
+    # stubs the service, and production must fail loudly.
+    def simulated?
+      Rails.env.development? && HCBCredential.first&.refresh_token.blank?
+    end
+
     # Generic wrapper that will attempt a token refresh on 401 once, then retry.
     def with_retry
       attempts = 0
@@ -60,6 +70,13 @@ module HCBService
         refresh_token = hcb_credentials.refresh_token
         redirect_uri = hcb_credentials.redirect_uri
         base = hcb_credentials.base_url || base_url
+
+        # Without this the request goes out with a blank token and HCB answers a
+        # bare `invalid_request`, which reads like a transient API fault rather
+        # than "someone has to re-authorize HCB".
+        if refresh_token.blank?
+          raise HCBError, "no refresh token stored - re-authorize HCB and update HCBCredential"
+        end
 
         # Use a lightweight connection to call the token endpoint to avoid recursion.
         # Doorkeeper expects a form-encoded POST (application/x-www-form-urlencoded).
@@ -94,14 +111,21 @@ module HCBService
         new_refresh_token = body && (body["refresh_token"] || body[:refresh_token])
         raise HCBError, "no access_token in response: #{body}" unless access_token
 
-        # HCB has already rotated the refresh token server-side at this point —
-        # the old one is dead regardless of what happens next. Retry the local
-        # save a few times so a transient DB blip doesn't strand us holding
-        # valid tokens we never wrote down.
+        # A refresh_token is OPTIONAL in a refresh response (RFC 6749 §5.1): a
+        # provider that doesn't rotate them just omits it. Writing it back
+        # unconditionally therefore erases the one we still need, and every later
+        # refresh then posts a blank token and gets `invalid_request` back, with
+        # no way to recover except re-authorizing by hand.
+        attrs = { access_token: access_token }
+        attrs[:refresh_token] = new_refresh_token if new_refresh_token.present?
+
+        # HCB may have rotated the refresh token server-side by now, so these are
+        # the only valid tokens we have. Retry the local save a few times so a
+        # transient DB blip doesn't strand us holding tokens we never wrote down.
         persisted = false
         persist_error = nil
         3.times do |attempt|
-          hcb_credentials.update!(refresh_token: new_refresh_token, access_token: access_token)
+          hcb_credentials.update!(attrs)
           persisted = true
           break
         rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished => e
@@ -134,39 +158,71 @@ module HCBService
     end
 
     def create_card_grant(email:, amount_cents:, merchant_lock: nil, category_lock: nil, keyword_lock: nil, purpose: nil, pre_authorization_required: false, one_time_use: false, instructions: nil, organization: nil)
+      return simulate(:create_card_grant, amount_cents: amount_cents) if simulated?
+
       with_retry do
-        org = organization || @hcb_org_slug
+        org = organization || slug
         conn.post("organizations/#{org}/card_grants", email:, amount_cents:, category_lock:, merchant_lock:, keyword_lock:, purpose:, pre_authorization_required:, one_time_use:, instructions:).body
       end
     end
 
     def topup_card_grant(hashid:, amount_cents:)
       Rails.logger.info "Topping up HCB card grant #{hashid} by #{amount_cents}¢"
+      return simulate(:topup_card_grant, hashid: hashid, amount_cents: amount_cents) if simulated?
+
       with_retry { conn.post("card_grants/#{hashid}/topup", amount_cents:).body }
     end
 
     def rename_transaction(hashid:, new_memo:)
-      with_retry { conn.put("organizations/#{@hcb_org_slug}/transactions/#{hashid}", memo: new_memo).body }
+      return simulate(:rename_transaction, hashid: hashid) if simulated?
+
+      with_retry { conn.put("organizations/#{slug}/transactions/#{hashid}", memo: new_memo).body }
     end
 
     def show_card_grant(hashid:)
+      return simulate(:show_card_grant, hashid: hashid) if simulated?
+
       with_retry { conn.get("card_grants/#{hashid}?expand=balance_cents,disbursements").body }
     end
 
     def update_card_grant(hashid:, merchant_lock: nil, category_lock: nil, keyword_lock: nil, purpose: nil, instructions: nil)
+      return simulate(:update_card_grant, hashid: hashid) if simulated?
+
       with_retry { conn.patch("card_grants/#{hashid}", { merchant_lock:, category_lock:, keyword_lock:, purpose:, instructions: }.compact).body }
     end
 
     def show_stripe_card(hashid:)
+      return simulate(:show_stripe_card, hashid: hashid) if simulated?
+
       with_retry { conn.get("cards/#{hashid}").body }
     end
 
     def cancel_card_grant!(hashid:)
+      return simulate(:cancel_card_grant!, hashid: hashid, status: "canceled") if simulated?
+
       with_retry { conn.post("card_grants/#{hashid}/cancel").body }
     end
 
     def index_card_grants
-      with_retry { conn.get("organizations/#{@hcb_org_slug}/card_grants").body }
+      return [] if simulated?
+
+      with_retry { conn.get("organizations/#{slug}/card_grants").body }
+    end
+
+    # Stand-in for an HCB response body, shaped like the real one: callers read
+    # `["id"]`, `["status"]` and `dig("disbursements", 0, "transaction_id")`, and
+    # ShopCardGrant#stripped_hashid drops a four-character prefix off the hashid.
+    def simulate(call, hashid: nil, amount_cents: 0, status: "active")
+      hashid ||= "cdg_dev#{SecureRandom.hex(5)}"
+      Rails.logger.info "[HCB simulated] #{call} -> #{hashid} (no HCB credentials in development)"
+
+      Hashie::Mash.new(
+        "id" => hashid,
+        "status" => status,
+        "amount_cents" => amount_cents,
+        "balance_cents" => amount_cents,
+        "disbursements" => [ { "transaction_id" => "txn_dev#{SecureRandom.hex(5)}" } ]
+      )
     end
 
     # Builds (or returns cached) Faraday connection for HCB API.
@@ -175,7 +231,6 @@ module HCBService
       hcb_creds = HCBCredential.first
       raise HCBError, "no HCB credentials found" unless hcb_creds
       hcb_access_token = hcb_creds.access_token
-      @hcb_org_slug = hcb_creds.slug
 
       @conn ||= Faraday.new url: "#{hcb_creds.base_url || base_url}/api/v4/" do |faraday|
         faraday.request :json
