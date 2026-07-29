@@ -119,8 +119,12 @@ class ProjectsController < ApplicationController
 
     # Shipwright verdicts are rendered straight from the review records —
     # they're private to project members, so they never become Post rows.
-    @timeline_entries = (@posts + visible_ship_decisions).sort_by do |entry|
-      entry.is_a?(Certification::Ship) ? entry.decided_on : entry.created_at
+    @timeline_entries = (@posts + visible_ship_decisions + visible_funding_requests).sort_by do |entry|
+      case entry
+      when Certification::Ship then entry.decided_on
+      when Certification::FundingRequest then entry.decided_at || entry.created_at
+      else entry.created_at
+      end
     end.reverse
 
     @show_project_onboarding = @is_member && @timeline_entries.empty?
@@ -218,6 +222,19 @@ class ProjectsController < ApplicationController
             .to_a
   end
   private :visible_ship_decisions
+
+  # Funding requests, shown only to project members (and admins): the amount
+  # asked for and the reviewer's feedback are the team's business, not public.
+  # Only the most recent request appears on the timeline - a resubmission
+  # supersedes the returned one it replaces.
+  def visible_funding_requests
+    return [] unless current_user
+    return [] unless @is_member || current_user.admin?
+    return [] unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.certification_funding_requests.includes(:reviewer).order(created_at: :desc).limit(1).to_a
+  end
+  private :visible_funding_requests
 
   def add_test_time
     authorize @project

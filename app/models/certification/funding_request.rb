@@ -173,6 +173,25 @@ module Certification
       @owner ||= project.memberships.owner.first&.user || user
     end
 
+    # Locals for the verdict notification's Slack template.
+    def notification_locals
+      routes = Rails.application.routes.url_helpers
+      # default_url_options is only configured in production, so a bare
+      # reverse_merge on it raises NoMethodError in development and test.
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        approved: approved?,
+        amount_dollars: final_amount_dollars,
+        tier_label: tier_label,
+        reviewer_name: reviewer&.display_name,
+        feedback: feedback.to_s
+      }
+    end
+
     # Reviewers enter whole-dollar amounts; we persist cents.
     def approved_amount_dollars
       approved_amount_cents ? approved_amount_cents / 100 : nil
@@ -191,8 +210,17 @@ module Certification
     before_save :assign_stardust_earned,
       if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
-    after_save_commit :issue_hcb_grant!, if: -> { saved_change_to_status? && approved? }
+    # Notify first. The verdict message only states what already happened (the
+    # request was approved, the project moved to build) and never claims a card
+    # has been issued, so it stays true even if the grant fails - and declaring
+    # it first means a dead HCB token can't silently swallow the verdict.
+    #
+    # The grant is guarded on a missing hashid rather than on the status change,
+    # so a grant that failed (an expired HCB token is a live failure mode here)
+    # retries the next time the request is saved instead of being stranded.
+    # issue_hcb_grant! already returns early when a grant exists.
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
+    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? }
 
     private
 
@@ -275,18 +303,17 @@ module Certification
       raise
     end
 
+    # Routed through the notification pipeline rather than a direct Slack DM, so
+    # the verdict also lands in the in-app inbox and by email, and so a builder
+    # with no Slack account still hears about it.
     def notify_owner!
-      owner = project.memberships.owner.first&.user
-      return unless owner&.slack_id.present?
-
-      case status.to_sym
-      when :approved
-        owner.dm_user("Your hardware project '#{project.title}' was approved for $#{final_amount_dollars} in funding! It's switched to the build phase. Log your build hours with a timelapse and ship when you're ready.")
-      when :returned
-        msg = "Your funding request for '#{project.title}' needs changes before it can be approved."
-        msg += "\n\n#{feedback}" if feedback.present?
-        owner.dm_user(msg)
-      end
+      Notifications::Hardware::FundingRequestReviewed.notify(
+        recipient: owner,
+        actor: reviewer,
+        record: self
+      )
+    rescue StandardError => e
+      Rails.logger.error("FundingRequest ##{id} notify_owner! failed: #{e.message}")
     end
   end
 end

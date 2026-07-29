@@ -23,6 +23,7 @@ module Notifications
       Notifications::Payouts::ShipEventIssued
       Notifications::Payouts::VoteDeficitBlocked
       Notifications::ShopOrders::StatusChanged
+      Notifications::Hardware::FundingRequestReviewed
       Notifications::Workshops::StartingSoon
     ].freeze
 

@@ -609,6 +609,19 @@
                       tooltip_position_value: "top"
                     }
                   ) %>
+            <% elsif !@project.has_devlog_since_last_ship? %>
+              <%= render ActionButtonComponent.new(
+                    text: "Submit Design to Get Project Funding",
+                    variant: :primary,
+                    type: :button,
+                    icon: "icons/rocket.png",
+                    disabled: :soft,
+                    data: {
+                      controller: "tooltip",
+                      tooltip_message_value: "Post at least one devlog before requesting funding!",
+                      tooltip_position_value: "top"
+                    }
+                  ) %>
             <% elsif !@project.info_complete? %>
               <%= render ActionButtonComponent.new(
                     text: "Submit Design to Get Project Funding",
@@ -858,6 +871,13 @@
         <% @timeline_entries.each do |entry| %>
           <% if entry.is_a?(Certification::Ship) %>
             <%= render "projects/ship_decision_card", decision: entry, is_member: is_member, project: @project %>
+          <% elsif entry.is_a?(Certification::FundingRequest) %>
+            <%# The resubmit button reuses the funding modal, which only renders
+                while the project is still in the design stage. %>
+            <% resubmit_id = (Flipper.enabled?(:hardware_flow, current_user) && @project.design_stage?) ? "funding-request-modal-#{@project.id}" : nil %>
+            <%= render "projects/funding_request_card",
+                       funding_request: entry, project: @project, owner: owner,
+                       resubmit_modal_id: resubmit_id %>
           <% elsif entry.postable_type == "Post::ShipEvent" %>
             <% ship_index += 1 %>
             <% recert_id = ((is_member || current_user&.can_review?) && @project.needs_changes? && ship_index == 1) ? "recert-modal-#{@project.id}" : nil %>
