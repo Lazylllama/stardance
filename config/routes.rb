@@ -847,12 +847,15 @@ Rails.application.routes.draw do
         end
       end
 
-      # Unified hardware review surface: one queue and one project page covering
-      # both design funding requests and build ship certifications. Verdicts and
+      # Hardware review surface: two separate queues (design funding requests and
+      # build ship certifications) sharing one project review page. Verdicts and
       # claims reuse the funding/ship mutation endpoints above so PaperTrail and
       # existing audit behavior stay attached to the underlying records.
+      # `index` redirects to the design queue so older links keep working.
       resources :hardware_reviews, path: "hardware", param: :project_id, only: [ :index, :show ] do
         collection do
+          get :design
+          get :build
           get :next
         end
       end

@@ -9,7 +9,9 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
       verb = @funding_request.approved? ? "Approved" : "Returned"
       count = ::Certification::FundingRequest.reviewed_today(current_user)
       notice = "#{verb} funding for “#{@funding_request.project.title}.” That's #{count} reviewed today. Keep going!"
-      redirect_to admin_certification_hardware_review_path(@funding_request.project_id), notice: notice
+      # Straight on to the next design review; `next` claims it, and falls back
+      # to the queue when there's nothing left.
+      redirect_to next_admin_certification_hardware_reviews_path(stage: "design"), notice: notice
     else
       load_hardware_review_context
       render "admin/certification/hardware_reviews/show", status: :unprocessable_entity

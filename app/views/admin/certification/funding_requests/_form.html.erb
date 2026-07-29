@@ -62,10 +62,6 @@
     <%= f.submit "Submit verdict", class: "action-btn action-btn--large action-btn--primary" %>
     <%= link_to "Skip and get next", next_admin_certification_hardware_reviews_path(skip: "funding:#{funding_request.id}"),
           class: "action-btn action-btn--small action-btn--secondary" %>
-    <button type="submit" form="unclaim-form-<%= funding_request.id %>"
-            class="action-btn action-btn--small action-btn--destructive">
-      Unclaim review
-    </button>
-    <%= link_to "Back to queue", admin_certification_hardware_reviews_path, class: "review-form__back" %>
+    <%= link_to "Back to queue", design_admin_certification_hardware_reviews_path, class: "review-form__back" %>
   </div>
 <% end %>
