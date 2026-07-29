@@ -45,6 +45,7 @@ Rails.application.config.after_initialize do
         disable_internal_sw_dash_reviews
         sharable_purchase
         shigimi_eyes
+        devlog_review_pace
       ].each { |flag| Flipper.add(flag) }
     end
   rescue StandardError => e

@@ -48,14 +48,28 @@
       <label for="filter-with-integrity">Only with certification integrity</label>
     </div>
 
-    <div class="ysws-queue__goal" role="status" aria-live="polite">
-      <% if @devlog_remaining.positive? %>
-        <span class="ysws-queue__goal-count"><%= @devlog_remaining %></span>
-        <span class="ysws-queue__goal-label">devlogs left until goal reached</span>
-      <% else %>
-        <span class="ysws-queue__goal-label">Goal of <%= @devlog_goal %> devlogs reached</span>
+    <% if @devlog_pace %>
+      <% on_pace = @devlog_pace[:needed_today].zero? %>
+      <%= tag.div class: [ "ysws-queue__goal", ("ysws-queue__goal--on-pace" if on_pace) ],
+                  role: "status", aria: { live: "polite" } do %>
+        <div class="ysws-queue__goal-primary">
+          <span class="ysws-queue__goal-count">
+            <%= number_with_precision @devlog_pace[:daily_average], precision: 1, strip_insignificant_zeros: true %>
+          </span>
+          <span class="ysws-queue__goal-label">devlogs / day this week</span>
+        </div>
+
+        <% if on_pace %>
+          <span class="ysws-queue__goal-note">
+            On pace — <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day average met
+          </span>
+        <% else %>
+          <span class="ysws-queue__goal-note">
+            <%= @devlog_pace[:needed_today] %> more needed today to reach your goal!
+          </span>
+        <% end %>
       <% end %>
-    </div>
+    <% end %>
 
     <% if @project_type.present? || @sort.present? || !@with_integrity %>
       <%= link_to "Reset filters",

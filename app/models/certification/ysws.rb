@@ -132,9 +132,15 @@ module Certification
       self[:todo_devlog_count].to_i
     end
 
-    # Default per-reviewer target for completed devlog reviews. Shown as a
-    # "reviews left until goal reached" widget on the review queue.
-    DEFAULT_DEVLOG_REVIEW_GOAL = 222
+    # Per-reviewer target for completed devlog reviews: a daily rate that
+    # reviewers are expected to average across the review week, rather than hit
+    # every single day. Drives the pace widget on the review queue.
+    DEVLOG_REVIEW_GOAL_PER_DAY = 45
+
+    # Review weeks run Wednesday 4pm to the following Wednesday 4pm, in the app
+    # time zone.
+    REVIEW_WEEK_START_DAY = :wednesday
+    REVIEW_WEEK_START_HOUR = 16
 
     # Projected stardust per reviewed devlog, tiered by the reviewer's running
     # devlog-review count: a reviewer's Nth devlog pays the rate for the tier N
@@ -227,12 +233,62 @@ module Certification
     # All-time count of devlogs a given reviewer has reviewed. A devlog counts
     # as reviewed once its parent YSWS review is completed (reviewed_at present),
     # matching the leaderboard's definition.
-    def self.reviewer_devlog_count(reviewer_id)
-      Certification::Devlog
+    def self.reviewer_devlog_count(reviewer_id, since: nil)
+      scope = Certification::Devlog
         .joins(:ysws_review)
         .where.not(certification_ysws_reviews: { reviewed_at: nil })
         .where(certification_ysws_reviews: { reviewer_id: reviewer_id })
+      scope = scope.where(certification_ysws_reviews: { reviewed_at: since.. }) if since
+      scope.count
+    end
+
+    # Start of the review week containing `now`: the most recent Wednesday 4pm.
+    # `beginning_of_week` lands on that Wednesday at midnight, so the 4pm cutoff
+    # can still be in the future — when it is, the week started a week earlier.
+    def self.review_week_start(now = Time.current)
+      cutoff = now.in_time_zone.beginning_of_week(REVIEW_WEEK_START_DAY) + REVIEW_WEEK_START_HOUR.hours
+      cutoff <= now ? cutoff : cutoff - 1.week
+    end
+
+    # 1-based day within the review week containing `now`. Days run on the same
+    # 4pm boundary as the week itself, so this is 1 on the first 4pm-to-4pm day
+    # and 7 on the last.
+    def self.review_week_day_number(now = Time.current)
+      ((now - review_week_start(now)) / 1.day).floor + 1
+    end
+
+    # A reviewer's pace against the daily goal for the current review week.
+    #
+    # `needed_today` is the catch-up figure: how many more devlogs would bring the
+    # week's running average up to the daily goal by the end of today. A reviewer
+    # who fell behind yesterday owes that shortfall on top of today's quota.
+    def self.reviewer_devlog_pace(reviewer_id, now: Time.current)
+      day_number = review_week_day_number(now)
+      reviewed   = reviewer_devlog_count(reviewer_id, since: review_week_start(now))
+
+      {
+        reviewed: reviewed,
+        day_number: day_number,
+        daily_average: reviewed / day_number.to_f,
+        needed_today: [ (DEVLOG_REVIEW_GOAL_PER_DAY * day_number) - reviewed, 0 ].max
+      }
+    end
+
+    # Reviewer ids already meeting the daily goal averaged across the review week
+    # so far — the same bar `reviewer_devlog_pace` reports as "on pace". Returned
+    # as a Set so the leaderboard can mark rows without a query per row.
+    def self.reviewers_on_pace(now: Time.current)
+      cumulative_target = DEVLOG_REVIEW_GOAL_PER_DAY * review_week_day_number(now)
+
+      Certification::Devlog
+        .joins(:ysws_review)
+        .where(certification_ysws_reviews: { reviewed_at: review_week_start(now).. })
+        .where.not(certification_ysws_reviews: { reviewer_id: nil })
+        .group("certification_ysws_reviews.reviewer_id")
+        .having("COUNT(*) >= ?", cumulative_target)
         .count
+        .keys
+        .to_set
     end
 
     # Devlogs reviewed per reviewer per day over the trailing window, bucketed by
