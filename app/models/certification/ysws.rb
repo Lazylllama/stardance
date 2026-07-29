@@ -137,8 +137,11 @@ module Certification
     # every single day. Drives the pace widget on the review queue.
     DEVLOG_REVIEW_GOAL_PER_DAY = 45
 
-    # Review weeks run Wednesday 4pm to the following Wednesday 4pm, in the app
-    # time zone.
+    # Program-facing time zone. The app's default zone is UTC, but reviewers,
+    # review weeks and bonus windows all run on Eastern wall-clock time.
+    PROGRAM_ZONE = Time.find_zone!("America/New_York")
+
+    # Review weeks run Wednesday 4pm to the following Wednesday 4pm, Eastern.
     REVIEW_WEEK_START_DAY = :wednesday
     REVIEW_WEEK_START_HOUR = 16
 
@@ -165,15 +168,13 @@ module Certification
     # whose parent review completed within `window` earn that much extra
     # stardust *on top of* their tier rate (additive, so a reviewer never loses
     # their higher tier rate for reviewing during a window). Windows are
-    # non-overlapping; the New York zone is used so EDT offsets apply correctly
-    # regardless of the app's default zone.
+    # non-overlapping and expressed in PROGRAM_ZONE so EDT offsets apply
+    # correctly regardless of the app's default zone.
     BONUS_WINDOWS = [
       # 11am EDT July 9 2026 → 4pm EDT July 13 2026.
-      [ Time.find_zone!("America/New_York").local(2026, 7, 9, 11, 0)..
-        Time.find_zone!("America/New_York").local(2026, 7, 13, 16, 0), 0.1 ],
+      [ PROGRAM_ZONE.local(2026, 7, 9, 11, 0)..PROGRAM_ZONE.local(2026, 7, 13, 16, 0), 0.1 ],
       # 4:15pm EDT July 24 2026 → 4:15pm EDT July 27 2026 (Mon).
-      [ Time.find_zone!("America/New_York").local(2026, 7, 24, 16, 15)..
-        Time.find_zone!("America/New_York").local(2026, 7, 27, 16, 15), 0.05 ]
+      [ PROGRAM_ZONE.local(2026, 7, 24, 16, 15)..PROGRAM_ZONE.local(2026, 7, 27, 16, 15), 0.05 ]
     ].freeze
 
     # SQL expression yielding the per-devlog bonus stardust for a review, based
@@ -242,19 +243,30 @@ module Certification
       scope.count
     end
 
-    # Start of the review week containing `now`: the most recent Wednesday 4pm.
-    # `beginning_of_week` lands on that Wednesday at midnight, so the 4pm cutoff
-    # can still be in the future — when it is, the week started a week earlier.
+    # Start of the review week containing `now`: the most recent Wednesday 4pm
+    # Eastern. `beginning_of_week` lands on that Wednesday at midnight, so the
+    # 4pm cutoff can still be in the future — when it is, the week started a
+    # week earlier.
     def self.review_week_start(now = Time.current)
-      cutoff = now.in_time_zone.beginning_of_week(REVIEW_WEEK_START_DAY) + REVIEW_WEEK_START_HOUR.hours
+      cutoff = now.in_time_zone(PROGRAM_ZONE)
+        .beginning_of_week(REVIEW_WEEK_START_DAY)
+        .change(hour: REVIEW_WEEK_START_HOUR)
       cutoff <= now ? cutoff : cutoff - 1.week
     end
 
     # 1-based day within the review week containing `now`. Days run on the same
     # 4pm boundary as the week itself, so this is 1 on the first 4pm-to-4pm day
     # and 7 on the last.
+    #
+    # Each 4pm-to-4pm day is keyed by the calendar date it started on, keeping
+    # the count wall-clock exact across DST — dividing elapsed seconds by 24h
+    # would report an 8th day in the week the clocks fall back, and shift every
+    # boundary by an hour in the week they spring forward.
     def self.review_week_day_number(now = Time.current)
-      ((now - review_week_start(now)) / 1.day).floor + 1
+      local     = now.in_time_zone(PROGRAM_ZONE)
+      day_start = local.hour < REVIEW_WEEK_START_HOUR ? local.to_date - 1 : local.to_date
+
+      (day_start - review_week_start(now).to_date).to_i.clamp(0, 6) + 1
     end
 
     # A reviewer's pace against the daily goal for the current review week.
