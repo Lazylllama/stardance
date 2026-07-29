@@ -30,50 +30,22 @@
 #  fk_rails_...  (project_id => projects.id)
 #  fk_rails_...  (user_id => users.id)
 #
+# Historical record of a Lookout recording. Stardance stopped recording with
+# Lookout when hardware time moved to Lapse, so nothing writes these rows any
+# more; they exist so the ~7.3k finished recordings already attached to projects
+# stay viewable on the hardware review pages (see LookoutService).
 class LookoutSession < ApplicationRecord
   STATUSES = %w[pending active paused stopped compiling complete failed].freeze
-  # Terminal states never change again, so the sync paths skip them.
-  TERMINAL_STATUSES = %w[complete failed].freeze
   # How the session was recorded (desktop / web / camera).
   MODES = %w[desktop web camera].freeze
 
   belongs_to :user
   belongs_to :project
 
-  belongs_to :devlog, class_name: "Post::Devlog", optional: true
-
   validates :token, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
   validates :mode, inclusion: { in: MODES }, allow_nil: true
 
-  scope :for_project, ->(project) { where(project: project) }
+  # Sessions that got far enough to have something worth showing a reviewer.
   scope :attachable, -> { where(status: %w[stopped complete]) }
-  # Sessions that might still advance — everything not yet in a terminal state.
-  # SyncPendingLookoutSessionsJob re-polls these so a recording can finalize even
-  # when the builder closed the recorder tab before Lookout finished compiling.
-  scope :syncable, -> { where.not(status: TERMINAL_STATUSES) }
-
-  def terminal?
-    TERMINAL_STATUSES.include?(status)
-  end
-
-  # Mirror Lookout's client-API payload onto this row. The remote payload is
-  # camelCase (trackedSeconds, videoUrl); tolerate snake_case too. Only accept a
-  # status we recognize so update! can't blow up on a new remote state, and never
-  # clobber an existing duration/video with a blank — Lookout returns a partial
-  # payload while a session is still compiling. Returns self.
-  def sync_from_remote!(remote)
-    return self if remote.blank?
-
-    next_status = remote[:status].presence_in(STATUSES)
-    tracked = remote[:trackedSeconds] || remote[:tracked_seconds] || remote[:duration_seconds]
-    video   = remote[:videoUrl] || remote[:video_url] || remote[:recording_url]
-
-    update!(
-      status: next_status || status,
-      duration_seconds: tracked ? tracked.to_i : duration_seconds,
-      recording_url: video.presence || recording_url
-    )
-    self
-  end
 end

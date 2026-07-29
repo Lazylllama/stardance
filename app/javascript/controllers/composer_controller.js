@@ -199,7 +199,6 @@ export default class extends Controller {
       editUrl,
       hackatimeLinked,
       recordable,
-      recordUrl,
     } = event.params;
     const linked = !!hackatimeLinked;
     const chip = event.currentTarget;
@@ -238,14 +237,11 @@ export default class extends Controller {
       if (editUrl) this.warnTarget.href = editUrl;
     }
 
-    // The Record button (home composer only) shows for recordable projects
-    // (hardware, or any project once the :lookout flag is on); point it at the
-    // newly-selected project's create-session endpoint.
+    // The Record button (home composer only) shows for hardware projects. It
+    // links straight to Lapse, which takes no per-project parameters, so there
+    // is nothing to re-point on chip switch.
     if (this.hasRecordBtnTarget) {
       this.recordBtnTarget.hidden = !recordable;
-      if (recordUrl) {
-        this.recordBtnTarget.dataset.lookoutRecorderCreateUrlValue = recordUrl;
-      }
     }
 
     if (this.#composerOpen) this.#loadPreviewTime();
