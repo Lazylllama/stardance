@@ -12,13 +12,13 @@ Drawing sketches at this stage helps a ton! Here's one I did for bitski, an LED 
 
 ![image](https://cdn.hackclub.com/019e9a77-6da9-7745-953a-f195132b2cd8/paste-1780707978107.png)
 
-I highly recommend watching the [2025 Open Sauce recap video](https://www.youtube.com/watch?v=Cb_pny1DxlQ) to get an idea of what people usually make!
+_Don't worry about making this perfect - the point is to have a north star to work towards_
 
 ## 2. Setting up your project
 
-Next step is creating your project!
+Next step is setting up your project to start working on it!
 
-You'll need to create a GitHub repository. This is a place where you can store your project files online & manage the different versions! Here's what it looks like:
+First, you'll need to create a [GitHub](https://github.com) repository. This is a place where you can store your project files online & manage the different versions! Here's what it looks like:
 
 ![image](https://cdn.hackclub.com/019e9a79-de93-7e08-aabb-dacbb22af364/paste-1780708138037.png)
 
@@ -35,6 +35,6 @@ If you're having issues with Lapse, you can write a markdown journal instead - y
 
 One resource you should definitely check out is the [Hardware Codex](https://codex.hackclub.com) - it's a collection of design resources to help you along your journey making projects!
 
-Make sure to ask tons of questions in [#outpost](https://hackclub.enterprise.slack.com/archives/C0B04RP43TQ) - the best source of advice is from your fellow hardware hackers!
+Make sure to ask tons of questions in [#hardware](https://hackclub.enterprise.slack.com/archives/C6C026NHJ) - the best source of advice is from your fellow hardware hackers!
 
 Once think you've finished your design, you'll be ready to submit your project! You should check out the "Submitting" section of the [Hardware in Stardance 101](/resources/hardware)
