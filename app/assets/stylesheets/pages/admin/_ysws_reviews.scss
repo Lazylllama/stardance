@@ -2636,7 +2636,8 @@ body:has(.certification-ysws) {
       background: var(--gradient-extra-highlight) center / cover no-repeat;
       // Two stacked soft lilacs: a tight one to feather the row's hard edge and
       // a wider one to bleed the glow into the rows above and below.
-      box-shadow: 0 0 var(--space-xs) var(--color-brand-lilac-soft),
+      box-shadow:
+        0 0 var(--space-xs) var(--color-brand-lilac-soft),
         0 0 var(--space-l) var(--color-brand-lilac-soft);
     }
 

@@ -69,7 +69,9 @@ body.admin-page {
     font-size: var(--font-size-l);
   }
 
-  a:not(.action-btn):not([class*="btn-"]):not(.ysws-queue__view-btn):not(.ysws-dashboard__reviewer-link--on-pace) {
+  a:not(.action-btn):not([class*="btn-"]):not(.ysws-queue__view-btn):not(
+      .ysws-dashboard__reviewer-link--on-pace
+    ) {
     color: var(--color-brand-highlight);
     text-decoration: none;
 
