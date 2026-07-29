@@ -267,8 +267,16 @@
     &--clamped {
       max-height: calc(1.55em * 3);
       overflow: hidden;
-      -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
-      mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent);
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        #000 calc(100% - 1.4em),
+        transparent
+      );
+      mask-image: linear-gradient(
+        to bottom,
+        #000 calc(100% - 1.4em),
+        transparent
+      );
     }
   }
 
