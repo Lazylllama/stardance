@@ -54,7 +54,7 @@ class ProjectsController < ApplicationController
       @hackatime_linked = current_user.hackatime_identity.present?
 
       if @hackatime_linked
-        @linked_hackatime_projects = @project.hackatime_projects
+        @linked_hackatime_projects = @project.hackatime_projects.where(user: current_user)
         @all_hackatime_projects = current_user.hackatime_projects
         result = current_user.try_sync_hackatime_data!
         @hackatime_times = result&.dig(:projects) || {}
@@ -311,7 +311,9 @@ class ProjectsController < ApplicationController
         @project.update!(hardware_stage: "design") if mission.hardware? && !@project.hardware?
         @project.missions << mission
         attrs = {}
-        if @project.title.blank? || @project.title == "Untitled"
+        # Only fill in a mission's default name when the builder didn't give one
+        # (older clients, or a create that skipped the name prompt).
+        if @project.placeholder_title?
           attrs[:title] = mission.default_project_title.presence || mission.name
         end
         if @project.description.blank? && mission.default_project_description.present?
@@ -487,28 +489,16 @@ class ProjectsController < ApplicationController
     redirect_to projects_setup_link_account_path, alert: "Finish setting up your account to keep working on your project."
   end
 
-  # Hardware projects live on Outpost now, not Stardance. Intercept any attempt
-  # to create one here — the /projects/new hardware form posts a hardware_stage,
-  # and a hardware mission_slug would also make the project hardware — and bounce
-  # back to the new-project page with the Outpost popup open.
-  def redirect_hardware_creation_to_outpost
-    return unless Flipper.enabled?(:hardware_to_outpost, current_user)
-    # Guests can't create a project anyway (ProjectPolicy#new?/#create? require an
-    # HCA-linked user), so don't bounce them to /projects/new — that would just
-    # 403 before the popup shows. Let the normal auth flow handle them.
-    return unless current_user&.hca_linked?
-
-    creating_hardware = params.dig(:project, :hardware_stage).present? ||
-      (params[:mission_slug].present? && Mission.find_by(slug: params[:mission_slug])&.hardware?)
-    redirect_to new_project_path(hardware: "outpost") if creating_hardware
-  end
-
+  # `project` is fetched rather than required so a create that arrives without it
+  # (a client where the name prompt never opened) re-renders :new with a title
+  # validation error instead of a bare 400.
   def project_params
-    params.require(:project).permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
+    params.fetch(:project, ActionController::Parameters.new)
+          .permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
   end
 
   def hackatime_project_ids
-    @hackatime_project_ids ||= Array(params[:project][:hackatime_project_ids]).reject(&:blank?).map(&:to_i)
+    @hackatime_project_ids ||= Array(params.dig(:project, :hackatime_project_ids)).reject(&:blank?).map(&:to_i)
   end
 
   def validate_urls
@@ -600,8 +590,10 @@ class ProjectsController < ApplicationController
     @project.errors.add(attribute, "#{name} could not be verified. Please try again or contact support if the issue persists.")
   end
   def link_hackatime_projects
-    # Unlink hackatime projects that were removed
-    @project.hackatime_projects.where.not(id: hackatime_project_ids).find_each do |hp|
+    # Unlink hackatime projects that were removed. Scoped to the current user:
+    # every member of a hardware project has their own row under the same name,
+    # and the form only ever submits this user's ids.
+    @project.hackatime_projects.where(user: current_user).where.not(id: hackatime_project_ids).find_each do |hp|
       unless hp.update(project: nil)
         hp.errors.full_messages.each do |message|
           @project.errors.add(:base, "Hackatime project #{hp.name}: #{message}")

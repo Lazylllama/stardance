@@ -241,6 +241,45 @@ class ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_select "input[name='project[hardware_stage]'][value='build']"
   end
 
+  test "every create path on the new project dialog asks for a name first" do
+    sign_in @owner
+
+    get new_project_path
+
+    assert_response :success
+    # Nothing posts a placeholder title any more: each create form carries a
+    # name prompt whose required input supplies project[title].
+    assert_select "input[type='hidden'][name='project[title]']", 0
+    assert_select "dialog.project-name-prompt input[name='project[title]'][required]",
+                  minimum: 3
+    # Software + both hardware stages open a prompt rather than submitting.
+    assert_select "#name-prompt-software"
+    assert_select "#name-prompt-hardware-design"
+    assert_select "#name-prompt-hardware-build"
+    assert_select "button.project-creation__blank-btn[type='button']"
+    assert_select ".project-creation__stage-option[type='submit']", 0
+  end
+
+  test "the name prompt caps the title at the model's limit" do
+    sign_in @owner
+
+    get new_project_path
+
+    assert_response :success
+    assert_select "dialog.project-name-prompt input[name='project[title]'][maxlength=?]",
+                  Project::TITLE_MAX_LENGTH.to_s
+  end
+
+  test "creating a project uses the name the builder typed" do
+    sign_in @owner
+
+    assert_difference -> { Project.count }, 1 do
+      post projects_path, params: { project: { title: "Solar plant waterer" } }
+    end
+
+    assert_equal "Solar plant waterer", Project.order(:created_at).last.title
+  end
+
   test "hardware project record launcher is locked until a Hackatime account is linked" do
     @project.update!(hardware_stage: "build")
     sign_in @owner # has a hack_club identity but no Hackatime identity
@@ -248,9 +287,9 @@ class ProjectsControllerTest < ActionDispatch::IntegrationTest
     get project_path(@project)
 
     assert_response :success
-    # Shown in the actions area, but disabled and without the recorder controller.
+    # Shown in the actions area, but disabled and not yet linking out to Lapse.
     assert_select ".project-show__actions button[aria-disabled='true']", text: /Record a timelapse/
-    assert_select ".project-show__actions [data-controller~='lookout-recorder']", 0
+    assert_select ".project-show__actions a[href=?]", LapseService::APP_URL, 0
   end
 
   test "hardware project record launcher is enabled once a Hackatime account is linked" do
@@ -265,8 +304,7 @@ class ProjectsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
-    assert_select ".project-show__actions [data-controller~='lookout-recorder'][data-lookout-recorder-create-url-value=?]",
-                  project_lookout_sessions_path(@project)
+    assert_select ".project-show__actions a[href=?]", LapseService::APP_URL
     assert_select ".project-show__actions button[aria-disabled='true']", text: /Record a timelapse/, count: 0
   end
 

@@ -38,6 +38,26 @@ class User::HackatimeProject < ApplicationRecord
 
   after_commit :enqueue_streak_resync, if: -> { saved_change_to_project_id? && project_id.present? }
 
+  # Point `name` at `project` for `user`, so time logged under that Hackatime
+  # project counts toward the Stardance project. Idempotent on (user, name), and
+  # never steals a name already linked to a different Stardance project; in that
+  # case the existing link is left alone. Best-effort: callers link as a
+  # side-effect of work that has already succeeded, so a validation failure here
+  # shouldn't take that work down with it.
+  def self.link(user:, project:, name:)
+    record = find_or_initialize_by(user: user, name: name)
+    return record if record.persisted? && record.project_id.present? && record.project_id != project.id
+
+    record.project = project
+    record.save
+    record
+  rescue ActiveRecord::RecordNotUnique
+    # (user_id, name) is unique and this is check-then-act, so concurrent runs
+    # can both miss the lookup and both insert. The loser just reads back the
+    # row the winner created rather than taking the whole caller down.
+    find_by(user: user, name: name)
+  end
+
   private
 
   def enqueue_streak_resync
