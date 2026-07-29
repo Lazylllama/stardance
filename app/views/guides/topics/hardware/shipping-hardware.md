@@ -58,4 +58,8 @@ One snippet you can add to your project is this. It adds a PCB button to your RE
 
 ## 5. Submit!
 
-Once you're done with your project, you're ready to submit your project!
+Once you're done with your project, you're ready to submit!
+
+If you just finished a _design_ and are looking for funding, submit it for funding from your project page
+
+If you have a build, hang tight!

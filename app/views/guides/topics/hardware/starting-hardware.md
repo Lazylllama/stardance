@@ -35,6 +35,6 @@ If you're having issues with Lapse, you can write a markdown journal instead - y
 
 One resource you should definitely check out is the [Hardware Codex](https://codex.hackclub.com) - it's a collection of design resources to help you along your journey making projects!
 
-Make sure to ask tons of questions in [#hardware](https://hackclub.enterprise.slack.com/archives/C6C026NHJ) - the best source of advice is from your fellow hardware hackers!
+Make sure to ask tons of questions in #stardance-help - the best source of advice is from your fellow hardware hackers!
 
 Once think you've finished your design, you'll be ready to submit your project! You should check out the "Submitting" section of the [Hardware in Stardance 101](/resources/hardware)

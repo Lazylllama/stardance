@@ -30,7 +30,6 @@ export default class extends Controller {
 
     this.openSettingsModalFromQueryParam();
     this.openIdvModalFromQueryParam();
-    this.openHardwareOutpostModalFromQueryParam();
   }
 
   disconnect() {
@@ -132,23 +131,4 @@ export default class extends Controller {
     window.history.replaceState(window.history.state, "", nextUrl);
   }
 
-  // A hardware-create attempt bounces back to /projects/new?hardware=outpost;
-  // pop the Outpost modal open, then strip the param so a refresh won't reopen it.
-  openHardwareOutpostModalFromQueryParam() {
-    if (this.element.id !== "hardware-outpost-modal") return;
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("hardware") !== "outpost") return;
-
-    if (!this.element.open) {
-      this.element.showModal();
-    }
-
-    params.delete("hardware");
-    const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${
-      window.location.hash
-    }`;
-    window.history.replaceState(window.history.state, "", nextUrl);
-  }
 }

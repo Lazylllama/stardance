@@ -9,7 +9,6 @@ class ProjectsController < ApplicationController
   before_action :set_project_minimal, only: [ :edit, :update, :destroy ]
   before_action :set_project, only: [ :show, :readme, :add_test_time ]
   before_action :redirect_guest_owner_to_link!, only: [ :show, :readme, :edit, :update ]
-  before_action :redirect_hardware_creation_to_outpost, only: [ :create ]
 
   def show
     authorize @project
@@ -245,11 +244,8 @@ class ProjectsController < ApplicationController
   end
 
   def new
-    # First-timers get bounced to the setup wizard — except when a blocked
-    # hardware create sent them here to see the Outpost popup (?hardware=outpost),
-    # which lives on this page. Bouncing then would drop the param (no popup) and
-    # could ping-pong with the wizard's own hardware redirect.
-    if current_user&.projects&.none? && params[:hardware] != "outpost"
+    # First-timers get bounced to the setup wizard.
+    if current_user&.projects&.none?
       # /projects/new just bounces to setup for first-timers — pop it from the
       # back-stack so the idea step's back button skips over it.
       if session[:previous_pages].is_a?(Array)

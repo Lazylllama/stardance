@@ -640,7 +640,6 @@ Rails.application.routes.draw do
         resource  :ban,                 only: [ :create, :destroy ]
         resource  :impersonation,       only: [ :create ]
         resources :feature_flags,       only: [ :create, :destroy ], param: :feature
-        resource  :presentable_hardware_flag, only: [ :create, :destroy ]
         resource  :hackatime_sync,      only: [ :create ]
         resource  :order_rejection,     only: [ :create ]
         resources :balance_adjustments, only: [ :create ]

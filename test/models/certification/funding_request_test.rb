@@ -68,7 +68,7 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     assert fr.errors[:requested_amount_cents].any?
   end
 
-  test "approval switches the project to build and accrues the owner discount" do
+  test "approval switches the project to build and issues the HCB grant" do
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
     )
@@ -77,45 +77,17 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     end
 
     assert_equal "build", @project.reload.hardware_stage
-    # tier 3 (S) => flat 100% discount on the 300✦ Outpost Ticket = 300
-    assert_equal 300, @owner.reload.outpost_discount_stardust
     assert_equal Certification::FundingRequest::REVIEW_BOUNTY, fr.reload.stardust_earned
     assert_equal "test_grant_123", fr.reload.hcb_grant_hashid
   end
 
-  test "approving for less than requested still grants the full flat tier discount" do
-    fr = @project.certification_funding_requests.create!(
-      user: @owner, complexity_tier: 3, requested_amount_cents: 10_000, status: :pending
-    )
-    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
-      fr.update!(reviewer: @reviewer, status: :approved, approved_amount_dollars: 40)
-    end
-
-    # flat per-tier discount: the approved amount no longer affects it; tier 3 (S) = 300
-    assert_equal 300, @owner.reload.outpost_discount_stardust
-  end
-
-  test "discount accrual is idempotent across re-saves" do
-    fr = @project.certification_funding_requests.create!(
-      user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
-    )
-    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
-      fr.update!(reviewer: @reviewer, status: :approved)
-    end
-    assert_equal 300, @owner.reload.outpost_discount_stardust
-
-    fr.update!(feedback: "nice work")
-    assert_equal 300, @owner.reload.outpost_discount_stardust
-  end
-
-  test "returned requests leave the project and discount untouched" do
+  test "returned requests leave the project untouched" do
     fr = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 2, requested_amount_cents: 3_000, status: :pending
     )
     fr.update!(reviewer: @reviewer, status: :returned, feedback: "needs more detail")
 
     assert_equal "design", @project.reload.hardware_stage
-    assert_equal 0, @owner.reload.outpost_discount_stardust
   end
 
   test "a funded project must post a build devlog before it can ship" do

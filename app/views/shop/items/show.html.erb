@@ -56,11 +56,6 @@
                                 </li>
                             <% end %>
                         </ul>
-                        <% if @shop_item.is_a?(ShopItem::OutpostTicket) %>
-                            <a class="shop-order__achievement-cta" href="https://forms.hackclub.com/submit-showcase-project" target="_blank" rel="noopener">
-                                Submit your hardware project for review →
-                            </a>
-                        <% end %>
                     <% else %>
                         <% achievement_names = @required_achievements.map(&:name).to_sentence(two_words_connector: ' or ', last_word_connector: ', or ') %>
                         <span>Unlocked via "<%= achievement_names %>"</span>
@@ -329,14 +324,6 @@
                         <h4 id="shop-order__summary-total-display" data-order-form-target="summaryTotalDisplay"><%= stardust_icon %> <%= @sale_price.round %></h4>
                     </div>
                 </div>
-                <% if @shop_item.is_a?(ShopItem::OutpostTicket) && current_user.outpost_discount_stardust.to_i > 0 %>
-                    <div class="shop-order__summary-outpost">
-                        <p><%= safe_join([ "You've earned ", stardust_icon, " ", current_user.outpost_discount_stardust.to_s, " toward the Outpost Ticket from your funded hardware designs." ]) %></p>
-                        <% if current_user.outpost_flight_stipend > 0 %>
-                            <p><%= safe_join([ "That covers the ticket and leaves ", stardust_icon, " ", content_tag(:strong, current_user.outpost_flight_stipend.to_s), " toward a flight stipend." ]) %></p>
-                        <% end %>
-                    </div>
-                <% end %>
             </div>
             <% primary_address = @user_addresses.find { |a| a["primary"] } || @user_addresses.first %>
             <% has_phone = primary_address&.dig("phone_number").present? || Rails.env.development? || @shop_item.is_a?(ShopItem::FreeStickers) %>
