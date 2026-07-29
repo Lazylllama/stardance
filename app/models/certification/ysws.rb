@@ -135,7 +135,7 @@ module Certification
     # Per-reviewer target for completed devlog reviews: a daily rate that
     # reviewers are expected to average across the review week, rather than hit
     # every single day. Drives the pace widget on the review queue.
-    DEVLOG_REVIEW_GOAL_PER_DAY = 1
+    DEVLOG_REVIEW_GOAL_PER_DAY = 45
 
     # Review weeks run Wednesday 4pm to the following Wednesday 4pm, in the app
     # time zone.
