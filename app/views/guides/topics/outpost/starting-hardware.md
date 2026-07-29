@@ -26,12 +26,12 @@ You can find instructions on how to to make one [here](https://docs.github.com/e
 
 ## 3. Working on your design
 
-Once you've got everything set up, start working away! As mentioned in the [Hardware in Stardance 101](/guides/hardware) You'll need to record your progress using Lookout!
+Once you've got everything set up, start working away! As mentioned in the [Hardware in Stardance 101](/guides/hardware) You'll need to record your progress using Lapse!
 
 ![image](https://cdn.hackclub.com/019ed754-f542-78e8-9f98-ba11070e40e8/paste-1781729129346.png)
 _hit this button to record your progress!_
 
-If you're having issues with lapse, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
+If you're having issues with Lapse, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
 
 One resource you should definitely check out is the [Hardware Codex](https://codex.hackclub.com) - it's a collection of design resources to help you along your journey making projects!
 

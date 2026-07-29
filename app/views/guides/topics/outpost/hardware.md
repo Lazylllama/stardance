@@ -4,7 +4,7 @@ The hardware flow can be a little confusing! **here's how it works:**
 
 The first step to making hardware projects is to make a design for your project! Once you create a new hardware project, it'll show up in your projects list!
 
-To get rewards from Stardance, you'll need to track your time using a tool called Lookout - it's a timelapsing software that takes screenshots roughly every 1 minute.
+To get rewards from Stardance, you'll need to track your time using a tool called Lapse - it's a timelapsing software that takes screenshots roughly every 15 seconds!
 
 ![image](https://cdn.hackclub.com/019ed75a-21f7-7c08-a97c-1c6e553a0b40/paste-1781729468716.png)
 _^^ hit this button to record your progress!_
@@ -20,8 +20,10 @@ Alternatively, if you are unable to use Lookout, you may document your changes i
 
 ## 2. Build your hardware projects, get Stardust!
 
-Once you finish building your projects, record a demo video and ship it! You'll get a fixed payout based on the # of hours you spend in Stardance
+Once you finish building your projects, record a demo video and ship it! You'll get 5 stardust for every hour you spent building your hardware project!
+
+_we'll have different ways to earn more stardust later, including making a video!_
 
 ## 3. Spend your Stardust in the Shop!
 
-Once you get Stardust, you can spend it in the [shop](/shop) to get awesome rewards!
+Once you get Stardust, you can spend it in the [shop](/shop) to get awesome prizes!
