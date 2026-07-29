@@ -71,7 +71,12 @@ class Vote::Assignment < ApplicationRecord
   end
 
   def refresh(matchmaker = Vote::Matchmaker.new(user))
-    if ship_event.certification_status == "rejected"
+    # Hardware left the rating pool, but assignments handed out before that
+    # would keep being served: the branches below only swap a ship out once it's
+    # rejected or already paid.
+    if ship_event.project&.hardware?
+      replace_with(matchmaker.next_ship_event)
+    elsif ship_event.certification_status == "rejected"
       replace_with(matchmaker.next_ship_event)
     elsif ship_event.payout.present? || ship_event.votes.payout_countable.count >= Post::ShipEvent::VOTES_TO_LEAVE_POOL
       if replacement = matchmaker.next_unpaid_ship_event

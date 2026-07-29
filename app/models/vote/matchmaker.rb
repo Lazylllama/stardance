@@ -77,6 +77,10 @@ class Vote::Matchmaker
     def candidate_ship_events
       scope = Post::ShipEvent
         .joins(:project)
+        # Hardware is certified by a reviewer against its timelapse, not rated by
+        # peers, so it never enters the pool. Its owner still owes the usual
+        # vote debt, which makes hardware builders net contributors here.
+        .where(projects: { hardware_stage: nil })
         .where.not(id: @user.votes.select(:ship_event_id))
         .where.not(id: @user.vote_assignments.select(:ship_event_id))
         .where.not(posts: { project_id: @user.projects.select(:id) })

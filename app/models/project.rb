@@ -298,20 +298,39 @@ class Project < ApplicationRecord
   normalizes :hardware_stage, with: ->(value) { value.presence }
   validates :hardware_stage, inclusion: { in: HARDWARE_STAGES }, allow_nil: true
   validates :project_type, inclusion: { in: AVAILABLE_CATEGORIES }, allow_nil: true
-  validate :hardware_stage_locked_after_funding_request
+  validate :hardware_stage_locked_once_committed
   validate :hardware_required_by_current_mission
 
   # Set by Certification::FundingRequest#apply_verdict_to_project! to let the
   # approval flow advance the stage; the lock below stays closed for everyone else.
   attr_accessor :advancing_via_funding_approval
 
-  def hardware_stage_locked_after_funding_request
-    return unless hardware_stage_changed? && has_any_funding_request?
-    # The certification flow advances design → build when a funding request is
-    # approved. Allow only that in-process action, while still locking any
-    # owner-initiated stage change.
+  # Once a project has asked for funding or shipped, its stage decides real
+  # money: hardware pays a flat rate and skips the payout review window, so an
+  # owner must not be able to flip an already-shipped software project to
+  # hardware and change how it gets paid.
+  def hardware_stage_locked_once_committed
+    return unless hardware_stage_changed?
     return if advancing_via_funding_approval
-    errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
+
+    if has_any_funding_request?
+      errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
+    elsif shipped_at_least_once?
+      errors.add(:hardware_stage, "cannot be changed after the project has shipped")
+    end
+  end
+
+  # Deliberately not memoized: a Project instance can be validated before a ship
+  # exists and again after (reload doesn't clear an ivar), and a stale false here
+  # would let the stage change through.
+  def shipped_at_least_once?
+    ship_events.exists?
+  end
+
+  # The edit form asks this so it can render a locked display instead of a
+  # control that would only fail validation.
+  def hardware_stage_locked?
+    has_any_funding_request? || shipped_at_least_once?
   end
 
   # A project on a hardware mission can't drop back to software while attached —

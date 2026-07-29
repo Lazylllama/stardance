@@ -151,7 +151,10 @@
             <div class="project-show__edit-grid" data-controller="project-type">
               <div class="project-show__field project-show__field--inline">
                 <span>Project type <%= render "projects/help_tooltip", text: "Software projects track coding time with Hackatime. Hardware projects (electronics, 3D printing, robotics, etc.) record a screen/build timelapse instead." %></span>
-                <% if @project.has_any_funding_request? %>
+                <%# Locked once the project has asked for funding or shipped: the
+                    stage decides how the ship is paid, so the model refuses the
+                    change and a live control here would only fail validation. %>
+                <% if @project.hardware_stage_locked? %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project type (locked)">
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked">Software</span>
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked project-show__stage-choice-label--selected">Hardware</span>
@@ -186,11 +189,13 @@
                    data-project-type-target="stageSection"
                    <%= "hidden" unless @project.hardware? %>>
                 <span>Project stage <%= render "projects/help_tooltip", text: "\"I need Funding\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"I don't need Funding\" means you already have your parts and are building." %></span>
-                <% if @project.has_any_funding_request? %>
+                <% if @project.hardware_stage_locked? %>
                   <% fr = @project.latest_funding_request %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project stage (locked)">
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked">
-                      <% if fr.approved? %>
+                      <% if fr.nil? %>
+                        Design Stage
+                      <% elsif fr.approved? %>
                         Design Stage — $<%= fr.final_amount_dollars %> approved
                       <% elsif fr.pending? %>
                         Design Stage — $<%= fr.requested_amount_dollars %> under review

@@ -61,7 +61,108 @@ class Post::ShipEventHoursTest < ActiveSupport::TestCase
     assert_in_delta 0.0, ship.hours, 0.001
   end
 
+  # --- funding-request cutoff -------------------------------------------------
+
+  test "hardware payout ignores reviewed time logged before the funding request" do
+    project = hardware_project_with_approved_funding(requested_at: 2.days.ago)
+    before = create_devlog(project, seconds: 7200, phase: "build", at: 3.days.ago)
+    after  = create_devlog(project, seconds: 7200, phase: "build", at: 1.day.ago)
+    before.update_column(:created_at, 3.days.ago)
+    after.update_column(:created_at, 1.day.ago)
+    ship = create_ship(project)
+
+    review_devlogs(project, ship, { before => 120, after => 120 })
+
+    # Only the devlog logged after the request counts: 120 minutes, not 240.
+    assert_in_delta 2.0, ship.reload.hours, 0.001
+  end
+
+  test "a hardware project that skipped funding keeps all its reviewed time" do
+    project = Project.create!(title: "HW #{SecureRandom.hex(4)}", hardware_stage: "build", created_at: 5.days.ago)
+    old = create_devlog(project, seconds: 7200, phase: "build", at: 4.days.ago)
+    old.update_column(:created_at, 4.days.ago)
+    ship = create_ship(project)
+
+    review_devlogs(project, ship, { old => 120 })
+
+    assert_in_delta 2.0, ship.reload.hours, 0.001
+  end
+
+  # The reviewed branch only runs when a YSWS review exists. Without one the
+  # hours come from raw devlog durations, which needs the same cutoff or a
+  # funded build is paid for its pre-funding design time.
+  test "the funding cutoff also applies when no reviewer has scored the devlogs" do
+    project = hardware_project_with_approved_funding(requested_at: 2.days.ago)
+    before = create_devlog(project, seconds: 7200, phase: "build", at: 3.days.ago)
+    after  = create_devlog(project, seconds: 7200, phase: "build", at: 1.day.ago)
+    before.update_column(:created_at, 3.days.ago)
+    after.update_column(:created_at, 1.day.ago)
+    ship = create_ship(project)
+
+    # No Certification::Ysws review at all, so this takes the raw-duration path.
+    assert_nil ship.reload.certification_ysws_review
+    assert_in_delta 2.0, ship.hours, 0.001
+  end
+
+  # --- flat rate --------------------------------------------------------------
+
+  test "an approved hardware build pays the flat rate per hour" do
+    project = hardware_project_with_approved_funding(requested_at: 2.days.ago)
+    devlog = create_devlog(project, seconds: 7200, phase: "build", at: 1.day.ago)
+    devlog.update_column(:created_at, 1.day.ago)
+    ship = create_ship(project)
+    review_devlogs(project, ship, { devlog => 120 })
+
+    assert_equal Post::ShipEvent::Payouts::HARDWARE_STARDUST_PER_HOUR,
+                 ship.reload.send(:payout_multiplier)
+  end
+
+  test "software still uses the vote-percentile curve" do
+    project = Project.create!(title: "SW #{SecureRandom.hex(4)}", created_at: 3.days.ago)
+    create_devlog(project, seconds: 3600, phase: nil, at: 1.day.ago)
+    ship = create_ship(project)
+
+    assert_not ship.reload.send(:hardware_payout?)
+  end
+
+  test "a locked hardware snapshot records which rule paid it" do
+    project = hardware_project_with_approved_funding(requested_at: 2.days.ago)
+    devlog = create_devlog(project, seconds: 7200, phase: "build", at: 1.day.ago)
+    devlog.update_column(:created_at, 1.day.ago)
+    ship = create_ship(project)
+    review_devlogs(project, ship, { devlog => 120 })
+
+    assert ship.reload.send(:hardware_payout?)
+    assert_equal "stardance_hardware_flat_5_v1", Post::ShipEvent::Payouts::HARDWARE_PAYOUT_CURVE_VERSION
+  end
+
   private
+
+  def hardware_project_with_approved_funding(requested_at:)
+    project = Project.create!(title: "HW #{SecureRandom.hex(4)}", hardware_stage: "design", created_at: 5.days.ago)
+    Project::Membership.create!(project: project, user: @owner, role: :owner)
+    seed = create_devlog(project, seconds: 1200, phase: "design", at: requested_at)
+    request = project.certification_funding_requests.create!(
+      user: @owner, complexity_tier: 1, requested_amount_cents: 2_000, status: :pending
+    )
+    request.update_column(:created_at, requested_at)
+    request.update_column(:status, ::Certification::FundingRequest.statuses[:approved])
+    seed.update_column(:created_at, requested_at - 1.hour)
+    project.update!(hardware_stage: "build")
+    project
+  end
+
+  # Approves each devlog for the given minutes through the YSWS review.
+  def review_devlogs(project, ship, minutes_by_devlog)
+    total = minutes_by_devlog.values.sum
+    ysws = Certification::Ysws.create!(user: @owner, project: project, post_ship_event: ship, original_minutes: total)
+    minutes_by_devlog.each do |devlog, minutes|
+      Certification::Devlog
+        .create!(post_devlog: devlog, ysws_review: ysws, original_minutes: minutes, status: :pending)
+        .approve!(minutes, "Verified against the timelapse")
+    end
+    ysws
+  end
 
   def create_devlog(project, seconds:, phase:, at:)
     devlog = Post::Devlog.new(body: "work log", duration_seconds: seconds, phase: phase)
