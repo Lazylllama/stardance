@@ -270,7 +270,13 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     old_state = @order.aasm_state
 
     if @order.shop_item.respond_to?(:fulfill!)
-      @order.approve!
+      begin
+        @order.approve!
+      rescue HCBError => e
+        Rails.logger.error "HCB grant fulfillment failed for order #{@order.id}: #{e.message}"
+        flash[:error] = "HCB grant fulfillment failed (#{e.message}). The order was not approved. Please ask an administrator to re-authenticate the HCB integration before retrying."
+        redirect_to admin_shop_order_path(@order) and return
+      end
       redirect_to shop_orders_return_path, notice: "Order approved and fulfilled" and return
     end
 
