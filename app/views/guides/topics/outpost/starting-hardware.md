@@ -1,6 +1,6 @@
 # Starting your hardware project
 
-Hey there! This page covers how to get started with your hardware project and some advice for working on it. This is especially
+Hey there! This page covers how to get started with your hardware project and some advice for working on it!
 
 ## 1. Coming up with an idea
 
@@ -12,13 +12,13 @@ Drawing sketches at this stage helps a ton! Here's one I did for bitski, an LED 
 
 ![image](https://cdn.hackclub.com/019e9a77-6da9-7745-953a-f195132b2cd8/paste-1780707978107.png)
 
-I highly recommend watching the [2025 Open Sauce recap video](https://www.youtube.com/watch?v=Cb_pny1DxlQ) to get an idea of what people usually make!
+_Don't worry about making this perfect - the point is to have a north star to work towards_
 
 ## 2. Setting up your project
 
-Next step is creating your project!
+Next step is setting up your project to start working on it!
 
-You'll need to create a GitHub repository. This is a place where you can store your project files online & manage the different versions! Here's what it looks like:
+First, you'll need to create a [GitHub](https://github.com) repository. This is a place where you can store your project files online & manage the different versions! Here's what it looks like:
 
 ![image](https://cdn.hackclub.com/019e9a79-de93-7e08-aabb-dacbb22af364/paste-1780708138037.png)
 
@@ -26,15 +26,15 @@ You can find instructions on how to to make one [here](https://docs.github.com/e
 
 ## 3. Working on your design
 
-Once you've got everything set up, start working away! As mentioned in the [Hardware in Stardance 101](/guides/hardware) You'll need to record your progress using Lookout!
+Once you've got everything set up, start working away! As mentioned in the [Hardware in Stardance 101](/guides/hardware) You'll need to record your progress using Lapse!
 
 ![image](https://cdn.hackclub.com/019ed754-f542-78e8-9f98-ba11070e40e8/paste-1781729129346.png)
 _hit this button to record your progress!_
 
-If you're having issues with look, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
+If you're having issues with Lapse, you can write a markdown journal instead - you can find out more about that [here](https://codex.hackclub.com/shipping/journaling/)
 
 One resource you should definitely check out is the [Hardware Codex](https://codex.hackclub.com) - it's a collection of design resources to help you along your journey making projects!
 
-Make sure to ask tons of questions in [#outpost](https://hackclub.enterprise.slack.com/archives/C0B04RP43TQ) - the best source of advice is from your fellow hardware hackers!
+Make sure to ask tons of questions in [#hardware](https://hackclub.enterprise.slack.com/archives/C6C026NHJ) - the best source of advice is from your fellow hardware hackers!
 
 Once think you've finished your design, you'll be ready to submit your project! You should check out the "Submitting" section of the [Hardware in Stardance 101](/resources/hardware)

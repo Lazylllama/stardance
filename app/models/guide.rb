@@ -9,7 +9,7 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
     shipping: "Shipping",
     craft: "Craft",
     program: "Program",
-    outpost: "Hardware | Outpost"
+    outpost: "Hardware"
   }.freeze
 
   # Root directory that `markdown:` paths are resolved against.
@@ -104,8 +104,9 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       category: :outpost,
       icon: "rocket",
       reading_minutes: 5,
-      related: %i[starting-hardware shipping-hardware outpost-tiers outpost-faq],
-      markdown: "outpost/outpost.md"
+      related: %i[starting-hardware shipping-hardware],
+      markdown: "outpost/outpost.md",
+      hidden: true
     ),
     new(
       slug: :now_what,
@@ -125,7 +126,7 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       category: :stardance_101,
       icon: "rocket",
       reading_minutes: 2,
-      related: %i[outpost starting-hardware outpost-faq],
+      related: %i[starting-hardware shipping-hardware hardware-tiers],
       markdown: "outpost/hardware.md"
     ),
     new(
@@ -135,59 +136,28 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       category: :outpost,
       icon: "compass_fill",
       reading_minutes: 5,
-      related: %i[outpost shipping-hardware outpost-tiers],
+      related: %i[hardware shipping-hardware hardware-tiers],
       markdown: "outpost/starting-hardware.md"
     ),
     new(
       slug: :"shipping-hardware",
       title: "Shipping your hardware project",
-      description: "Get your project ready to ship — required files, repository structure, and the step-by-step.",
+      description: "Learn how to get your hardware project ready to submit, step-by-step!",
       category: :outpost,
       icon: "ship",
       reading_minutes: 5,
-      related: %i[starting-hardware outpost outpost-tiers],
-      markdown: "outpost/shipping-hardware.md",
-      hidden: true
+      related: %i[hardware starting-hardware hardware-tiers],
+      markdown: "outpost/shipping-hardware.md"
     ),
     new(
-      slug: :"outpost-tiers",
-      title: "Outpost Project Tiers!",
-      description: "What the different Outpost project tiers look like, with budgets, points, and examples for each.",
+      slug: :"hardware-tiers",
+      title: "Hardware Project Tiers!",
+      description: "What the different funding tiers are for hardware projects, including funding amounts!",
       category: :outpost,
       icon: "code",
       reading_minutes: 4,
-      related: %i[outpost starting-hardware],
+      related: %i[hardware starting-hardware shipping-hardware],
       markdown: "outpost/tiers.md"
-    ),
-    new(
-      slug: :"outpost-faq",
-      title: "Outpost FAQ",
-      description: "Your one stop shop for all things Outpost; channels, logistics, and more!",
-      category: :outpost,
-      icon: "info",
-      reading_minutes: 4,
-      related: %i[outpost starting-hardware shipping-hardware],
-      markdown: "outpost/faq.md"
-    ),
-    new(
-      slug: :"super-hardware-builder",
-      title: "Becoming a Super Hardware Builder",
-      description: "How to earn Super Hardware Builder status, which gets you perks (including Outpost qualification!)",
-      category: :outpost,
-      icon: "rocket",
-      reading_minutes: 4,
-      related: %i[outpost starting-hardware],
-      markdown: "outpost/super-hardware-builder.md"
-    ),
-    new(
-      slug: :tiers,
-      title: "Hardware funding tiers",
-      description: "How Outpost funds hardware builds: the B/A/S/X tiers, what each covers, and how unspent budget turns into Stardust toward the Outpost Ticket.",
-      category: :outpost,
-      icon: "info",
-      reading_minutes: 3,
-      related: %i[outpost outpost-tiers how_to_ship],
-      hidden: true
     ),
     new(
       slug: :software,
