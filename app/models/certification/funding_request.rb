@@ -65,8 +65,8 @@ module Certification
     TIERS = {
       1 => { code: "B", name: "B Tier", max_cents: 2_500,  examples: "Macropads and very basic PCBs" },
       2 => { code: "A", name: "A Tier", max_cents: 12_000, examples: "Keyboards and devboards" },
-      3 => { code: "S", name: "S Tier", max_cents: 18_000, examples: "Ambitious, polished builds" },
-      4 => { code: "X", name: "X Tier", max_cents: 40_000, examples: "Out of this world builds (may include a travel stipend)" }
+      3 => { code: "S", name: "S Tier", max_cents: 20_000, examples: "Ambitious, polished builds" },
+      4 => { code: "X", name: "X Tier", max_cents: 60_000, examples: "Out of this world builds (may include a travel stipend)" }
     }.freeze
 
     # tier => maximum grant, in cents / dollars.
