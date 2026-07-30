@@ -159,7 +159,7 @@ module Post::ShipEvent::Payouts
   def issue_payout(force: false)
     return false unless self.class.payout_feature_enabled?(payout_recipient)
 
-    if payout_ready_except_vote_balance? && payout_recipient.vote_balance.negative?
+    if payout_ready_except_vote_balance? && vote_balance_blocked?
       notify_vote_deficit
       return false
     end
@@ -199,14 +199,14 @@ module Post::ShipEvent::Payouts
     payout_lockable? &&
       (hardware_payout? || payout_review_due?) &&
       !payout_review_flagged? &&
-      !payout_recipient.vote_balance.negative?
+      !vote_balance_blocked?
   end
 
   def payout_lockable?
     return false unless self.class.payout_feature_enabled?(payout_recipient)
 
     payout_ready_except_vote_balance? &&
-      !payout_recipient.vote_balance.negative? &&
+      !vote_balance_blocked? &&
       hours.positive?
   end
 
@@ -313,6 +313,12 @@ module Post::ShipEvent::Payouts
   end
 
   private
+    # Hardware ships don't charge vote debt, so their builders have no way to
+    # work a deficit off. Only the voting path holds a payout for it.
+    def vote_balance_blocked?
+      !hardware_payout? && payout_recipient&.vote_balance.to_i.negative?
+    end
+
     def payout_ready_except_vote_balance?
       certification_status == "approved" &&
         payout.blank? &&
@@ -468,7 +474,7 @@ module Post::ShipEvent::Payouts
         blockers << "Needs #{Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT} countable votes"
       end
       blockers << "Missing recipient" if payout_recipient.blank?
-      blockers << "Vote balance deficit" if payout_recipient&.vote_balance.to_i.negative?
+      blockers << "Vote balance deficit" if vote_balance_blocked?
       blockers << "No payable hours" unless preview_hours.to_f.positive?
       blockers << "Pending vote flags" if pending_flags_count.positive?
       blockers

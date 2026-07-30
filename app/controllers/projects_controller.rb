@@ -196,6 +196,8 @@ class ProjectsController < ApplicationController
           ratings_given: ratings_given,
           ratings_total: ratings_total,
           static_prize: is_static,
+          # Suppresses the payout checklist entirely; see PayoutVotesWidget.
+          hardware: @project.hardware?,
           paid_out: latest_ship_event.payout.present?,
           estimated_payout: latest_ship_event.estimated_payout,
           review_open: latest_ship_event.payout_review_open?,

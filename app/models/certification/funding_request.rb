@@ -60,6 +60,14 @@ module Certification
       returned: 2
     }, default: :pending
 
+    # HCB org the hardware grants are issued from. Spend controls (approved and
+    # blocked merchants/categories) live on this org's card-grant settings in the
+    # HCB dashboard, not here: HCB's v4 API can't set the banned lists per grant
+    # (card_grants_controller only permits merchant_lock/category_lock), so every
+    # grant inherits allowed + banned from the org setting via CardGrant's union
+    # of its own locks with `setting`.
+    HCB_GRANT_ORG = "stardance-hardware"
+
     # Complexity tiers (B/A/S/X). Keyed by the integer stored in
     # complexity_tier; each carries a max grant + examples.
     TIERS = {
@@ -293,14 +301,24 @@ module Certification
       grant = HCBService.create_card_grant(
         email: owner.grant_email,
         amount_cents: final_amount_cents,
-        # HCB caps the grant purpose at 30 characters.
-        purpose: "Hardware Grant: #{project.title}".truncate(30),
-        organization: "stardance-hardware"
+        # HCB caps the purpose at 30 chars, so key it off the project id (short
+        # and stable) rather than the title, which would get chopped.
+        purpose: "Hardware grant, project #{project.id}".truncate(30),
+        instructions: grant_instructions,
+        organization: HCB_GRANT_ORG
       )
       update_column(:hcb_grant_hashid, grant["id"])
     rescue => e
       Rails.logger.error "Failed to issue HCB grant for FundingRequest ##{id}: #{e.message}"
       raise
+    end
+
+    # Cardholder-facing note shown on the grant in HCB. No length cap here (only
+    # `purpose` is capped), so it can spell out what the money is for.
+    def grant_instructions
+      "Use this grant to buy parts and materials for your Stardance hardware " \
+        "project \"#{project.title}\". Spend it only on components for this " \
+        "build, keep your receipts, and ask in #stardance-help if you have any questions."
     end
 
     # Routed through the notification pipeline rather than a direct Slack DM, so
