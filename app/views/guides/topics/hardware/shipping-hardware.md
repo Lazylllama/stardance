@@ -2,7 +2,9 @@
 
 Now that you have the design files, it's time to actually ship your hardware project and get it ready to submit!
 
-_want to learn more about shipping? read more at the [codex](https://codex.hackclub.com/shipping)_
+The goal of shipping is to turn your project into a shareable piece that anyone can learn from, make, or otherwise find useful! It takes your project from just something local on your computer or in your room into something for the whole world to see.
+
+_want to learn more about shipping? read more at the [codex](https://codex.hackclub.com/shipping). contains examples!_
 
 ## 1. Make sure you have all of your project files!
 
@@ -58,8 +60,15 @@ One snippet you can add to your project is this. It adds a PCB button to your RE
 
 ## 5. Submit!
 
-Once you're done with your project, you're ready to submit!
+Once you're done with your project, you're ready to submit it!
 
 If you just finished a _design_ and are looking for funding, submit it for funding from your project page
 
-If you have a build, hang tight!
+![image](https://cdn.hackclub.com/019fb495-7a69-7fb6-aa42-80c52c50aef9/paste-1785441122200.png)
+_you should get to this screen!_
+
+If you just finished your build and are looking for Stardust, just ship your project and it'll get sent to the review queue!
+
+![image](https://cdn.hackclub.com/019fb4a5-0c64-796c-b051-256f8078856c/paste-1785442142663.png)
+
+You'll get a flat payout of 5 stardust per hour, with options to get more later!
