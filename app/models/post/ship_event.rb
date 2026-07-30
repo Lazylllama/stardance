@@ -160,6 +160,9 @@ class Post::ShipEvent < ApplicationRecord
   def decrement_user_vote_balance
     return unless post&.user
     return if mission_submission&.payout_path == "static_prize"
+    # Vote debt buys a place in the rating pool. Hardware never enters it, so
+    # charging for a ship the builder can't work off would strand them.
+    return if project&.hardware?
 
     post.user.increment!(:vote_balance, -VOTE_COST_PER_SHIP)
   end

@@ -2,8 +2,8 @@ require "test_helper"
 
 # Hardware ships are certified by a reviewer against a timelapse rather than
 # rated by peers, so they never enter the voting pool and don't wait on a vote
-# count. Their owners still owe the usual vote debt, which is the point: each
-# hardware ship adds 15 ratings to the pool without consuming any.
+# count. Their owners are charged no vote debt either, and any debt they carry
+# from software ships never holds a hardware payout.
 class Post::HardwarePayoutTest < ActiveSupport::TestCase
   setup do
     Flipper.enable(:hardware_flow)
@@ -97,21 +97,28 @@ class Post::HardwarePayoutTest < ActiveSupport::TestCase
     assert_not_nil ship.payout
   end
 
-  # The owner still owes 15 ratings; that debt is what feeds the pool.
-  test "a hardware ship is held while its owner is in vote debt" do
+  # Debt carried over from a software ship is not the hardware builder's to work
+  # off through this project, so it must not hold the build's payout.
+  test "a hardware ship pays out while its owner is in vote debt" do
     ship = ship_for(hardware: true)
     @owner.update!(vote_balance: -Post::ShipEvent::VOTE_COST_PER_SHIP)
 
-    assert_no_difference -> { @owner.ledger_entries.count } do
+    assert_difference -> { @owner.ledger_entries.count }, 1 do
       ship.issue_payout!
     end
 
-    assert_nil ship.reload.payout
+    assert_operator ship.reload.payout, :>, 0
   end
 
-  test "shipping hardware still charges the vote debt" do
-    assert_difference -> { @owner.reload.vote_balance }, -Post::ShipEvent::VOTE_COST_PER_SHIP do
+  test "shipping hardware charges no vote debt" do
+    assert_no_difference -> { @owner.reload.vote_balance } do
       ship_for(hardware: true)
+    end
+  end
+
+  test "shipping software still charges the vote debt" do
+    assert_difference -> { @owner.reload.vote_balance }, -Post::ShipEvent::VOTE_COST_PER_SHIP do
+      ship_for(hardware: false)
     end
   end
 
