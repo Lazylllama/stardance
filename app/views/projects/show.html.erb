@@ -1292,4 +1292,8 @@
     </div>
   </dialog>
 
+  <% if is_member && @project.hardware? && current_user && !current_user.has_dismissed?("hardware_update") %>
+    <%= render "projects/hardware_update_modal", project: @project %>
+  <% end %>
+
 </div>
