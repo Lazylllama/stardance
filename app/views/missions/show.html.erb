@@ -121,15 +121,27 @@
                 which attaches the mission and applies hardware conversion. New
                 builders still funnel through the onboarding setup step. %>
             <% onboarded = current_user&.hca_linked? && current_user.projects.exists? %>
-            <%= button_to "Create a project",
-                          onboarded ? projects_path : projects_setup_submit_mission_path,
-                          method: :post,
-                          params: onboarded ?
-                            { mission_slug: @mission.slug, project: { title: "Untitled" } } :
-                            { mission_slug: @mission.slug },
-                          data: { turbo: false },
-                          form: { class: "mission-home__cta-form" },
-                          class: "action-btn action-btn--large #{continue_flow ? "action-btn--secondary" : "action-btn--primary"}" %>
+            <% create_cta_class = "action-btn action-btn--large #{continue_flow ? "action-btn--secondary" : "action-btn--primary"}" %>
+            <% if onboarded %>
+              <%# Named up front via the same prompt as /projects/new. New builders
+                  skip it: the setup wizard has its own naming step. %>
+              <%= form_with url: projects_path, method: :post, data: { turbo: false }, class: "mission-home__cta-form" do %>
+                <%= hidden_field_tag :mission_slug, @mission.slug %>
+                <button type="button" class="<%= create_cta_class %>"
+                        onclick="openNamePrompt(this, 'name-prompt-mission-cta')">
+                  Create a project
+                </button>
+                <%= render "projects/name_prompt", id: "name-prompt-mission-cta" %>
+              <% end %>
+            <% else %>
+              <%= button_to "Create a project",
+                            projects_setup_submit_mission_path,
+                            method: :post,
+                            params: { mission_slug: @mission.slug },
+                            data: { turbo: false },
+                            form: { class: "mission-home__cta-form" },
+                            class: create_cta_class %>
+            <% end %>
             <% if !continue_flow && has_attach_choices %>
               <button type="button"
                       class="action-btn action-btn--large action-btn--secondary"

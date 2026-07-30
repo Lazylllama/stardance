@@ -41,8 +41,8 @@ module Certification
   # A hardware project owner's request for a build grant, submitted from the
   # design ("I need Funding") stage. Routes through the same reviewer queue as
   # ship certifications (Certification::Reviewable). On approval the project
-  # switches to the build stage and the owner accrues an Outpost Ticket discount
-  # set by the approved tier (B 30% / A 50% / S & X 100% of the ticket price).
+  # switches to the build stage and an HCB card grant is issued for the approved
+  # amount, capped by the tier's max.
   class FundingRequest < ApplicationRecord
     self.table_name = "certification_funding_requests"
 
@@ -60,36 +60,21 @@ module Certification
       returned: 2
     }, default: :pending
 
-    # Complexity tiers, mirroring outpost.hackclub.com (B/A/S/X). Keyed by the
-    # integer stored in complexity_tier; each carries a max grant + examples.
+    # Complexity tiers (B/A/S/X). Keyed by the integer stored in
+    # complexity_tier; each carries a max grant + examples.
     TIERS = {
-      1 => { code: "B", name: "B Tier", max_cents: 2_500,  discount_percent: 30,  examples: "Macropads and very basic PCBs" },
-      2 => { code: "A", name: "A Tier", max_cents: 12_000, discount_percent: 50,  examples: "Keyboards and devboards" },
-      3 => { code: "S", name: "S Tier", max_cents: 18_000, discount_percent: 100, examples: "Ambitious, polished builds" },
-      4 => { code: "X", name: "X Tier", max_cents: 40_000, discount_percent: 100, examples: "Out of this world builds (may include a travel stipend)" }
+      1 => { code: "B", name: "B Tier", max_cents: 2_500,  examples: "Macropads and very basic PCBs" },
+      2 => { code: "A", name: "A Tier", max_cents: 12_000, examples: "Keyboards and devboards" },
+      3 => { code: "S", name: "S Tier", max_cents: 18_000, examples: "Ambitious, polished builds" },
+      4 => { code: "X", name: "X Tier", max_cents: 40_000, examples: "Out of this world builds (may include a travel stipend)" }
     }.freeze
 
     # tier => maximum grant, in cents / dollars.
     TIER_MAX_CENTS = TIERS.transform_values { |t| t[:max_cents] }.freeze
     TIER_MAX_DOLLARS = TIER_MAX_CENTS.transform_values { |cents| cents / 100 }.freeze
 
-    # tier => percent of the Outpost Ticket price knocked off when a design is
-    # approved at that tier. Flat per tier — no longer tied to unrequested dollars.
-    TIER_DISCOUNT_PERCENT = TIERS.transform_values { |t| t[:discount_percent] }.freeze
-
     # Stardust a reviewer earns per completed funding review.
     REVIEW_BOUNTY = 1
-
-    # tier id => { code:, pct:, sd: } for client-side previews (funding modal).
-    def self.tier_discount_summary
-      TIERS.each_with_object({}) do |(id, t), summary|
-        summary[id] = {
-          code: t[:code],
-          pct: t[:discount_percent],
-          sd: (t[:discount_percent] * User::OUTPOST_TICKET_BASE / 100.0).round
-        }
-      end
-    end
 
     validates :complexity_tier, inclusion: { in: TIER_MAX_CENTS.keys }
     validates :requested_amount_cents, numericality: { only_integer: true, greater_than: 0 }
@@ -177,9 +162,6 @@ module Certification
     def tier_label = tier_name || "Tier #{complexity_tier}"
     def tier_max_cents = tier[:max_cents]
     def tier_max_dollars = tier_max_cents ? tier_max_cents / 100 : nil
-    def tier_discount_percent = tier[:discount_percent].to_i
-    # Flat Stardust knocked off the Outpost Ticket for this tier.
-    def tier_discount_stardust = (tier_discount_percent * User::OUTPOST_TICKET_BASE / 100.0).round
     def requested_amount_dollars = (requested_amount_cents || 0) / 100
     def final_amount_cents = approved_amount_cents || requested_amount_cents
     def final_amount_dollars = (final_amount_cents || 0) / 100
@@ -189,6 +171,25 @@ module Certification
     # remains (mirrors how grants/discounts resolve the recipient).
     def owner
       @owner ||= project.memberships.owner.first&.user || user
+    end
+
+    # Locals for the verdict notification's Slack template.
+    def notification_locals
+      routes = Rails.application.routes.url_helpers
+      # default_url_options is only configured in production, so a bare
+      # reverse_merge on it raises NoMethodError in development and test.
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        approved: approved?,
+        amount_dollars: final_amount_dollars,
+        tier_label: tier_label,
+        reviewer_name: reviewer&.display_name,
+        feedback: feedback.to_s
+      }
     end
 
     # Reviewers enter whole-dollar amounts; we persist cents.
@@ -209,8 +210,17 @@ module Certification
     before_save :assign_stardust_earned,
       if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
-    after_save_commit :issue_hcb_grant!, if: -> { saved_change_to_status? && approved? }
+    # Notify first. The verdict message only states what already happened (the
+    # request was approved, the project moved to build) and never claims a card
+    # has been issued, so it stays true even if the grant fails - and declaring
+    # it first means a dead HCB token can't silently swallow the verdict.
+    #
+    # The grant is guarded on a missing hashid rather than on the status change,
+    # so a grant that failed (an expired HCB token is a live failure mode here)
+    # retries the next time the request is saved instead of being stranded.
+    # issue_hcb_grant! already returns early when a grant exists.
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
+    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? }
 
     private
 
@@ -261,9 +271,8 @@ module Certification
       self.decided_at = Time.current
     end
 
-    # On a decision, advance the project and (on approval) accrue the owner's
-    # Outpost Ticket discount. approved_amount_cents is defaulted in a before_save
-    # so it's set by the time this runs.
+    # On a decision, advance the project. approved_amount_cents is defaulted in a
+    # before_save so it's set by the time this runs.
     def apply_verdict_to_project!
       return if pending?
       project.with_lock do
@@ -271,27 +280,10 @@ module Certification
         when :approved
           project.advancing_via_funding_approval = true
           project.update!(hardware_stage: "build")
-          accrue_discount_for_owner!
         when :returned
           # owner is notified; no project change
         end
       end
-    end
-
-    # Flat per-tier discount toward the Outpost Ticket, cumulative on the owner.
-    # Snapshotted into discount_stardust_awarded so re-saving an approved request
-    # never double-accrues.
-    def accrue_discount_for_owner!
-      return unless approved?
-      return if discount_stardust_awarded.present?
-
-      awarded = tier_discount_stardust
-
-      owner = project.memberships.owner.first&.user || user
-      owner.with_lock do
-        owner.update!(outpost_discount_stardust: owner.outpost_discount_stardust + awarded)
-      end
-      update_column(:discount_stardust_awarded, awarded)
     end
 
     def issue_hcb_grant!
@@ -311,18 +303,17 @@ module Certification
       raise
     end
 
+    # Routed through the notification pipeline rather than a direct Slack DM, so
+    # the verdict also lands in the in-app inbox and by email, and so a builder
+    # with no Slack account still hears about it.
     def notify_owner!
-      owner = project.memberships.owner.first&.user
-      return unless owner&.slack_id.present?
-
-      case status.to_sym
-      when :approved
-        owner.dm_user("Your hardware project '#{project.title}' was approved for $#{final_amount_dollars} in funding! It's switched to the build phase. Log your build hours with a timelapse and ship when you're ready.")
-      when :returned
-        msg = "Your funding request for '#{project.title}' needs changes before it can be approved."
-        msg += "\n\n#{feedback}" if feedback.present?
-        owner.dm_user(msg)
-      end
+      Notifications::Hardware::FundingRequestReviewed.notify(
+        recipient: owner,
+        actor: reviewer,
+        record: self
+      )
+    rescue StandardError => e
+      Rails.logger.error("FundingRequest ##{id} notify_owner! failed: #{e.message}")
     end
   end
 end

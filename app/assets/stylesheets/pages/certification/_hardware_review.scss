@@ -37,4 +37,386 @@
   &__timeline-meta {
     color: var(--color-space-text-muted, rgba(255, 255, 255, 0.7));
   }
+
+  &__history {
+    display: grid;
+    gap: var(--space-s);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__history-item {
+    padding: var(--space-s);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+  }
+
+  &__history-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
+  &__history-feedback {
+    margin: var(--space-s) 0 0;
+    color: var(--color-space-text-muted, rgba(255, 255, 255, 0.7));
+    white-space: pre-wrap;
+  }
+}
+
+// Design and build are separate queues sharing this layout; the stage switcher
+// is the only place they meet.
+.hardware-queue {
+  &__subtitle {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: var(--font-size-s);
+    color: var(--color-space-text-muted);
+  }
+
+  &__stages {
+    display: flex;
+    gap: var(--space-s);
+    margin-bottom: var(--space-m);
+  }
+
+  &__stage {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-s);
+    padding: var(--space-s) var(--space-m);
+    border: 1px solid var(--color-space-border);
+    border-radius: var(--border-radius);
+    background: var(--color-set-1-bg);
+    color: var(--color-space-text-muted);
+    text-decoration: none;
+    font-weight: 600;
+
+    &:hover {
+      color: var(--color-space-text);
+    }
+
+    &.is-active {
+      color: var(--color-space-text);
+      border-color: var(--color-brand-lilac);
+      background: var(--color-brand-lilac-soft);
+    }
+  }
+
+  &__stage-count {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-s);
+    opacity: 0.85;
+  }
+
+  // Queue health, in priority order. The pending count is the headline; the
+  // rest are supporting numbers a reviewer can act on.
+  &__vitals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: var(--space-m);
+    padding: var(--space-m);
+    margin-bottom: var(--space-m);
+    border: 1px solid var(--color-space-border);
+    border-radius: var(--border-radius);
+    background: var(--color-set-1-bg);
+  }
+
+  &__vital {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__vital-value {
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-space-text);
+
+    &--link {
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  &__vital-label {
+    font-size: var(--font-size-s);
+    color: var(--color-space-text-muted);
+  }
+
+  &__vital--primary &__vital-value {
+    font-size: var(--font-size-xxl);
+  }
+
+  &__cell-ask {
+    white-space: nowrap;
+  }
+
+  &__ask {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__ask-note {
+    margin-left: 0.35rem;
+    font-size: var(--font-size-s);
+    color: var(--color-space-text-muted);
+  }
+
+  &__dates {
+    align-self: end;
+
+    summary {
+      cursor: pointer;
+      font-size: var(--font-size-s);
+      color: var(--color-space-text-muted);
+    }
+  }
+
+  &__dates-fields {
+    display: flex;
+    gap: var(--space-s);
+    margin-top: var(--space-s);
+  }
+
+  &__leaderboard {
+    margin-top: var(--space-l);
+  }
+}
+
+// Review page: the decision-critical facts and the verdict form share the first
+// screen; supporting context is folded below.
+.hardware-review {
+  &__header {
+    display: grid;
+    gap: var(--space-m);
+    padding: var(--space-m);
+    margin-bottom: var(--space-m);
+    border: 1px solid var(--color-space-border);
+    border-radius: var(--border-radius);
+    background: var(--color-set-1-bg);
+  }
+
+  &__facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-m);
+    margin: 0;
+  }
+
+  &__fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+
+    dt {
+      font-size: var(--font-size-s);
+      color: var(--color-space-text-muted);
+    }
+
+    dd {
+      margin: 0;
+      font-size: var(--font-size-l);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-space-text);
+    }
+
+    &--primary dd {
+      font-size: var(--font-size-xl);
+      color: var(--color-brand-cream);
+    }
+
+    &--wide {
+      grid-column: 1 / -1;
+
+      dd {
+        font-size: var(--font-size-m);
+        font-weight: 500;
+        color: var(--color-space-text-muted);
+      }
+    }
+  }
+
+  &__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+  }
+
+  &__link {
+    padding: 0.2rem 0.6rem;
+    font-size: var(--font-size-s);
+    font-weight: 600;
+    color: var(--color-space-text);
+    text-decoration: none;
+    border: 1px solid var(--color-space-border);
+    border-radius: 999px;
+
+    &:hover {
+      border-color: var(--color-brand-lilac);
+    }
+  }
+
+  &__more {
+    margin-top: var(--space-m);
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--color-space-text-muted);
+    }
+
+    > * + * {
+      margin-top: var(--space-m);
+    }
+  }
+
+  &__secondary-actions {
+    display: grid;
+    gap: var(--space-s);
+  }
+}
+
+// Reviewer's own hardware numbers, shown in place on the queue rather than
+// sending them to the site-wide (ship-only) stats page.
+.hardware-stats {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(520px, calc(100vw - 48px));
+  max-height: fit-content;
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: visible;
+
+  &::backdrop {
+    background: rgba(8, 6, 30, 0.75);
+    backdrop-filter: blur(4px);
+  }
+
+  &__card {
+    position: relative;
+    display: grid;
+    gap: var(--space-m);
+    padding: var(--space-xl);
+    background: var(--color-set-2-bg);
+    border: 1px solid var(--color-space-border);
+    border-radius: var(--border-radius);
+    box-shadow: 0 24px 60px var(--color-shadow-deep);
+  }
+
+  &__close {
+    position: absolute;
+    top: var(--space-s);
+    right: var(--space-s);
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    appearance: none;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--color-space-text-muted);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-space-text);
+    }
+  }
+
+  &__title {
+    margin: 0;
+    padding-right: var(--space-l);
+    font-size: var(--font-size-l);
+    color: var(--color-space-text);
+  }
+
+  &__headline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-m);
+  }
+
+  &__headline-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  &__headline-value {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-brand-cream);
+  }
+
+  &__headline-label {
+    font-size: var(--font-size-s);
+    color: var(--color-space-text-muted);
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+
+    th,
+    td {
+      padding: var(--space-s) 0;
+      text-align: right;
+      border-bottom: 1px solid var(--color-space-border);
+    }
+
+    thead th {
+      font-size: var(--font-size-s);
+      font-weight: 600;
+      color: var(--color-space-text-muted);
+    }
+
+    th:first-child,
+    tbody th {
+      text-align: left;
+    }
+  }
+
+  &__note {
+    margin: 0;
+    font-size: var(--font-size-s);
+    color: var(--color-space-text-muted);
+  }
+
+  &__link {
+    color: var(--color-brand-lilac);
+  }
+}
+
+// The queue marks overdue waits and negative daily flow with these; without a
+// rule an overdue row rendered identically to a healthy one.
+.hardware-queue,
+.ship-queue {
+  .is-negative {
+    color: var(--color-brand-salmon);
+  }
+
+  .is-positive {
+    color: var(--color-brand-mint);
+  }
 }

@@ -151,7 +151,10 @@
             <div class="project-show__edit-grid" data-controller="project-type">
               <div class="project-show__field project-show__field--inline">
                 <span>Project type <%= render "projects/help_tooltip", text: "Software projects track coding time with Hackatime. Hardware projects (electronics, 3D printing, robotics, etc.) record a screen/build timelapse instead." %></span>
-                <% if @project.has_any_funding_request? %>
+                <%# Locked once the project has asked for funding or shipped: the
+                    stage decides how the ship is paid, so the model refuses the
+                    change and a live control here would only fail validation. %>
+                <% if @project.hardware_stage_locked? %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project type (locked)">
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked">Software</span>
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked project-show__stage-choice-label--selected">Hardware</span>
@@ -186,11 +189,13 @@
                    data-project-type-target="stageSection"
                    <%= "hidden" unless @project.hardware? %>>
                 <span>Project stage <%= render "projects/help_tooltip", text: "\"I need Funding\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"I don't need Funding\" means you already have your parts and are building." %></span>
-                <% if @project.has_any_funding_request? %>
+                <% if @project.hardware_stage_locked? %>
                   <% fr = @project.latest_funding_request %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project stage (locked)">
                     <span class="project-show__stage-choice-label project-show__stage-choice-label--locked">
-                      <% if fr.approved? %>
+                      <% if fr.nil? %>
+                        Design Stage
+                      <% elsif fr.approved? %>
                         Design Stage — $<%= fr.final_amount_dollars %> approved
                       <% elsif fr.pending? %>
                         Design Stage — $<%= fr.requested_amount_dollars %> under review
@@ -525,7 +530,7 @@
           devlog_modifier_class = devlog_primary ? "project-show__action--primary" : "project-show__action--secondary"
         %>
         <nav class="project-show__actions" aria-label="Project actions">
-          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !Flipper.enabled?(:lookout, current_user) %>
+          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
             <%= render "projects/record_timelapse_button",
                        project: @project,
                        disabled_message: (@hackatime_linked ? nil : "Link your Hackatime account to start recording") %>
@@ -606,6 +611,19 @@
                     data: {
                       controller: "tooltip",
                       tooltip_message_value: "We're reviewing your design. You'll be switched to building once it's approved.",
+                      tooltip_position_value: "top"
+                    }
+                  ) %>
+            <% elsif !@project.has_devlog_since_last_ship? %>
+              <%= render ActionButtonComponent.new(
+                    text: "Submit Design to Get Project Funding",
+                    variant: :primary,
+                    type: :button,
+                    icon: "icons/rocket.png",
+                    disabled: :soft,
+                    data: {
+                      controller: "tooltip",
+                      tooltip_message_value: "Post at least one devlog before requesting funding!",
                       tooltip_position_value: "top"
                     }
                   ) %>
@@ -700,7 +718,7 @@
         <% end %>
       <% else %>
         <nav class="project-show__actions" aria-label="Project actions">
-          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !Flipper.enabled?(:lookout, current_user) %>
+          <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? %>
             <%= render "projects/record_timelapse_button",
                        project: @project,
                        disabled_message: "Link your Hackatime account to start recording" %>
@@ -805,9 +823,7 @@
             <%= onboarding_mission ? onboarding_mission.name : (@hackatime_linked ? "You're all set — go #{verb}!" : "Welcome to your new project!") %>
           </h2>
 
-          <%# Time-tracking nudge — shown for every new project, mission or not.
-              Suppressed under :lookout; the Track-your-time card owns this message. %>
-          <% unless Flipper.enabled?(:lookout, current_user) %>
+          <%# Time-tracking nudge, shown for every new project, mission or not. %>
           <% if !@hackatime_linked %>
             <p class="project-show__onboarding-header-body">
               <% if onboarding_mission&.has_guide? %>
@@ -828,7 +844,6 @@
             <p class="project-show__onboarding-header-body">
               Start coding with Hackatime running. Once you have 15 minutes, <%= link_to "edit your project", project_path(@project, editing: true), class: "project-show__onboarding-header-link", data: { turbo_frame: "project_hero" } %> to link your Hackatime project, then write your first devlog!
             </p>
-          <% end %>
           <% end %>
         </header>
 
@@ -851,10 +866,6 @@
             Read on how to start your hardware project!<%= inline_svg_tag "icons/right-arrow.svg", class: "action-btn__icon action-btn__icon--trailing", aria: { hidden: true } %>
           <% end %>
         <% end %>
-
-        <% if Flipper.enabled?(:lookout, current_user) %>
-          <%= render "projects/track_time_card", project: @project, hackatime_linked: @hackatime_linked %>
-        <% end %>
       </section>
     <% end %>
 
@@ -865,6 +876,13 @@
         <% @timeline_entries.each do |entry| %>
           <% if entry.is_a?(Certification::Ship) %>
             <%= render "projects/ship_decision_card", decision: entry, is_member: is_member, project: @project %>
+          <% elsif entry.is_a?(Certification::FundingRequest) %>
+            <%# The resubmit button reuses the funding modal, which only renders
+                while the project is still in the design stage. %>
+            <% resubmit_id = (Flipper.enabled?(:hardware_flow, current_user) && @project.design_stage?) ? "funding-request-modal-#{@project.id}" : nil %>
+            <%= render "projects/funding_request_card",
+                       funding_request: entry, project: @project, owner: owner,
+                       resubmit_modal_id: resubmit_id %>
           <% elsif entry.postable_type == "Post::ShipEvent" %>
             <% ship_index += 1 %>
             <% recert_id = ((is_member || current_user&.can_review?) && @project.needs_changes? && ship_index == 1) ? "recert-modal-#{@project.id}" : nil %>
@@ -1114,25 +1132,25 @@
         post modal but collects a complexity tier + requested amount. %>
     <% if Flipper.enabled?(:hardware_flow, current_user) && @project.design_stage? %>
       <dialog id="funding-request-modal-<%= @project.id %>"
-              class="ship-modal ship-modal--post funding-modal--outpost"
+              class="ship-modal ship-modal--post funding-modal"
               data-controller="modal"
               aria-label="Request project funding">
         <%= form_with url: project_funding_request_path(@project),
                       method: :post,
                       data: { turbo: false },
-                      html: { class: "ship-modal__form", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json, tier_discounts: Certification::FundingRequest.tier_discount_summary.to_json } } do |form| %>
+                      html: { class: "ship-modal__form", onsubmit: "return fundingSubmit(this)", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json } } do |form| %>
           <div class="ship-modal__panel funding-modal__panel">
             <header class="funding-modal__header">
-              <%= image_tag "outpost.png", alt: "Outpost", class: "funding-modal__logo" %>
-              <p class="funding-modal__tagline">The greatest hardware adventure yet. Get your build funded.</p>
+              <h2 class="funding-modal__title">Get your build funded</h2>
+              <p class="funding-modal__tagline">Tell us what you're making and what it'll cost.</p>
             </header>
 
             <fieldset class="funding-modal__tiers">
               <legend>Pick your complexity tier</legend>
               <% Certification::FundingRequest::TIERS.each do |tier_id, t| %>
-                <label class="funding-tier">
+                <label class="funding-tier funding-tier--<%= t[:code].downcase %>">
                   <%= form.radio_button :complexity_tier, tier_id, required: true, class: "funding-tier__input", onchange: "fundingValidate(this.form)" %>
-                  <span class="funding-tier__badge funding-tier__badge--<%= t[:code].downcase %>"><%= t[:code] %></span>
+                  <span class="funding-tier__badge"><%= t[:code] %></span>
                   <span class="funding-tier__info">
                     <span class="funding-tier__name"><%= t[:name] %></span>
                     <span class="funding-tier__examples"><%= t[:examples] %></span>
@@ -1147,15 +1165,17 @@
               <%= form.number_field :requested_amount, min: 1, step: 1, required: true, class: "funding-modal__amount-input", oninput: "fundingValidate(this.form)" %>
             </label>
             <p class="funding-request__error" role="alert" hidden></p>
-            <p class="funding-modal__discount" role="status" hidden></p>
 
             <p class="funding-modal__note">
-              Get your design approved to earn Stardust toward the Outpost Ticket — higher tiers cover more of it.
+              Get your design approved and we'll issue a grant card for the approved amount. Higher tiers fund more.
               <%= link_to "How tiers work", guide_path("tiers"), class: "funding-modal__guide-link", target: "_blank", rel: "noopener" %>
             </p>
 
+            <%# No `required`: the browser blocks submission silently when the
+                control is scrolled out of view inside a dialog, so the check is
+                enforced on submit instead, where it can point at itself. %>
             <label class="funding-modal__bom-check">
-              <input type="checkbox" required onchange="fundingValidate(this.form)">
+              <input type="checkbox" onchange="fundingValidate(this.form)">
               <span>I have a <code>BOM.csv</code> in my repository</span>
             </label>
 
@@ -1171,14 +1191,16 @@
         <% end %>
       </dialog>
       <script>
+        function fundingBomLabel(form) {
+          return form.querySelector(".funding-modal__bom-check");
+        }
+
         function fundingValidate(form) {
           if (!form) return;
           var maxes = JSON.parse(form.dataset.tierMaxes || "{}");
-          var discounts = JSON.parse(form.dataset.tierDiscounts || "{}");
           var tier = form.querySelector('[name="complexity_tier"]:checked');
           var amountEl = form.querySelector('[name="requested_amount"]');
           var err = form.querySelector(".funding-request__error");
-          var discountEl = form.querySelector(".funding-modal__discount");
           var submit = form.querySelector('[type="submit"]');
           if (!amountEl || !err || !submit) return;
           var amount = parseFloat(amountEl.value);
@@ -1186,23 +1208,31 @@
           if (max != null) amountEl.max = max;
 
           var bomCheck = form.querySelector('.funding-modal__bom-check input[type="checkbox"]');
-          var bomMissing = bomCheck && !bomCheck.checked;
           var over = max != null && !isNaN(amount) && amount > max;
           err.textContent = over ? "This tier funds up to $" + max + ". Lower your request or pick a higher tier." : "";
           err.hidden = !over;
-          submit.disabled = over || bomMissing;
+          // Only the over-max case disables the button. An unchecked BOM leaves it
+          // clickable on purpose, so pressing it can explain itself.
+          submit.disabled = over;
 
-          if (discountEl) {
-            var d = tier ? discounts[tier.value] : null;
-            if (d) {
-              discountEl.textContent = d.pct >= 100
-                ? "Approved at " + d.code + " tier = a free Outpost Ticket (✦ " + d.sd + ", 100% off)."
-                : "Approved at " + d.code + " tier = " + d.pct + "% off the Outpost Ticket (✦ " + d.sd + ").";
-              discountEl.hidden = false;
-            } else {
-              discountEl.hidden = true;
-            }
+          if (bomCheck && bomCheck.checked) {
+            fundingBomLabel(form).classList.remove("funding-modal__bom-check--error");
           }
+        }
+
+        function fundingSubmit(form) {
+          var bomCheck = form.querySelector('.funding-modal__bom-check input[type="checkbox"]');
+          if (bomCheck && !bomCheck.checked) {
+            var err = form.querySelector(".funding-request__error");
+            fundingBomLabel(form).classList.add("funding-modal__bom-check--error");
+            if (err) {
+              err.textContent = "Confirm you have a BOM.csv in your repository before submitting.";
+              err.hidden = false;
+            }
+            bomCheck.focus();
+            return false;
+          }
+          return true;
         }
       </script>
     <% end %>
@@ -1287,5 +1317,9 @@
       <p class="followers-modal__loading">Loading…</p>
     </div>
   </dialog>
+
+  <% if is_member && @project.hardware? && current_user && !current_user.has_dismissed?("hardware_update") %>
+    <%= render "projects/hardware_update_modal", project: @project %>
+  <% end %>
 
 </div>

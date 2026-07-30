@@ -135,23 +135,10 @@
       </dl>
     </div>
   </div>
-  <% if Flipper.enabled?(:hardware_flow, current_user) %>
+  <% if Flipper.enabled?(:hardware_flow, current_user) && @user.earned_achievement?(:manual_outpost_ticket_approval) %>
   <div>
     <h2>Hardware</h2>
-    <div>
-      <% if @user.earned_achievement?(:manual_outpost_ticket_approval) %>
-        <p>Outpost Ticket: <strong>approved</strong></p>
-        <%= button_to "Remove approval ✗", admin_user_presentable_hardware_flag_path(@user),
-                      method: :delete,
-                      disabled: !current_user&.admin?,
-                      title: "Remove the Outpost Ticket approval" %>
-      <% else %>
-        <%= button_to "Approve Outpost Ticket ✓", admin_user_presentable_hardware_flag_path(@user),
-                      method: :post,
-                      disabled: !current_user&.admin?,
-                      title: "Manually approve the Outpost Ticket" %>
-      <% end %>
-    </div>
+    <p>Super Hardware Builder: <strong>yes</strong></p>
   </div>
   <% end %>
 

@@ -217,12 +217,6 @@ application.register("image-dropzone", ImageDropzoneController);
 import JsonHighlightController from "./json_highlight_controller";
 application.register("json-highlight", JsonHighlightController);
 
-import LookoutCaptureController from "./lookout_capture_controller";
-application.register("lookout-capture", LookoutCaptureController);
-
-import LookoutRecorderController from "./lookout_recorder_controller";
-application.register("lookout-recorder", LookoutRecorderController);
-
 import MarkdownPreviewController from "./markdown_preview_controller";
 application.register("markdown-preview", MarkdownPreviewController);
 

@@ -54,6 +54,7 @@ class Project < ApplicationRecord
   has_paper_trail
 
   after_create :notify_slack_channel
+  after_commit :ensure_hackatime_projects, if: :needs_hackatime_project?
 
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif].freeze
   MAX_BANNER_SIZE = 10.megabytes
@@ -65,13 +66,32 @@ class Project < ApplicationRecord
   ].freeze
   USER_SELECTABLE_TYPES = (AVAILABLE_CATEGORIES - [ "Hardware" ]).freeze
 
+  # Titles the create flows post before the builder has named anything: the
+  # /projects/new hidden field submits "Untitled" and the setup wizard starts at
+  # "Untitled project". A project usually turns hardware while still carrying one
+  # of these, so anything keyed on the title has to wait for a real one.
+  DEFAULT_TITLE = "Untitled".freeze
+  SETUP_DEFAULT_TITLE = "Untitled project".freeze
+  PLACEHOLDER_TITLES = [ DEFAULT_TITLE, SETUP_DEFAULT_TITLE ].freeze
+  TITLE_MAX_LENGTH = 120
+
   # Hardware projects carry a build/design stage; software projects leave
-  # hardware_stage nil. Drives the Lookout screen-recording flow on the project
-  # page (hardware builders can't run a Hackatime editor plugin).
+  # hardware_stage nil. Hardware builders can't run a Hackatime editor plugin, so
+  # they record Lapse timelapses against a seeded Hackatime project instead.
   HARDWARE_STAGES = %w[design build].freeze
 
   scope :excluding_member, ->(user) {
     user ? where.not(id: user.projects) : all
+  }
+  scope :hardware, -> { where.not(hardware_stage: nil) }
+  # Projects with no Hackatime project linked for this member yet. Scoped per
+  # member rather than per project: on a shared project each member records
+  # their own Lapse time, so one member's link doesn't cover anyone else.
+  #
+  # The subquery has to drop nil project_ids. A NULL inside NOT IN makes the
+  # whole predicate unknown, and the scope would match nothing at all.
+  scope :without_hackatime_project_for, ->(user) {
+    where.not(id: User::HackatimeProject.where(user: user).where.not(project_id: nil).select(:project_id))
   }
   scope :fire, -> { where.not(marked_fire_at: nil) }
   scope :fire_nomination_pending, -> { where.not(nominated_fire_at: nil).where(marked_fire_at: nil) }
@@ -260,7 +280,7 @@ class Project < ApplicationRecord
                        saver: { strip: true, quality: 75 }
   end
 
-  validates :title, presence: true, length: { maximum: 120 }
+  validates :title, presence: true, length: { maximum: TITLE_MAX_LENGTH }
   validates :description, length: { maximum: 1_000 }, allow_blank: true
   validates :ai_declaration, length: { maximum: 1_000 }, allow_blank: true
   validates :demo_url, :repo_url, :readme_url,
@@ -278,20 +298,39 @@ class Project < ApplicationRecord
   normalizes :hardware_stage, with: ->(value) { value.presence }
   validates :hardware_stage, inclusion: { in: HARDWARE_STAGES }, allow_nil: true
   validates :project_type, inclusion: { in: AVAILABLE_CATEGORIES }, allow_nil: true
-  validate :hardware_stage_locked_after_funding_request
+  validate :hardware_stage_locked_once_committed
   validate :hardware_required_by_current_mission
 
   # Set by Certification::FundingRequest#apply_verdict_to_project! to let the
   # approval flow advance the stage; the lock below stays closed for everyone else.
   attr_accessor :advancing_via_funding_approval
 
-  def hardware_stage_locked_after_funding_request
-    return unless hardware_stage_changed? && has_any_funding_request?
-    # The certification flow advances design → build when a funding request is
-    # approved. Allow only that in-process action, while still locking any
-    # owner-initiated stage change.
+  # Once a project has asked for funding or shipped, its stage decides real
+  # money: hardware pays a flat rate and skips the payout review window, so an
+  # owner must not be able to flip an already-shipped software project to
+  # hardware and change how it gets paid.
+  def hardware_stage_locked_once_committed
+    return unless hardware_stage_changed?
     return if advancing_via_funding_approval
-    errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
+
+    if has_any_funding_request?
+      errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
+    elsif shipped_at_least_once?
+      errors.add(:hardware_stage, "cannot be changed after the project has shipped")
+    end
+  end
+
+  # Deliberately not memoized: a Project instance can be validated before a ship
+  # exists and again after (reload doesn't clear an ivar), and a stale false here
+  # would let the stage change through.
+  def shipped_at_least_once?
+    ship_events.exists?
+  end
+
+  # The edit form asks this so it can render a locked display instead of a
+  # control that would only fail validation.
+  def hardware_stage_locked?
+    has_any_funding_request? || shipped_at_least_once?
   end
 
   # A project on a hardware mission can't drop back to software while attached —
@@ -374,6 +413,30 @@ class Project < ApplicationRecord
     hardware_stage.present?
   end
 
+  # The moment a project turns hardware, whether it was born that way or was
+  # switched over later. Design → build doesn't count: the project is already
+  # hardware and its Hackatime project already exists.
+  def became_hardware?
+    saved_change_to_hardware_stage? && hardware? && hardware_stage_before_last_save.blank?
+  end
+
+  # Still carrying a name the create flow filled in, rather than one the builder
+  # chose. The Hackatime project is named after the title, so seeding one now
+  # would leave the builder recording Lapse timelapses against "Untitled".
+  def placeholder_title?
+    title.blank? || PLACEHOLDER_TITLES.include?(title.strip)
+  end
+
+  # Seed when a hardware project first has a name worth using: either it just
+  # turned hardware and is already named, or it just got renamed. Projects are
+  # normally created placeholder-named and turn hardware before the builder
+  # names them, so the rename is usually the trigger that matters.
+  def needs_hackatime_project?
+    return false unless hardware? && !placeholder_title?
+
+    became_hardware? || saved_change_to_title?
+  end
+
   def design_stage?
     hardware_stage == "design"
   end
@@ -399,9 +462,10 @@ class Project < ApplicationRecord
     @_latest_funding_request = certification_funding_requests.order(created_at: :desc).first
   end
 
-  # Name of the Hackatime project that Lookout timelapse heartbeats are filed
-  # under (and auto-linked to this project) — the project title, so recorded
-  # time lands under the same Hackatime project as any code-based time.
+  # Name of the Hackatime project this project's time is filed under (and which
+  # Project::EnsureHackatimeProjectsJob seeds for hardware builders to pick in
+  # Lapse): the project title, so timelapse time lands under the same Hackatime
+  # project as any code-based time.
   def hackatime_recorder_name
     title
   end
@@ -410,8 +474,12 @@ class Project < ApplicationRecord
     description.to_s
   end
 
+  # Deduplicated because every member of a hardware project gets their own
+  # User::HackatimeProject row under the same name, and callers treat this as a
+  # set: it's joined into the Airtable sync and the devlog key snapshot, and
+  # rendered as-is on the integrity dashboard.
   def hackatime_keys
-    hackatime_projects.pluck(:name)
+    hackatime_projects.distinct.pluck(:name)
   end
 
   def total_hackatime_hours
@@ -775,6 +843,10 @@ class Project < ApplicationRecord
     sub = last_ship_event.mission_submission
     return true if sub&.payout_path == "static_prize"
     false
+  end
+
+  def ensure_hackatime_projects
+    Project::EnsureHackatimeProjectsJob.perform_later(id)
   end
 
   def notify_slack_channel

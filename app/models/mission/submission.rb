@@ -130,7 +130,7 @@ class Mission::Submission < ApplicationRecord
     project = ship_event&.post&.project
     builder = ship_event&.post&.user
     routes = Rails.application.routes.url_helpers
-    url_opts = Rails.application.config.action_controller.default_url_options
+    url_opts = (Rails.application.config.action_controller.default_url_options || {})
                     .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
 
     {

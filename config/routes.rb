@@ -640,7 +640,6 @@ Rails.application.routes.draw do
         resource  :ban,                 only: [ :create, :destroy ]
         resource  :impersonation,       only: [ :create ]
         resources :feature_flags,       only: [ :create, :destroy ], param: :feature
-        resource  :presentable_hardware_flag, only: [ :create, :destroy ]
         resource  :hackatime_sync,      only: [ :create ]
         resource  :order_rejection,     only: [ :create ]
         resources :balance_adjustments, only: [ :create ]
@@ -848,12 +847,15 @@ Rails.application.routes.draw do
         end
       end
 
-      # Unified hardware review surface: one queue and one project page covering
-      # both design funding requests and build ship certifications. Verdicts and
+      # Hardware review surface: two separate queues (design funding requests and
+      # build ship certifications) sharing one project review page. Verdicts and
       # claims reuse the funding/ship mutation endpoints above so PaperTrail and
       # existing audit behavior stay attached to the underlying records.
+      # `index` redirects to the design queue so older links keep working.
       resources :hardware_reviews, path: "hardware", param: :project_id, only: [ :index, :show ] do
         collection do
+          get :design
+          get :build
           get :next
         end
       end
@@ -920,13 +922,6 @@ Rails.application.routes.draw do
       end
     end
     resources :reports, only: [ :create ], module: :projects
-    resources :lookout_sessions, only: %i[create show], module: :projects, shallow: false do
-      get  :record, on: :member
-      post :stop, on: :member
-      post :set_mode, on: :member
-      post :forward_heartbeats, on: :member
-      get  :status, on: :collection
-    end
     resource :og_image, only: [ :show ], module: :projects, defaults: { format: :png }
     resource :ships, only: [ :create ], module: :projects
     resource :recertification, only: [ :create ], module: :projects

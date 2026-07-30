@@ -2265,3 +2265,66 @@
     }
   }
 }
+
+// Funding request on the project timeline. Short by design: the amount and,
+// once decided, the verdict. Mirrors .ship-decision-card so the two review
+// outcomes read as the same kind of event.
+.funding-request-card {
+  // Same border as a ship post, so a funding request reads as part of the same
+  // project story. Only a returned request breaks out of it.
+  --funding-accent: var(--color-brand-highlight);
+
+  background: var(--color-set-4-bg);
+  border-color: var(--funding-accent);
+  gap: var(--space-xxs);
+
+  &--returned {
+    --funding-accent: var(--color-brand-salmon);
+  }
+
+  &__amount {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--funding-accent);
+  }
+
+  &__tier {
+    font-size: var(--font-size-s);
+    font-weight: 500;
+    color: var(--color-space-text-muted);
+  }
+
+  &__message {
+    p {
+      margin: 0;
+    }
+  }
+
+  &__feedback {
+    padding-left: var(--space-s);
+    border-left: 3px solid var(--funding-accent);
+  }
+
+  &__feedback-label {
+    margin: 0 0 var(--space-xxs);
+    color: var(--funding-accent);
+    font-size: var(--font-size-s);
+    font-weight: 700;
+  }
+
+  &__feedback-body {
+    color: var(--color-space-text);
+    font-size: var(--font-size-m);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-start;
+  }
+}

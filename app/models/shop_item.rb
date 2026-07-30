@@ -382,10 +382,9 @@ class ShopItem < ApplicationRecord
     sale_percentage.present? && sale_percentage > 0
   end
 
-  # Per-user effective price. Most items ignore the user and just use the
-  # regional price; ShopItem::OutpostTicket overrides this to subtract the
-  # user's accrued discount. This is the price enforced at purchase (see
-  # ShopOrder#freeze_item_price).
+  # Per-user effective price. Subclasses may override to vary price by user;
+  # the default just uses the regional price. This is the price enforced at
+  # purchase (see ShopOrder#freeze_item_price).
   def price_for_user(_user, region)
     price_for_region(region)
   end

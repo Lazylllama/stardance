@@ -465,7 +465,7 @@ module Certification
       return unless owner&.slack_id.present?
 
       routes = Rails.application.routes.url_helpers
-      url_opts = Rails.application.config.action_controller.default_url_options
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
                       .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
 
       locals = {

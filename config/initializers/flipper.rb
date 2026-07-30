@@ -39,9 +39,7 @@ Rails.application.config.after_initialize do
         week_1_release
         hardware_flow
         ship_event_payouts
-        lookout
         payout_recommendations
-        hardware_to_outpost
         disable_internal_sw_dash_reviews
         sharable_purchase
         shigimi_eyes

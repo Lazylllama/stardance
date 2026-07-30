@@ -1,6 +1,9 @@
 class HackatimeService
   BASE_URL = "https://hackatime.hackclub.com"
   START_DATE = "2026-05-31"
+  # Tags the heartbeat that brings a project into existence, so it is
+  # distinguishable from real activity (e.g. by Hackatime fraud tooling).
+  SEED_PLUGIN = "stardance-project-seed".freeze
 
   class << self
     def fetch_authenticated_user(access_token)
@@ -115,7 +118,7 @@ class HackatimeService
     # returns an existing key or creates one. Returns the key string or nil.
     #
     # MUST stay public: it's called both internally (resolve_api_key) and with an
-    # explicit receiver by LookoutHeartbeatForwarder. Do NOT add a second
+    # explicit receiver by Project::EnsureHackatimeProjectsJob. Do NOT add a second
     # definition below the `private` keyword — a later same-name def shadows this
     # one and makes it private, which silently breaks every external caller with
     # `NoMethodError (private method 'fetch_api_key')`.
@@ -142,9 +145,9 @@ class HackatimeService
 
     # Push heartbeats to Hackatime on behalf of a user using their API key (NOT
     # the OAuth token — the Wakatime-compatible ingestion endpoint wants the key,
-    # which you can get via fetch_api_key). Used to forward Lookout timelapse
-    # capture timestamps so the time shows up under a Hackatime project the user
-    # can then link. Returns true on success.
+    # which you can get via fetch_api_key). Used to seed the Hackatime project a
+    # hardware builder records Lapse timelapses against (see create_project).
+    # Returns true on success.
     def push_heartbeats(api_key:, heartbeats:)
       return false if api_key.blank? || heartbeats.blank?
 
@@ -168,6 +171,38 @@ class HackatimeService
     rescue => e
       Rails.logger.error "HackatimeService push_heartbeats exception: #{e.message}"
       false
+    end
+
+    # Bring a Hackatime project into existence for the owner of `api_key`.
+    #
+    # Hackatime has no project resource to POST to: a "project" is just a
+    # DISTINCT over the `project` column of heartbeats (hackclub/hackatime
+    # ProjectStatsQuery), so a project exists exactly when some heartbeat carries
+    # its name. One heartbeat is therefore both necessary and sufficient.
+    #
+    # Seeding adds no time. Hackatime derives duration from the gap to the
+    # previous heartbeat and scores the first one in a project as zero
+    # (`LAG(time) ... IS NULL THEN 0` in DashboardData::Snapshots), so the seed
+    # can't invent payable hours.
+    #
+    # The heartbeat is labelled as a project-creation seed rather than left to
+    # pass for real activity. Hackatime's ingest endpoint drops anything outside
+    # its HEARTBEAT_KEYS allowlist, so there's no custom field to use: `plugin`
+    # is the Wakatime-standard "what sent this", and `editor`/`language` are what
+    # its dashboards and fraud tooling group on.
+    def create_project(api_key:, name:, entity:)
+      return false if api_key.blank? || name.blank?
+
+      push_heartbeats(api_key: api_key, heartbeats: [ {
+        type: "app",
+        entity: entity,
+        project: name,
+        category: "coding",
+        editor: "Stardance",
+        language: "Stardance",
+        plugin: SEED_PLUGIN,
+        time: Time.current.to_i
+      } ])
     end
 
     def fetch_heartbeat_spans(hackatime_uid, project_keys, start_date:, end_date:, access_token: nil)

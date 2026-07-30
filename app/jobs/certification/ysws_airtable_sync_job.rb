@@ -410,7 +410,7 @@ module Certification
       end
 
       # List the Hackatime project names linked to this project
-      hackatime_project_names = review.project&.hackatime_projects&.pluck(:name) || []
+      hackatime_project_names = review.project&.hackatime_projects&.distinct&.pluck(:name) || []
       justification += if hackatime_project_names.any?
         "\n\nUser's Hackatime Project Names: #{hackatime_project_names.join(", ")}"
       else
