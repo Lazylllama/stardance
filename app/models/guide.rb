@@ -139,16 +139,6 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       markdown: "hardware/shipping-hardware.md"
     ),
     new(
-      slug: :"super-hardware-builder",
-      title: "Becoming a Super Hardware Builder",
-      description: "How to earn Super Hardware Builder status, and the perks that come with it.",
-      category: :hardware,
-      icon: "rocket",
-      reading_minutes: 4,
-      related: %i[starting-hardware],
-      markdown: "hardware/super-hardware-builder.md"
-    ),
-    new(
       slug: :tiers,
       title: "Hardware funding tiers",
       description: "What the different funding tiers are for hardware projects, including funding amounts!",
