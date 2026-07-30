@@ -51,6 +51,12 @@
 }
 
 .funding-tier {
+  // Each tier owns an accent, and everything that marks the tier reads from it:
+  // the badge, the selected border, the selected fill and the radio. Lilac is
+  // the fallback so an unknown tier still looks deliberate.
+  --funding-tier-accent: var(--color-brand-lilac);
+  --funding-tier-accent-soft: var(--color-brand-lilac-soft);
+
   display: flex;
   align-items: center;
   gap: var(--space-s);
@@ -64,19 +70,40 @@
     border-color 120ms ease,
     background 120ms ease;
 
+  &--b {
+    --funding-tier-accent: var(--color-brand-mint);
+    --funding-tier-accent-soft: var(--color-brand-mint-soft);
+  }
+
+  &--a {
+    --funding-tier-accent: var(--color-brand-blue);
+    --funding-tier-accent-soft: var(--color-brand-blue-soft);
+  }
+
+  &--s {
+    --funding-tier-accent: var(--color-brand-lilac);
+    --funding-tier-accent-soft: var(--color-brand-lilac-soft);
+  }
+
+  &--x {
+    --funding-tier-accent: var(--color-brand-yellow);
+    --funding-tier-accent-soft: var(--color-brand-yellow-soft);
+  }
+
   &:hover {
     border-color: var(--color-border-input-focus);
   }
 
-  // Selected tier. Lilac is the system's default primary accent.
+  // Selected tier highlights in its own accent, so the fill matches the badge
+  // the builder just clicked rather than reading as one shared purple.
   &:has(.funding-tier__input:checked) {
-    border-color: var(--color-brand-lilac);
-    background: var(--color-brand-lilac-soft);
+    border-color: var(--funding-tier-accent);
+    background: var(--funding-tier-accent-soft);
   }
 
   &__input {
     flex: 0 0 auto;
-    accent-color: var(--color-brand-lilac);
+    accent-color: var(--funding-tier-accent);
   }
 
   // Dark ink on a bright pastel, per the accent guidance.
@@ -90,20 +117,7 @@
     border-radius: var(--border-radius);
     font-weight: 800;
     color: var(--color-set-1-bg);
-    background: var(--color-brand-lilac);
-
-    &--b {
-      background: var(--color-brand-mint);
-    }
-    &--a {
-      background: var(--color-brand-blue);
-    }
-    &--s {
-      background: var(--color-brand-lilac);
-    }
-    &--x {
-      background: var(--color-brand-yellow);
-    }
+    background: var(--funding-tier-accent);
   }
 
   &__info {
@@ -178,9 +192,28 @@
   display: flex;
   align-items: center;
   gap: var(--space-s);
+  padding: var(--space-xs) var(--space-s);
+  border: 2px solid transparent;
+  border-radius: var(--border-radius);
   font-size: var(--font-size-s);
   color: var(--color-space-text);
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+
+  // Set when a submit is attempted with the box unticked, so the requirement
+  // points at itself instead of the form failing silently.
+  &--error {
+    border-color: var(--color-brand-salmon);
+    background: var(--color-brand-salmon-soft);
+
+    input[type="checkbox"] {
+      accent-color: var(--color-brand-salmon);
+      outline: 2px solid var(--color-brand-salmon);
+      outline-offset: 2px;
+    }
+  }
 
   input[type="checkbox"] {
     accent-color: var(--color-brand-lilac);

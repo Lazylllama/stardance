@@ -1138,7 +1138,7 @@
         <%= form_with url: project_funding_request_path(@project),
                       method: :post,
                       data: { turbo: false },
-                      html: { class: "ship-modal__form", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json } } do |form| %>
+                      html: { class: "ship-modal__form", onsubmit: "return fundingSubmit(this)", data: { tier_maxes: Certification::FundingRequest::TIER_MAX_DOLLARS.to_json } } do |form| %>
           <div class="ship-modal__panel funding-modal__panel">
             <header class="funding-modal__header">
               <h2 class="funding-modal__title">Get your build funded</h2>
@@ -1148,9 +1148,9 @@
             <fieldset class="funding-modal__tiers">
               <legend>Pick your complexity tier</legend>
               <% Certification::FundingRequest::TIERS.each do |tier_id, t| %>
-                <label class="funding-tier">
+                <label class="funding-tier funding-tier--<%= t[:code].downcase %>">
                   <%= form.radio_button :complexity_tier, tier_id, required: true, class: "funding-tier__input", onchange: "fundingValidate(this.form)" %>
-                  <span class="funding-tier__badge funding-tier__badge--<%= t[:code].downcase %>"><%= t[:code] %></span>
+                  <span class="funding-tier__badge"><%= t[:code] %></span>
                   <span class="funding-tier__info">
                     <span class="funding-tier__name"><%= t[:name] %></span>
                     <span class="funding-tier__examples"><%= t[:examples] %></span>
@@ -1171,8 +1171,11 @@
               <%= link_to "How tiers work", guide_path("tiers"), class: "funding-modal__guide-link", target: "_blank", rel: "noopener" %>
             </p>
 
+            <%# No `required`: the browser blocks submission silently when the
+                control is scrolled out of view inside a dialog, so the check is
+                enforced on submit instead, where it can point at itself. %>
             <label class="funding-modal__bom-check">
-              <input type="checkbox" required onchange="fundingValidate(this.form)">
+              <input type="checkbox" onchange="fundingValidate(this.form)">
               <span>I have a <code>BOM.csv</code> in my repository</span>
             </label>
 
@@ -1188,6 +1191,10 @@
         <% end %>
       </dialog>
       <script>
+        function fundingBomLabel(form) {
+          return form.querySelector(".funding-modal__bom-check");
+        }
+
         function fundingValidate(form) {
           if (!form) return;
           var maxes = JSON.parse(form.dataset.tierMaxes || "{}");
@@ -1201,12 +1208,31 @@
           if (max != null) amountEl.max = max;
 
           var bomCheck = form.querySelector('.funding-modal__bom-check input[type="checkbox"]');
-          var bomMissing = bomCheck && !bomCheck.checked;
           var over = max != null && !isNaN(amount) && amount > max;
           err.textContent = over ? "This tier funds up to $" + max + ". Lower your request or pick a higher tier." : "";
           err.hidden = !over;
-          submit.disabled = over || bomMissing;
+          // Only the over-max case disables the button. An unchecked BOM leaves it
+          // clickable on purpose, so pressing it can explain itself.
+          submit.disabled = over;
 
+          if (bomCheck && bomCheck.checked) {
+            fundingBomLabel(form).classList.remove("funding-modal__bom-check--error");
+          }
+        }
+
+        function fundingSubmit(form) {
+          var bomCheck = form.querySelector('.funding-modal__bom-check input[type="checkbox"]');
+          if (bomCheck && !bomCheck.checked) {
+            var err = form.querySelector(".funding-request__error");
+            fundingBomLabel(form).classList.add("funding-modal__bom-check--error");
+            if (err) {
+              err.textContent = "Confirm you have a BOM.csv in your repository before submitting.";
+              err.hidden = false;
+            }
+            bomCheck.focus();
+            return false;
+          }
+          return true;
         }
       </script>
     <% end %>
