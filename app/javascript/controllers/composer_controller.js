@@ -193,13 +193,8 @@ export default class extends Controller {
 
   selectProject(event) {
     event.preventDefault();
-    const {
-      postUrl,
-      previewUrl,
-      editUrl,
-      hackatimeLinked,
-      recordable,
-    } = event.params;
+    const { postUrl, previewUrl, editUrl, hackatimeLinked, recordable } =
+      event.params;
     const linked = !!hackatimeLinked;
     const chip = event.currentTarget;
 

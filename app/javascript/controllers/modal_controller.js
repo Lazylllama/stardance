@@ -130,5 +130,4 @@ export default class extends Controller {
     }`;
     window.history.replaceState(window.history.state, "", nextUrl);
   }
-
 }
