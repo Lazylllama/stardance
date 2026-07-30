@@ -65,6 +65,14 @@ module Notifications
       notification.actor
     end
 
+    # Whenever a notification is about one person, their avatar stands in for the
+    # glyph in the icon slot (and the separate face row is dropped). An aggregate
+    # keeps the glyph plus its row of faces; a system notification with no actor
+    # keeps its glyph.
+    def avatar_icon?
+      !expandable? && avatar_actor.present?
+    end
+
     # All actors behind an aggregated notification, for the expandable list.
     def aggregated_actors
       @aggregated_actors ||= notification.aggregated_actors
