@@ -616,7 +616,7 @@
                   ) %>
             <% elsif !@project.has_devlog_since_last_ship? %>
               <%= render ActionButtonComponent.new(
-                    text: "Submit Design to Get Project Funding",
+                    text: "Submit for funding",
                     variant: :primary,
                     type: :button,
                     icon: "icons/rocket.png",
@@ -629,7 +629,7 @@
                   ) %>
             <% elsif !@project.info_complete? %>
               <%= render ActionButtonComponent.new(
-                    text: "Submit Design to Get Project Funding",
+                    text: "Submit for funding",
                     variant: :primary,
                     type: :button,
                     icon: "icons/rocket.png",
@@ -642,7 +642,7 @@
                   ) %>
             <% else %>
               <%= render ActionButtonComponent.new(
-                    text: "Submit Design to Get Project Funding",
+                    text: "Submit for funding",
                     variant: :primary,
                     type: :button,
                     icon: "icons/rocket.png",
