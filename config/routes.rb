@@ -619,14 +619,17 @@ Rails.application.routes.draw do
   end
 
   namespace :admin, constraints: AdminConstraint do
+    # Admin dashboard
     root to: "application#index"
+    get "dashboard/counts/:key", to: "dashboard_counts#show", as: :dashboard_count
+
     resource :funnel, only: [ :show ], controller: "funnel"
 
     mount Blazer::Engine, at: "blazer", constraints: ->(request) {
       AdminConstraint.allow?(request, :access_blazer?)
     }
 
-    mount Flipper::UI.app(Flipper), at: "flipper", constraints: ->(request) {
+    mount Flipper::UI.app(Flipper), at: "flipper", as: :flipper, constraints: ->(request) {
       AdminConstraint.allow?(request, :access_flipper?)
     }
 
@@ -716,7 +719,6 @@ Rails.application.routes.draw do
     end
 
     resource :shop, only: [ :show ], controller: "shop/dashboard"
-    post "shop/clear-carousel-cache", to: "shop/dashboard#clear_carousel_cache", as: :clear_carousel_cache
     namespace :shop do
       resources :items, only: [ :new, :create, :show, :edit, :update, :destroy ] do
         collection do
@@ -755,9 +757,6 @@ Rails.application.routes.draw do
     end
     resources :messages, only: [ :index, :create ]
     resources :email_templates, only: [ :index, :create, :destroy ]
-    resources :support_vibes, only: [ :index, :create ]
-    resources :sw_vibes, only: [ :index ]
-    resources :suspicious_votes, only: [ :index ]
     resources :audit_logs, only: [ :index, :show ]
     resources :fulfillment_payouts, only: [ :index, :show ] do
       member do
