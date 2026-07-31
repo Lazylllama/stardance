@@ -7,8 +7,14 @@ class Admin::Certification::Ysws::DashboardController < Admin::Certification::Ap
     @leaderboard = ::Certification::Ysws.reviewer_devlog_leaderboard
     @chart_data  = ::Certification::Ysws.reviewer_daily_devlog_data.to_json
 
-    # Reviewers hitting the daily average get the leaderboard's top-spot treatment.
-    # Empty when the flag is off, so no row is highlighted.
-    @on_pace_reviewer_ids = Flipper.enabled?(:devlog_review_pace, current_user) ? ::Certification::Ysws.reviewers_on_pace : Set.new
+    # Reviewers hitting the daily average get the leaderboard's top-spot treatment,
+    # alongside a devlogs/day column. Both ride the pace flag: nil averages hide
+    # the column and leave every row unhighlighted.
+    if Flipper.enabled?(:devlog_review_pace, current_user)
+      @daily_averages       = ::Certification::Ysws.reviewer_daily_averages
+      @on_pace_reviewer_ids = ::Certification::Ysws.reviewers_on_pace(daily_averages: @daily_averages)
+    else
+      @on_pace_reviewer_ids = Set.new
+    end
   end
 end
