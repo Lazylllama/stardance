@@ -43,7 +43,9 @@
       <%= admin_page_button "Certificates", admin_certificates_path, enabled: policy(Certificate).index? %>
       <%= admin_page_button "Workshops", admin_workshops_path, enabled: policy(:admin).access_workshops? %>
       <%= admin_page_button "Funnel", admin_funnel_path, enabled: policy(:admin).access_funnel? %>
-      <%= admin_page_button "Super Stars", admin_super_stars_path, enabled: policy(:super_star_dashboard).show? %>
+      <%= admin_page_button "Super Stars", admin_super_stars_path,
+        enabled: policy(:super_star_dashboard).show?,
+        count: "super_stars" %>
       <%= admin_page_button "Audit Logs", admin_audit_logs_path, enabled: policy(PaperTrail::Version).index? %>
       <%= admin_page_button "Ledger Entries", admin_ledger_entries_path, enabled: policy(LedgerEntry).index? %>
       <%= admin_page_button "Payout Reviews", admin_payout_reviews_path, enabled: policy(:payout_review).index? %>
