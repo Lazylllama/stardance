@@ -695,6 +695,10 @@ class Project < ApplicationRecord
 
   def shippable? = ship_blocking_errors.empty?
 
+  # True while a ship is waiting on a reviewer decision. Blocks re-shipping
+  # until that ship is approved or returned for changes.
+  def awaiting_ship_review? = ship_reviews.pending.exists?
+
   def ship_blocking_errors = shipping_requirements.reject { |r| r[:passed] }.map { |r| r[:label] }
 
   # The single most relevant reason the project can't ship yet, as a short
