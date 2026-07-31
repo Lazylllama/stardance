@@ -61,6 +61,35 @@ class Post::ShipEventHoursTest < ActiveSupport::TestCase
     assert_in_delta 0.0, ship.hours, 0.001
   end
 
+  # --- software-origin conversions --------------------------------------------
+
+  # A project built as software (phase-less devlogs) that turned hardware without
+  # ever asking for funding used to pay nothing: none of its time was tagged
+  # "build". Its software time isn't design work, so it counts from the start.
+  test "a converted project with no funding counts its software time" do
+    project = Project.create!(title: "HW #{SecureRandom.hex(4)}", created_at: 5.days.ago)
+    create_devlog(project, seconds: 7200, phase: nil, at: 3.days.ago) # logged as software
+    project.update!(hardware_stage: "build")
+    ship = create_ship(project)
+
+    assert_in_delta 2.0, ship.reload.hours_at_ship, 0.001
+    assert_in_delta 2.0, ship.hours, 0.001
+  end
+
+  # Once the convert has a funding request, the same funding boundary applies:
+  # software time logged before it is pre-funding and doesn't count.
+  test "a converted project with funding still respects the funding boundary" do
+    project = hardware_project_with_approved_funding(requested_at: 2.days.ago)
+    software = create_devlog(project, seconds: 7200, phase: nil, at: 4.days.ago)
+    build    = create_devlog(project, seconds: 7200, phase: "build", at: 1.day.ago)
+    software.update_column(:created_at, 4.days.ago)
+    build.update_column(:created_at, 1.day.ago)
+    ship = create_ship(project)
+
+    # Only the post-funding build devlog counts: 2h, not 4h.
+    assert_in_delta 2.0, ship.reload.hours, 0.001
+  end
+
   # --- funding-request cutoff -------------------------------------------------
 
   test "hardware payout ignores reviewed time logged before the funding request" do

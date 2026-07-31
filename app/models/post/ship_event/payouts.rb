@@ -384,14 +384,9 @@ module Post::ShipEvent::Payouts
     def capped_logged_seconds
       return 0 unless post&.project && post.created_at
 
-      scope = devlogs_in_ship_window
-      # Same cutoff the reviewed branch applies: a hardware build is only paid
-      # for work done once funding was asked for.
-      if (cutoff = hardware_payout_cutoff)
-        scope = scope.where("posts.created_at >= ?", cutoff)
-      end
-
-      scope.pluck("post_devlogs.duration_seconds").sum do |duration_seconds|
+      # devlogs_in_ship_window already drops pre-funding and design-phase time
+      # on hardware, so the funding cutoff is applied there.
+      devlogs_in_ship_window.pluck("post_devlogs.duration_seconds").sum do |duration_seconds|
         [ duration_seconds.to_i, Post::ShipEvent::MAX_PAYOUT_SECONDS_PER_DEVLOG ].min
       end
     end
