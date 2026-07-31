@@ -286,19 +286,29 @@ module Certification
       }
     end
 
-    # Reviewer ids already meeting the daily goal averaged across the review week
-    # so far — the same bar `reviewer_devlog_pace` reports as "on pace". Returned
-    # as a Set so the leaderboard can mark rows without a query per row.
-    def self.reviewers_on_pace(now: Time.current)
-      cumulative_target = DEVLOG_REVIEW_GOAL_PER_DAY * review_week_day_number(now)
+    # Every reviewer's devlogs-per-day for the current review week — the same
+    # figure `reviewer_devlog_pace` reports as `daily_average`, for all reviewers
+    # in one query so the leaderboard doesn't need one per row.
+    #   => { reviewer_id => average, ... }
+    def self.reviewer_daily_averages(now: Time.current)
+      day_number = review_week_day_number(now)
 
       Certification::Devlog
         .joins(:ysws_review)
         .where(certification_ysws_reviews: { reviewed_at: review_week_start(now).. })
         .where.not(certification_ysws_reviews: { reviewer_id: nil })
         .group("certification_ysws_reviews.reviewer_id")
-        .having("COUNT(*) >= ?", cumulative_target)
         .count
+        .transform_values { |reviewed| reviewed / day_number.to_f }
+    end
+
+    # Reviewer ids already meeting the daily goal averaged across the review week
+    # so far — the same bar `reviewer_devlog_pace` reports as "on pace". Returned
+    # as a Set so the leaderboard can mark rows without a query per row. Callers
+    # that already hold the averages pass them in to avoid a second query.
+    def self.reviewers_on_pace(now: Time.current, daily_averages: reviewer_daily_averages(now: now))
+      daily_averages
+        .select { |_reviewer_id, average| average >= DEVLOG_REVIEW_GOAL_PER_DAY }
         .keys
         .to_set
     end

@@ -9,6 +9,12 @@
             <th class="ysws-dashboard__col-rank">#</th>
             <th>Reviewer</th>
             <th class="ysws-dashboard__col-num">Devlogs reviewed</th>
+            <% if daily_averages %>
+              <th class="ysws-dashboard__col-num"
+                  title="Devlogs reviewed per day so far this review week (goal: <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day)">
+                Locked In?
+              </th>
+            <% end %>
             <th class="ysws-dashboard__col-num">Stardust ✦</th>
           </tr>
         </thead>
@@ -23,6 +29,12 @@
                             class: ("ysws-dashboard__reviewer-link--on-pace" if on_pace) %>
               </td>
               <td class="ysws-dashboard__col-num"><%= row[:devlogs] %></td>
+              <% if daily_averages %>
+                <td class="ysws-dashboard__col-num">
+                  <%= number_with_precision daily_averages[row[:reviewer_id]].to_f,
+                                            precision: 1, strip_insignificant_zeros: true %>
+                </td>
+              <% end %>
               <td class="ysws-dashboard__col-num"><%= row[:stardust] %></td>
             <% end %>
           <% end %>
