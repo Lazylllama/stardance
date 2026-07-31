@@ -21,14 +21,24 @@ class Projects::LookoutSessionsController < ApplicationController
     @lookout_session.sync_from_remote!(remote) if remote
 
     @finalize_deadline = LookoutSession::FINALIZE_DEADLINE
+    @already_pushed = LookoutPushStatus.pushed_tokens(user: current_user, refresh: params[:recheck].present?)
+                                       .include?(@lookout_session.token)
     @recording = LookoutService.recording_for_session(@lookout_session)
     @hackatime_project_names = current_user.hackatime_projects
                                            .where.not(name: User::HackatimeProject::EXCLUDED_NAMES)
                                            .order(:name)
                                            .pluck(:name)
     @linked_hackatime_names = @hackatime_project_names & @project.hackatime_keys
-    @default_existing_hackatime_name = @linked_hackatime_names.first
+
+    # Best guess for where this time belongs: the project's own recorder name (its
+    # title), which is what the session was created to file against. Prefer an
+    # existing Hackatime project of that name, then any already linked to this
+    # project; otherwise offer to create it new.
     @default_hackatime_name = @project.hackatime_recorder_name
+    @default_existing_hackatime_name =
+      (@default_hackatime_name if @hackatime_project_names.include?(@default_hackatime_name)) ||
+      @linked_hackatime_names.first
+    @prefer_existing = @default_existing_hackatime_name.present?
   end
 
   # Push the session's captured time into the chosen Hackatime project. Runs
@@ -44,6 +54,7 @@ class Projects::LookoutSessionsController < ApplicationController
 
     result = LookoutHeartbeatForwarder.call(@lookout_session, project_name: project_name)
     if result.ok?
+      LookoutPushStatus.expire(current_user)
       redirect_to my_timelapses_path,
                   notice: "Sent your time to #{project_name}. It counts toward the project once you post a devlog."
     else

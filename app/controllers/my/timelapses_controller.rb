@@ -12,6 +12,9 @@ class My::TimelapsesController < ApplicationController
                               .recoverable
                               .includes(:project)
                               .order(Arel.sql("COALESCE(started_at, created_at) DESC"))
+    # Which sessions Hackatime already has, matched exactly by heartbeat entity
+    # (see LookoutPushStatus). Cached per user; ?recheck re-scans.
+    @pushed_tokens = LookoutPushStatus.pushed_tokens(user: current_user, refresh: params[:recheck].present?)
   end
 
   private

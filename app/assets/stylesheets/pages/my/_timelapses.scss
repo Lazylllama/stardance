@@ -90,19 +90,54 @@
     font-size: var(--font-size-s);
   }
 
-  &__action {
+  &__recheck {
+    margin-left: var(--space-xxs);
+    color: var(--color-brand-mint);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  &__actions {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
+  &__send {
     padding: var(--space-xxs) var(--space-m);
     background: var(--color-brand-mint);
     color: var(--color-set-1-bg);
+    border: none;
     border-radius: var(--profile-radius);
+    font-family: var(--font-family-text);
     font-size: var(--font-size-s);
     font-weight: 600;
-    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  &__review {
+    color: var(--color-space-text-muted);
+    font-size: var(--font-size-s);
     white-space: nowrap;
 
-    &--disabled {
-      background: var(--color-set-3-bg);
+    &:hover {
+      color: var(--color-space-text);
+    }
+  }
+
+  &__status {
+    flex-shrink: 0;
+    font-size: var(--font-size-s);
+    font-weight: 600;
+    white-space: nowrap;
+
+    &--done {
+      color: var(--color-brand-mint);
+    }
+
+    &--closed {
       color: var(--color-space-text-muted);
     }
   }

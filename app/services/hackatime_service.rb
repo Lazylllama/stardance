@@ -227,6 +227,35 @@ class HackatimeService
       []
     end
 
+    # Raw heartbeats for the api_key's owner between start_time and end_time (both
+    # ISO8601). Returns an array of heartbeat hashes (string keys, including
+    # "entity" and "project"), or [] on failure. Used to check whether a Lookout
+    # session's time already reached Hackatime by matching heartbeat "entity"
+    # against the session token (see LookoutPushStatus). The endpoint applies no
+    # result cap, so callers bound the window themselves.
+    def fetch_heartbeats(api_key:, start_time:, end_time:)
+      return [] if api_key.blank?
+
+      response = connection.get("my/heartbeats") do |req|
+        req.headers["Authorization"] = "Bearer #{api_key}"
+        req.params["start_time"] = start_time
+        req.params["end_time"] = end_time
+      end
+
+      if response.success?
+        JSON.parse(response.body)["heartbeats"] || []
+      else
+        Rails.logger.error "HackatimeService.fetch_heartbeats error: #{response.status}"
+        []
+      end
+    rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
+      Rails.logger.error "HackatimeService.fetch_heartbeats timeout: #{e.message}"
+      []
+    rescue => e
+      Rails.logger.error "HackatimeService.fetch_heartbeats exception: #{e.message}"
+      []
+    end
+
     private
 
       # Returns [response, fell_back] where fell_back is true when the
