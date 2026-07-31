@@ -1,0 +1,49 @@
+<% content_for :title, "Your timelapses" %>
+
+<main class="timelapses">
+  <header class="timelapses__header">
+    <h1 class="timelapses__title">Your timelapses</h1>
+    <p class="timelapses__lede">
+      Hardware recording moved to Lapse. These are your older Lookout recordings.
+      If any of them still needs its time sent to Hackatime, open it and send.
+    </p>
+  </header>
+
+  <% if @window_open %>
+    <p class="timelapses__notice">
+      It's safe to send again if you're not sure whether one already went through,
+      Hackatime ignores duplicates. This page closes on
+      <%= @deadline.strftime("%B %-d") %>.
+    </p>
+  <% else %>
+    <p class="timelapses__notice timelapses__notice--closed">
+      The recovery window closed on <%= @deadline.strftime("%B %-d") %>. Record new
+      time on Lapse instead.
+    </p>
+  <% end %>
+
+  <% if @sessions.empty? %>
+    <p class="timelapses__empty">No Lookout recordings to recover. Your hardware time is tracked in Lapse now.</p>
+  <% else %>
+    <ul class="timelapses__list">
+      <% @sessions.each do |session| %>
+        <li class="timelapses__item">
+          <div class="timelapses__item-main">
+            <span class="timelapses__project"><%= session.project.title %></span>
+            <span class="timelapses__meta">
+              <%= (session.started_at || session.created_at).strftime("%b %-d") %>
+              &middot; <%= format_hours_minutes(session.duration_seconds) %>
+            </span>
+          </div>
+          <% if @window_open %>
+            <%= link_to "Review & send time",
+                        finalize_project_lookout_session_path(session.project, session),
+                        class: "timelapses__action" %>
+          <% else %>
+            <span class="timelapses__action timelapses__action--disabled">Closed</span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</main>
