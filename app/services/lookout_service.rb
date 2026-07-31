@@ -13,7 +13,56 @@ class LookoutService
   REVIEW_READ_TIMEOUT = 6
   MAX_REVIEW_RECORDINGS = 12
 
+  # Bounds for the token-authenticated client API (status/timings/stop), used by
+  # the temporary session-finalize recovery flow. See LookoutSessionsController.
+  CLIENT_OPEN_TIMEOUT = 5
+  CLIENT_READ_TIMEOUT = 10
+
   class << self
+    # Client API (token-authenticated). Current status/duration/video for one
+    # session; nil on failure.
+    def fetch_session(token)
+      response = client_connection.get("api/sessions/#{token}")
+      return JSON.parse(response.body).symbolize_keys if response.success?
+
+      Rails.logger.error "LookoutService fetch_session error: #{response.status}"
+      nil
+    rescue => e
+      Rails.logger.error "LookoutService fetch_session exception: #{e.message}"
+      nil
+    end
+
+    # Capture timestamps for a session, forwarded to Hackatime as heartbeats
+    # (see LookoutHeartbeatForwarder). Returns the parsed body (an array, or a
+    # hash with a "timestamps" key) or nil.
+    def fetch_timings(token)
+      response = client_connection.get("api/sessions/#{token}/timings")
+      return JSON.parse(response.body) if response.success?
+
+      Rails.logger.error "LookoutService fetch_timings error: #{response.status}"
+      nil
+    rescue => e
+      Rails.logger.error "LookoutService fetch_timings exception: #{e.message}"
+      nil
+    end
+
+    def stop_session(token)
+      response = client_connection.post("api/sessions/#{token}/stop")
+      return JSON.parse(response.body).symbolize_keys if response.success?
+
+      Rails.logger.error "LookoutService stop_session error: #{response.status}"
+      nil
+    rescue => e
+      Rails.logger.error "LookoutService stop_session exception: #{e.message}"
+      nil
+    end
+
+    # A single session's playable recording (live-refreshed presigned URL), or
+    # nil when nothing is ready yet. Same display hash as recordings_for_project.
+    def recording_for_session(session)
+      review_recording(session)
+    end
+
     # A project's finished Lookout recordings, for the hardware funding review.
     # Lookout's stored video URLs are presigned and expire after ~1h, so we
     # refresh each session's video/thumbnail live (concurrently, bounded) at
@@ -78,6 +127,15 @@ class LookoutService
       Faraday.new(url: BASE_URL) do |conn|
         conn.options.open_timeout = REVIEW_OPEN_TIMEOUT
         conn.options.timeout = REVIEW_READ_TIMEOUT
+        conn.headers["Content-Type"] = "application/json"
+        conn.adapter Faraday.default_adapter
+      end
+    end
+
+    def client_connection
+      @client_connection ||= Faraday.new(url: BASE_URL) do |conn|
+        conn.options.open_timeout = CLIENT_OPEN_TIMEOUT
+        conn.options.timeout = CLIENT_READ_TIMEOUT
         conn.headers["Content-Type"] = "application/json"
         conn.adapter Faraday.default_adapter
       end

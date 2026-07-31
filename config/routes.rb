@@ -922,6 +922,17 @@ Rails.application.routes.draw do
       end
     end
     resources :reports, only: [ :create ], module: :projects
+    # Temporary recovery for Lookout recordings stranded by the recorder's
+    # retirement (see Projects::LookoutSessionsController). The old recorder tab
+    # deep-linked to :record, so keep that path working by redirecting it to the
+    # finalize page builders are already trying to reach.
+    resources :lookout_sessions, only: [], module: :projects, shallow: false do
+      member do
+        get :finalize
+        post :forward_heartbeats
+        get :record, to: redirect(status: 302) { |params, _req| "/projects/#{params[:project_id]}/lookout_sessions/#{params[:id]}/finalize" }
+      end
+    end
     resource :og_image, only: [ :show ], module: :projects, defaults: { format: :png }
     resource :ships, only: [ :create ], module: :projects
     resource :recertification, only: [ :create ], module: :projects
