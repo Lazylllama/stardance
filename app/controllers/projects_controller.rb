@@ -597,7 +597,9 @@ class ProjectsController < ApplicationController
     # so we don't confirm whether an internal host exists.
     Rails.logger.warn("URL validation rejected #{attribute}: #{e.message}")
     @project.errors.add(attribute, "nice try ding dong — #{name} has to be a real, public URL")
-  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
+  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ECONNRESET,
+         Errno::ETIMEDOUT, Errno::ENETUNREACH, Errno::EPIPE,
+         Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
     Rails.logger.warn("URL validation failed for #{attribute}: #{e.class}: #{e.message}")
     @project.errors.add(attribute, "#{name} could not be reached. Please make sure the URL is valid and publicly accessible.")
   rescue StandardError => e
