@@ -57,7 +57,7 @@ class ShopWarehousePackage < ApplicationRecord
     non_sticker_count = contents.count { |c| !c[:sku].start_with?("Sti/") }
     contents += bonus_stickers if non_sticker_count >= BONUS_STICKER_COUNT
     contents << {
-      sku: "Pri/Sta/4x6/1st",
+      sku: "Pri/SD/4x6/1st",
       quantity: 1
     }
     update!(frozen_contents: contents)
