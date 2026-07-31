@@ -1,0 +1,3 @@
+<%= turbo_frame_tag "admin_count_#{@key}" do %>
+  <span class="<%= class_names("admin-dashboard__count-pill", "admin-dashboard__count-pill--muted" => @count.zero?) %>"><%= @count %></span>
+<% end %>
