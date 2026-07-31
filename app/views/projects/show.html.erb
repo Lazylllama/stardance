@@ -654,7 +654,30 @@
               the ship button stays hidden behind the funding button until the
               grant flips them to the build stage. %>
           <% unless @project.design_stage? %>
-          <% if @project.shippable? %>
+          <% if @project.awaiting_ship_review? %>
+            <%= render ActionButtonComponent.new(
+                  text: "Ship your project!",
+                  variant: :secondary,
+                  type: :button,
+                  icon: "icons/rocket.png",
+                  disabled: :soft,
+                  data: {
+                    controller: "tooltip",
+                    tooltip_message_value: "Your project is in review. You can ship again once it's approved.",
+                    tooltip_position_value: "top"
+                  }
+                ) %>
+          <% elsif @project.needs_changes? %>
+            <%# Changes requested: the ship CTA resubmits this same ship for
+                re-certification instead of opening a fresh ship. %>
+            <%= render ActionButtonComponent.new(
+                  text: "Ship your project!",
+                  variant: :primary,
+                  type: :button,
+                  icon: "icons/rocket.png",
+                  onclick: "document.getElementById('recert-modal-' + #{@project.id.to_json}).showModal()"
+                ) %>
+          <% elsif @project.shippable? %>
             <% if unposted_seconds >= 15 * 60 %>
               <%= render ActionButtonComponent.new(
                     text: "Ship your project!",
