@@ -42,6 +42,13 @@ class LookoutSession < ApplicationRecord
   TERMINAL_STATUSES = %w[complete failed].freeze
   # How the session was recorded (desktop / web / camera).
   MODES = %w[desktop web camera].freeze
+  # The temporary recovery window (finalize page + /my/timelapses) closes after
+  # this; past it the surfaces send builders back to Lapse. See
+  # Projects::LookoutSessionsController and My::TimelapsesController.
+  FINALIZE_DEADLINE = Time.utc(2026, 8, 14, 23, 59, 59)
+
+  # Sessions carrying capture time worth sending to Hackatime.
+  scope :recoverable, -> { where("duration_seconds > 0") }
 
   belongs_to :user
   belongs_to :project
