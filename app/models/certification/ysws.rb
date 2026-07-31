@@ -132,6 +132,22 @@ module Certification
       self[:todo_devlog_count].to_i
     end
 
+    # The ship certification a reviewer should actually look at for this review.
+    #
+    # ship_cert_id is only populated when the ship event went through manual
+    # ship certification. Reships auto-approve off a passing URL probe and never
+    # mint a cert, so the column stays null even though the project was
+    # certified on an earlier ship. Fall back the same way #return_to_ship_cert
+    # does — match the ship event first, then the project's most recent approved
+    # cert — so reship reviews still point somewhere real.
+    def effective_ship_cert
+      return ship_cert if ship_cert
+
+      project_certs = Certification::Ship.where(project_id: project_id)
+      project_certs.find_by(post_ship_event_id: post_ship_event_id) ||
+        project_certs.approved.order(Arel.sql("decided_at DESC NULLS LAST"), id: :desc).first
+    end
+
     # Per-reviewer target for completed devlog reviews: a daily rate that
     # reviewers are expected to average across the review week, rather than hit
     # every single day. Drives the pace widget on the review queue.
