@@ -84,11 +84,8 @@ class HCBServiceTest < ActiveSupport::TestCase
       f.adapter :test, stubs
     end
 
-    HCBService.instance_variable_set(:@conn, nil)
     Faraday.stub(:new, ->(*, **, &_blk) { connection }) { yield }
     requested
-  ensure
-    HCBService.instance_variable_set(:@conn, nil)
   end
 
   # Swaps in a Faraday test adapter for the token endpoint only.
