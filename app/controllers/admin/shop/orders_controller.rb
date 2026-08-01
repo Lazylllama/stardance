@@ -144,10 +144,9 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     @user_orders = @order.user.shop_orders.where.not(id: @order.id).order(created_at: :desc).limit(10)
     @user_projects = @order.user.projects.includes(:hackatime_projects).order(created_at: :desc)
 
-    # Find sibling LetterMail orders for Theseus coalesce button
-    if @order.shop_item.type == "ShopItem::LetterMail" && @order.awaiting_periodical_fulfillment?
+    if @order.shop_item.is_a?(ShopItem::LetterMail) && @order.awaiting_periodical_fulfillment?
       @theseus_sibling_orders = ShopOrder.joins(:shop_item)
-                                         .where(shop_items: { type: "ShopItem::LetterMail" })
+                                         .where(shop_items: { type: @order.shop_item.type })
                                          .where(user_id: @order.user_id, frozen_address_ciphertext: @order.frozen_address_ciphertext)
                                          .where(aasm_state: "awaiting_periodical_fulfillment")
                                          .where.not(id: @order.id)
@@ -662,9 +661,9 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
 
     order_ids = (Array(params[:order_ids]).map(&:to_i) | [ @order.id ]).uniq
 
-    @order.user.with_advisory_lock("theseus_send", timeout_seconds: 10) do
+    @order.user.with_advisory_lock("theseus_send/#{@order.user_id}", timeout_seconds: 10) do
       orders_to_send = ShopOrder.joins(:shop_item)
-                                .where(id: order_ids, shop_items: { type: "ShopItem::LetterMail" }, aasm_state: "awaiting_periodical_fulfillment")
+                                .where(id: order_ids, shop_items: { type: @order.shop_item.type }, aasm_state: "awaiting_periodical_fulfillment")
                                 .to_a
 
       stale_ids = order_ids - orders_to_send.map(&:id)
@@ -672,7 +671,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
         redirect_to admin_shop_order_path(@order), alert: "Order(s) #{stale_ids.join(', ')} no longer awaiting fulfillment. Please refresh and try again." and return
       end
 
-      letter_id = TheseusService.create_letter(orders_to_send, queue: "stardance-envelope")
+      letter_id = TheseusService.create_letter(orders_to_send, queue: @order.shop_item.class::THESEUS_QUEUE)
       orders_to_send.each { |o| o.mark_fulfilled!(letter_id, nil, "#{current_user.display_name} - Letter Mail (Theseus)") }
 
       notice = "Sent to Theseus (letter #{letter_id})"

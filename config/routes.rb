@@ -732,6 +732,7 @@ Rails.application.routes.draw do
           post :request_approval
         end
       end
+      resource :letter_mail_batch, only: [ :create ]
       resources :orders, only: [ :index, :show ] do
         member do
           post :reveal_address
