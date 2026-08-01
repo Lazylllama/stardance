@@ -16,6 +16,7 @@ class ShopOrderDailySummaryJob < ApplicationJob
     "ShopItem::ThirdPartyPhysical" => "Third Party Physical",
     "ShopItem::HQMailItem" => "HQ Mail",
     "ShopItem::LetterMail" => "Letter Mail",
+    "ShopItem::NonmachinableLetterMail" => "Nonmachinable Letter Mail",
     "ShopItem::WarehouseItem" => "Warehouse",
     "ShopItem::FreeStickers" => "Free Stickers",
     "ShopItem::HCBGrant" => "HCB Grant",

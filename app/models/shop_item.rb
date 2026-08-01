@@ -275,6 +275,7 @@ class ShopItem < ApplicationRecord
     "ShopItem::HCBPreauthGrant",
     "ShopItem::HQMailItem",
     "ShopItem::LetterMail",
+    "ShopItem::NonmachinableLetterMail",
     "ShopItem::ThirdPartyPhysical",
     "ShopItem::ThirdPartyDigital",
     "ShopItem::WarehouseItem",
