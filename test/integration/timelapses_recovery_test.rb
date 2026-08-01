@@ -26,6 +26,23 @@ class TimelapsesRecoveryTest < ActionDispatch::IntegrationTest
     assert_select "form[action=?]", forward_heartbeats_project_lookout_session_path(@project, @pushed), count: 0
   end
 
+  test "skips sessions whose project was soft-deleted instead of crashing the page" do
+    orphan_project = projects(:two)
+    orphan = LookoutSession.create!(user: @user, project: orphan_project, token: "tok-orphan",
+                                    status: "complete", duration_seconds: 600,
+                                    started_at: Time.utc(2026, 7, 17, 12))
+    orphan_project.update_column(:deleted_at, Time.current)
+    assert_nil orphan.reload.project, "guard assumes a soft-deleted project reads back as nil"
+
+    LookoutPushStatus.stub(:pushed_tokens, Set.new) do
+      get my_timelapses_path
+    end
+
+    assert_response :success
+    assert_select "form[action=?]", forward_heartbeats_project_lookout_session_path(orphan_project, orphan), count: 0
+    assert_select "form[action=?]", forward_heartbeats_project_lookout_session_path(@project, @pending)
+  end
+
   test "one-click send forwards the session to Hackatime and returns to the list" do
     forwarded = nil
     ok = Struct.new(:ok, :error, :count) { def ok? = ok }.new(true, nil, 3)
