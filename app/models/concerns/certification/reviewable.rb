@@ -26,8 +26,14 @@ module Certification
           .update_all(reviewer_id: nil, claim_expires_at: nil, updated_at: Time.current)
       end
 
+      # Records this queue may hand out next. Defaults to everything claimable;
+      # override to narrow when one model backs more than one queue.
+      def next_eligible_scope(user)
+        available_for(user)
+      end
+
       def next_eligible(user, skip_ids: [])
-        scope = available_for(user)
+        scope = next_eligible_scope(user)
         scope = scope.where.not(id: skip_ids) if skip_ids.any?
         scope.order(
           Arel.sql(sanitize_sql_array([ "CASE WHEN reviewer_id = ? THEN 0 ELSE 1 END", user.id ])),

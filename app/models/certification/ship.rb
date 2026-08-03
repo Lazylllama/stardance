@@ -161,8 +161,24 @@ module Certification
         : joins(:project).where(projects: { project_type: type })
     }
 
+    # A hardware ship is certified in the hardware build queue
+    # (Admin::Certification::HardwareReviewsController), which selects the same
+    # rows with `hardware_stage IS NOT NULL`. This is the other half of that
+    # split: without it one review sits in both queues and a shipwright gets
+    # handed a build cert they aren't reviewing for.
+    #
+    # Deliberately not folded into `for_reviewer`/`available_for` — the hardware
+    # queue builds on those, so narrowing them there would empty it.
+    scope :software_only, -> { joins(:project).where(projects: { hardware_stage: nil }) }
+
     def self.available_for(user)
       super.merge(for_reviewer(user))
+    end
+
+    # Claim-next for the software queue. The hardware queue has its own
+    # candidate lookup, so this narrowing stays on Ship rather than the concern.
+    def self.next_eligible_scope(user)
+      super.software_only
     end
 
     # Health target for the pending queue. Above this we read as "behind".
@@ -173,24 +189,27 @@ module Certification
 
     # Snapshot of queue health for the reviewer dashboard. Counts are global
     # (every reviewer shares one queue), so this is intentionally not scoped
-    # to the current user the way the listing is.
+    # to the current user the way the listing is. Software only, so the header
+    # numbers agree with the rows the shipwright is actually shown.
     def self.dashboard_stats(now: Time.current)
       today = now.beginning_of_day
       week = now.beginning_of_week
-      approved_count = where(status: :approved).count
-      returned_count = where(status: :returned).count
+      base = software_only
+      approved_count = base.where(status: :approved).count
+      returned_count = base.where(status: :returned).count
       decided_count = approved_count + returned_count
 
-      decided = where.not(status: :pending)
+      decided = base.where.not(status: :pending)
 
-      pending_ages = where(status: :pending).pluck(:created_at)
+      pending_ages = base.where(status: :pending).pluck(:created_at)
       median_pending_wait = if pending_ages.any?
         sorted = pending_ages.map { |t| now - t }.sort
         (median_value(sorted) / 3600.0).round(1)
       end
 
+      # Table-qualified: `base` joins projects, which has its own created_at.
       avg_decision_secs = decided.where.not(decided_at: nil)
-        .average(Arel.sql("EXTRACT(EPOCH FROM (decided_at - created_at))"))
+        .average(Arel.sql("EXTRACT(EPOCH FROM (certification_ship_reviews.decided_at - certification_ship_reviews.created_at))"))
       avg_decision_hours = avg_decision_secs ? (avg_decision_secs / 3600.0).round(1) : nil
 
       {
@@ -200,13 +219,14 @@ module Certification
         decided: decided_count,
         approval_rate: decided_count.zero? ? nil : (approved_count * 100.0 / decided_count).round(1),
         decisions_today: decided.where(decided_at: today..).count,
-        new_today: where(created_at: today..).count,
+        new_today: base.where(created_at: today..).count,
         decisions_this_week: decided.where(decided_at: week..).count,
-        new_this_week: where(created_at: week..).count,
-        oldest_pending: where(status: :pending).order(created_at: :asc).first,
+        new_this_week: base.where(created_at: week..).count,
+        oldest_pending: base.where(status: :pending).order(created_at: :asc).first,
         queue_target: QUEUE_TARGET,
         sla_days: SLA_DAYS,
-        overdue_pending: where(status: :pending).where("created_at < ?", now - SLA_DAYS.days).count,
+        overdue_pending: base.where(status: :pending)
+                             .where("certification_ship_reviews.created_at < ?", now - SLA_DAYS.days).count,
         median_pending_wait_hours: median_pending_wait,
         avg_decision_hours: avg_decision_hours
       }
