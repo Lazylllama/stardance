@@ -229,16 +229,25 @@ module Certification
     # payout: it scales with each reviewer's lifetime total via the
     # DEVLOG_STARDUST_TIERS rate tiers, plus the per-devlog bonus for any devlogs
     # reviewed within a BONUS_WINDOWS window.
-    #   => [{ reviewer_id:, name:, devlogs:, stardust: }, ...] desc by devlogs
+    # `reviews` counts the distinct YSWS reviews completed in the same window —
+    # one per ship review, however many devlogs it covered.
+    #   => [{ reviewer_id:, name:, devlogs:, reviews:, stardust: }, ...] desc by devlogs
     def self.reviewer_devlog_leaderboard(now: Time.current)
+      window_start = now - LEADERBOARD_WINDOW
+
       windowed_counts = Certification::Devlog
         .joins(:ysws_review)
-        .where(certification_ysws_reviews: { reviewed_at: (now - LEADERBOARD_WINDOW).. })
+        .where(certification_ysws_reviews: { reviewed_at: window_start.. })
         .where.not(certification_ysws_reviews: { reviewer_id: nil })
         .group("certification_ysws_reviews.reviewer_id")
         .count
 
       return [] if windowed_counts.empty?
+
+      windowed_review_counts = where(reviewed_at: window_start..)
+        .where(reviewer_id: windowed_counts.keys)
+        .group(:reviewer_id)
+        .count
 
       bonus_case = bonus_stardust_case_sql
 
@@ -260,6 +269,7 @@ module Certification
             reviewer_id: reviewer_id,
             name: name,
             devlogs: windowed_counts[reviewer_id],
+            reviews: windowed_review_counts.fetch(reviewer_id, 0),
             stardust: stardust
           }
         end
