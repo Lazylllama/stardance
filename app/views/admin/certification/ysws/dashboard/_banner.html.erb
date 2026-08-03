@@ -18,6 +18,10 @@
                 Locked In?
               </th>
             <% end %>
+            <th class="ysws-dashboard__col-num"
+                title="Distinct reviews completed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>">
+              Reviews (<%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>)
+            </th>
             <th class="ysws-dashboard__col-num" title="Projected payout across all devlogs reviewed, all time">
               Stardust ✦
             </th>
@@ -40,6 +44,7 @@
                                             precision: 1, strip_insignificant_zeros: true %>
                 </td>
               <% end %>
+              <td class="ysws-dashboard__col-num"><%= row[:reviews] %></td>
               <td class="ysws-dashboard__col-num"><%= row[:stardust] %></td>
             <% end %>
           <% end %>
