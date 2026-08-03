@@ -153,6 +153,11 @@ module Certification
     # every single day. Drives the pace widget on the review queue.
     DEVLOG_REVIEW_GOAL_PER_DAY = 45
 
+    # Rolling window the reviewer leaderboard ranks on. Deliberately independent
+    # of the review week: it's always this full span, so a reviewer's standing
+    # doesn't reset to zero every Wednesday 4pm.
+    LEADERBOARD_WINDOW = 3.days
+
     # Program-facing time zone. The app's default zone is UTC, but reviewers,
     # review weeks and bonus windows all run on Eastern wall-clock time.
     PROGRAM_ZONE = Time.find_zone!("America/New_York")
@@ -215,36 +220,50 @@ module Certification
       end.round(2)
     end
 
-    # All-time devlog-review leaderboard. A devlog counts as reviewed once its
-    # parent YSWS review is completed (reviewed_at present); completion already
-    # forces every child devlog out of :pending. Projected stardust scales with
-    # each reviewer's total via the DEVLOG_STARDUST_TIERS rate tiers, plus the
-    # per-devlog bonus for any devlogs reviewed within a BONUS_WINDOWS window.
+    # Devlog-review leaderboard for the trailing LEADERBOARD_WINDOW. A devlog
+    # counts as reviewed once its parent YSWS review is completed (reviewed_at
+    # present); completion already forces every child devlog out of :pending.
+    #
+    # `devlogs` — and the ranking — cover only the window, and reviewers with
+    # nothing in it are left off entirely. `stardust` stays all-time projected
+    # payout: it scales with each reviewer's lifetime total via the
+    # DEVLOG_STARDUST_TIERS rate tiers, plus the per-devlog bonus for any devlogs
+    # reviewed within a BONUS_WINDOWS window.
     #   => [{ reviewer_id:, name:, devlogs:, stardust: }, ...] desc by devlogs
-    def self.reviewer_devlog_leaderboard
+    def self.reviewer_devlog_leaderboard(now: Time.current)
+      windowed_counts = Certification::Devlog
+        .joins(:ysws_review)
+        .where(certification_ysws_reviews: { reviewed_at: (now - LEADERBOARD_WINDOW).. })
+        .where.not(certification_ysws_reviews: { reviewer_id: nil })
+        .group("certification_ysws_reviews.reviewer_id")
+        .count
+
+      return [] if windowed_counts.empty?
+
       bonus_case = bonus_stardust_case_sql
 
-      # Count devlogs per reviewer, split by their per-devlog bonus amount, so
-      # tier rates apply to the total while each bonus applies only to the
-      # devlogs reviewed in its window.
+      # All-time counts for the ranked reviewers, split by their per-devlog bonus
+      # amount, so tier rates apply to the lifetime total while each bonus applies
+      # only to the devlogs reviewed in its window.
       Certification::Devlog
         .joins(ysws_review: :reviewer)
         .where.not(certification_ysws_reviews: { reviewed_at: nil })
+        .where(certification_ysws_reviews: { reviewer_id: windowed_counts.keys })
         .group("users.id", "users.display_name", Arel.sql(bonus_case))
         .count
         .group_by { |(reviewer_id, name, _bonus), _count| [ reviewer_id, name ] }
         .map do |(reviewer_id, name), entries|
-          devlogs        = entries.sum { |_key, count| count }
-          bonus_stardust = entries.sum { |(_id, _name, bonus), count| bonus.to_f * count }
-          stardust       = (stardust_for_devlog_count(devlogs) + bonus_stardust).round(2)
+          all_time_devlogs = entries.sum { |_key, count| count }
+          bonus_stardust   = entries.sum { |(_id, _name, bonus), count| bonus.to_f * count }
+          stardust         = (stardust_for_devlog_count(all_time_devlogs) + bonus_stardust).round(2)
           {
             reviewer_id: reviewer_id,
             name: name,
-            devlogs: devlogs,
+            devlogs: windowed_counts[reviewer_id],
             stardust: stardust
           }
         end
-        .sort_by { |row| [ -row[:devlogs], row[:name] ] }
+        .sort_by { |row| [ -row[:devlogs], row[:name].to_s ] }
     end
 
     # All-time count of devlogs a given reviewer has reviewed. A devlog counts

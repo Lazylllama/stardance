@@ -8,14 +8,19 @@
           <tr>
             <th class="ysws-dashboard__col-rank">#</th>
             <th>Reviewer</th>
-            <th class="ysws-dashboard__col-num">Devlogs reviewed</th>
+            <th class="ysws-dashboard__col-num"
+                title="Devlogs reviewed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %> — reviewers with none in that window aren't ranked">
+              Devlogs reviewed (<%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>)
+            </th>
             <% if daily_averages %>
               <th class="ysws-dashboard__col-num"
                   title="Devlogs reviewed per day so far this review week (goal: <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day)">
                 Locked In?
               </th>
             <% end %>
-            <th class="ysws-dashboard__col-num">Stardust ✦</th>
+            <th class="ysws-dashboard__col-num" title="Projected payout across all devlogs reviewed, all time">
+              Stardust ✦
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -41,7 +46,9 @@
         </tbody>
       </table>
     <% else %>
-      <p class="ysws-dashboard__empty">No reviewed devlogs yet.</p>
+      <p class="ysws-dashboard__empty">
+        No devlogs reviewed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>.
+      </p>
     <% end %>
   </div>
 
