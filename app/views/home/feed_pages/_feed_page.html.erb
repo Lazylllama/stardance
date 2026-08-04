@@ -1,9 +1,10 @@
 <% @feed_posts.each_with_index do |post, index| %>
   <% source = @feed_post_sources&.fetch(post, "quality_latest") || "quality_latest" %>
   <% if post.postable_type == "Post::ShipEvent" %>
+    <% next unless (project = post.project) %>
     <%= render "projects/ship_card",
           post: post,
-          project: post.project,
+          project: project,
           source: source,
           position: index + 1,
           page: @pagy.page,
