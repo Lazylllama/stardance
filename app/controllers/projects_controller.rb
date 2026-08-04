@@ -9,7 +9,6 @@ class ProjectsController < ApplicationController
   before_action :set_project_minimal, only: [ :edit, :update, :destroy ]
   before_action :set_project, only: [ :show, :readme, :add_test_time ]
   before_action :redirect_guest_owner_to_link!, only: [ :show, :readme, :edit, :update ]
-  before_action :redirect_hardware_creation_to_outpost, only: [ :create ]
 
   def show
     authorize @project
@@ -54,7 +53,7 @@ class ProjectsController < ApplicationController
       @hackatime_linked = current_user.hackatime_identity.present?
 
       if @hackatime_linked
-        @linked_hackatime_projects = @project.hackatime_projects
+        @linked_hackatime_projects = @project.hackatime_projects.where(user: current_user)
         @all_hackatime_projects = current_user.hackatime_projects
         result = current_user.try_sync_hackatime_data!
         @hackatime_times = result&.dig(:projects) || {}
@@ -120,8 +119,12 @@ class ProjectsController < ApplicationController
 
     # Shipwright verdicts are rendered straight from the review records —
     # they're private to project members, so they never become Post rows.
-    @timeline_entries = (@posts + visible_ship_decisions).sort_by do |entry|
-      entry.is_a?(Certification::Ship) ? entry.decided_on : entry.created_at
+    @timeline_entries = (@posts + visible_ship_decisions + visible_funding_requests).sort_by do |entry|
+      case entry
+      when Certification::Ship then entry.decided_on
+      when Certification::FundingRequest then entry.decided_at || entry.created_at
+      else entry.created_at
+      end
     end.reverse
 
     @show_project_onboarding = @is_member && @timeline_entries.empty?
@@ -193,6 +196,8 @@ class ProjectsController < ApplicationController
           ratings_given: ratings_given,
           ratings_total: ratings_total,
           static_prize: is_static,
+          # Suppresses the payout checklist entirely; see PayoutVotesWidget.
+          hardware: @project.hardware?,
           paid_out: latest_ship_event.payout.present?,
           estimated_payout: latest_ship_event.estimated_payout,
           review_open: latest_ship_event.payout_review_open?,
@@ -220,6 +225,19 @@ class ProjectsController < ApplicationController
   end
   private :visible_ship_decisions
 
+  # Funding requests, shown only to project members (and admins): the amount
+  # asked for and the reviewer's feedback are the team's business, not public.
+  # Only the most recent request appears on the timeline - a resubmission
+  # supersedes the returned one it replaces.
+  def visible_funding_requests
+    return [] unless current_user
+    return [] unless @is_member || current_user.admin?
+    return [] unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.certification_funding_requests.includes(:reviewer).order(created_at: :desc).limit(1).to_a
+  end
+  private :visible_funding_requests
+
   def add_test_time
     authorize @project
 
@@ -245,11 +263,8 @@ class ProjectsController < ApplicationController
   end
 
   def new
-    # First-timers get bounced to the setup wizard — except when a blocked
-    # hardware create sent them here to see the Outpost popup (?hardware=outpost),
-    # which lives on this page. Bouncing then would drop the param (no popup) and
-    # could ping-pong with the wizard's own hardware redirect.
-    if current_user&.projects&.none? && params[:hardware] != "outpost"
+    # First-timers get bounced to the setup wizard.
+    if current_user&.projects&.none?
       # /projects/new just bounces to setup for first-timers — pop it from the
       # back-stack so the idea step's back button skips over it.
       if session[:previous_pages].is_a?(Array)
@@ -311,7 +326,9 @@ class ProjectsController < ApplicationController
         @project.update!(hardware_stage: "design") if mission.hardware? && !@project.hardware?
         @project.missions << mission
         attrs = {}
-        if @project.title.blank? || @project.title == "Untitled"
+        # Only fill in a mission's default name when the builder didn't give one
+        # (older clients, or a create that skipped the name prompt).
+        if @project.placeholder_title?
           attrs[:title] = mission.default_project_title.presence || mission.name
         end
         if @project.description.blank? && mission.default_project_description.present?
@@ -487,28 +504,16 @@ class ProjectsController < ApplicationController
     redirect_to projects_setup_link_account_path, alert: "Finish setting up your account to keep working on your project."
   end
 
-  # Hardware projects live on Outpost now, not Stardance. Intercept any attempt
-  # to create one here — the /projects/new hardware form posts a hardware_stage,
-  # and a hardware mission_slug would also make the project hardware — and bounce
-  # back to the new-project page with the Outpost popup open.
-  def redirect_hardware_creation_to_outpost
-    return unless Flipper.enabled?(:hardware_to_outpost, current_user)
-    # Guests can't create a project anyway (ProjectPolicy#new?/#create? require an
-    # HCA-linked user), so don't bounce them to /projects/new — that would just
-    # 403 before the popup shows. Let the normal auth flow handle them.
-    return unless current_user&.hca_linked?
-
-    creating_hardware = params.dig(:project, :hardware_stage).present? ||
-      (params[:mission_slug].present? && Mission.find_by(slug: params[:mission_slug])&.hardware?)
-    redirect_to new_project_path(hardware: "outpost") if creating_hardware
-  end
-
+  # `project` is fetched rather than required so a create that arrives without it
+  # (a client where the name prompt never opened) re-renders :new with a title
+  # validation error instead of a bare 400.
   def project_params
-    params.require(:project).permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
+    params.fetch(:project, ActionController::Parameters.new)
+          .permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
   end
 
   def hackatime_project_ids
-    @hackatime_project_ids ||= Array(params[:project][:hackatime_project_ids]).reject(&:blank?).map(&:to_i)
+    @hackatime_project_ids ||= Array(params.dig(:project, :hackatime_project_ids)).reject(&:blank?).map(&:to_i)
   end
 
   def validate_urls
@@ -592,7 +597,9 @@ class ProjectsController < ApplicationController
     # so we don't confirm whether an internal host exists.
     Rails.logger.warn("URL validation rejected #{attribute}: #{e.message}")
     @project.errors.add(attribute, "nice try ding dong — #{name} has to be a real, public URL")
-  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
+  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ECONNRESET,
+         Errno::ETIMEDOUT, Errno::ENETUNREACH, Errno::EPIPE,
+         Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
     Rails.logger.warn("URL validation failed for #{attribute}: #{e.class}: #{e.message}")
     @project.errors.add(attribute, "#{name} could not be reached. Please make sure the URL is valid and publicly accessible.")
   rescue StandardError => e
@@ -600,8 +607,10 @@ class ProjectsController < ApplicationController
     @project.errors.add(attribute, "#{name} could not be verified. Please try again or contact support if the issue persists.")
   end
   def link_hackatime_projects
-    # Unlink hackatime projects that were removed
-    @project.hackatime_projects.where.not(id: hackatime_project_ids).find_each do |hp|
+    # Unlink hackatime projects that were removed. Scoped to the current user:
+    # every member of a hardware project has their own row under the same name,
+    # and the form only ever submits this user's ids.
+    @project.hackatime_projects.where(user: current_user).where.not(id: hackatime_project_ids).find_each do |hp|
       unless hp.update(project: nil)
         hp.errors.full_messages.each do |message|
           @project.errors.add(:base, "Hackatime project #{hp.name}: #{message}")

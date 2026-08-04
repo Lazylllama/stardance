@@ -93,12 +93,6 @@ production:
     concurrency: 1
     description: "Notify project owners nearing the per-devlog payout cap on un-devlogged time"
 
-  sync_pending_lookout_sessions:
-    class: SyncPendingLookoutSessionsJob
-    schedule: every 5 minutes
-    concurrency: 1
-    description: "Re-poll recent non-terminal Lookout sessions so recordings finalize even if the recorder tab was closed"
-
   activity_daily_summary:
     class: ActivityDailySummaryJob
     schedule: every day at 10am America/New_York

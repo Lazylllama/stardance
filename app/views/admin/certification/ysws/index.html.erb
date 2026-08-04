@@ -7,7 +7,8 @@
     active   = @sort == col
     next_dir = (active && @dir == "desc") ? "asc" : "desc"
     arrow    = active ? (@dir == "asc" ? "▲" : "▼") : "▾"
-    link_to admin_certification_ysws_reviews_path(project_type: @project_type, sort: col, dir: next_dir),
+    link_to admin_certification_ysws_reviews_path(project_type: @project_type, sort: col, dir: next_dir,
+                                                  with_integrity: @with_integrity ? nil : "0"),
             class: "ysws-queue__sort#{' ysws-queue__sort--active' if active}" do
       safe_join([ label, content_tag(:span, arrow, class: "ysws-queue__sort-arrow", "aria-hidden": true) ], " ")
     end
@@ -40,16 +41,37 @@
             class: "ysws-queue__select", onchange: "this.form.requestSubmit()" %>
     </div>
 
-    <div class="ysws-queue__goal" role="status" aria-live="polite">
-      <% if @devlog_remaining.positive? %>
-        <span class="ysws-queue__goal-count"><%= @devlog_remaining %></span>
-        <span class="ysws-queue__goal-label">devlogs left until goal reached</span>
-      <% else %>
-        <span class="ysws-queue__goal-label">Goal of <%= @devlog_goal %> devlogs reached</span>
-      <% end %>
+    <div class="ysws-queue__filter ysws-queue__filter--toggle">
+      <%= hidden_field_tag :with_integrity, "0", id: nil %>
+      <%= check_box_tag :with_integrity, "1", @with_integrity, id: "filter-with-integrity",
+            class: "ysws-queue__checkbox", onchange: "this.form.requestSubmit()" %>
+      <label for="filter-with-integrity">Only with certification integrity</label>
     </div>
 
-    <% if @project_type.present? || @sort.present? %>
+    <% if @devlog_pace %>
+      <% on_pace = @devlog_pace[:needed_today].zero? %>
+      <%= tag.div class: [ "ysws-queue__goal", ("ysws-queue__goal--on-pace" if on_pace) ],
+                  role: "status", aria: { live: "polite" } do %>
+        <div class="ysws-queue__goal-primary">
+          <span class="ysws-queue__goal-count">
+            <%= number_with_precision @devlog_pace[:daily_average], precision: 1, strip_insignificant_zeros: true %>
+          </span>
+          <span class="ysws-queue__goal-label">devlogs / day this week</span>
+        </div>
+
+        <% if on_pace %>
+          <span class="ysws-queue__goal-note">
+            On pace — <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day average met
+          </span>
+        <% else %>
+          <span class="ysws-queue__goal-note">
+            <%= @devlog_pace[:needed_today] %> more needed today to reach your goal!
+          </span>
+        <% end %>
+      <% end %>
+    <% end %>
+
+    <% if @project_type.present? || @sort.present? || !@with_integrity %>
       <%= link_to "Reset filters",
                   admin_certification_ysws_reviews_path(reset_filters: 1),
                   class: "btn-secondary slim ysws-queue__reset-filters" %>
@@ -67,6 +89,7 @@
         <thead>
           <tr>
             <th>Review ID</th>
+            <th>Certification Integrity</th>
             <th>Project Type</th>
             <th>Project Name</th>
             <th>User</th>
@@ -80,6 +103,14 @@
           <% @reviews.each do |review| %>
             <tr class="<%= "ysws-queue__row--claimed" if review.claimed_by?(current_user) %>">
               <td data-label="ID">#<%= review.id %></td>
+              <td data-label="Integrity">
+                <% if review.integrity_check %>
+                  <%= link_to review.integrity_check.status.humanize,
+                              admin_certification_integrity_review_path(review.integrity_check) %>
+                <% else %>
+                  <span class="ysws-queue__placeholder">—</span>
+                <% end %>
+              </td>
               <td data-label="Type">
                 <%= review.project&.project_type.presence || tag.span("—", class: "ysws-queue__placeholder") %>
               </td>

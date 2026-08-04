@@ -31,18 +31,19 @@ class ReviewerPayoutRequest < ApplicationRecord
   include AASM
 
   MINIMUM_AMOUNT = 10
+  MAX_AMOUNT = 2_147_483_647 # postgres integer column ceiling — hard stop, not a business cap
+  HISTORY_LIMIT = 100
 
   has_paper_trail
 
   belongs_to :user
   belongs_to :admin, class_name: "User", optional: true
 
-  validates :amount, numericality: { greater_than_or_equal_to: MINIMUM_AMOUNT, only_integer: true }
-  validates :adjusted_amount, numericality: { greater_than: 0, only_integer: true }, allow_nil: true
-  validates :paid_amount, numericality: { greater_than: 0, only_integer: true }, allow_nil: true
+  validates :amount, numericality: { greater_than_or_equal_to: MINIMUM_AMOUNT, less_than_or_equal_to: MAX_AMOUNT, only_integer: true }
+  validates :adjusted_amount, numericality: { greater_than: 0, less_than_or_equal_to: MAX_AMOUNT, only_integer: true }, allow_nil: true
+  validates :paid_amount, numericality: { greater_than: 0, less_than_or_equal_to: MAX_AMOUNT, only_integer: true }, allow_nil: true
   validates :adjust_reason, presence: { message: "is required when adjusting the amount" },
     if: :adjusted?
-  validate :adjusted_amount_cannot_exceed_amount
   validate :sufficient_balance, on: :create
   validate :no_pending_request, on: :create
 
@@ -135,22 +136,32 @@ class ReviewerPayoutRequest < ApplicationRecord
     find_by(user: user, aasm_state: "pending")
   end
 
+  def self.available_to_request_for(user)
+    return 0 unless user
+    [ unclaimed_for(user) - (pending_for(user)&.amount || 0), 0 ].max
+  end
+
+  def self.history_for(user)
+    return none unless user
+    where(user: user).includes(:admin).order(created_at: :desc).limit(HISTORY_LIMIT)
+  end
+
+  def decided_at
+    return nil if pending?
+    paid_at || updated_at
+  end
+
   def self.settled_for(user)
     return 0 unless user
 
-    # Paid requests settle the requested claim, even when an admin approves less.
-    # The adjustment is a final correction, not a partial payout that remains claimable.
-    where(user: user, aasm_state: "paid").sum(:amount)
+    # A reduction still settles the full requested claim (the denied difference
+    # isn't reclaimable); a bonus settles what was actually paid (the surplus
+    # above the request must count too, or it reopens as "unclaimed"). Either
+    # way that's whichever of amount/paid_amount is larger.
+    where(user: user, aasm_state: "paid").sum(Arel.sql("GREATEST(amount, paid_amount)"))
   end
 
   private
-
-  def adjusted_amount_cannot_exceed_amount
-    return if adjusted_amount.blank? || amount.blank?
-    return if adjusted_amount <= amount
-
-    errors.add(:adjusted_amount, "cannot exceed the requested amount")
-  end
 
   def sufficient_balance
     return unless user
@@ -181,7 +192,7 @@ class ReviewerPayoutRequest < ApplicationRecord
     user.ledger_entries.create!(
       amount: paid_amount,
       reason: "Shipwrights payout ##{id}",
-      created_by: "#{admin.display_name} (#{admin.id})",
+      created_by: admin ? "#{admin.display_name} (#{admin.id})" : "Shipwrights Dashboard",
       ledgerable: self
     )
   end

@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
 class Gorse::PostPayload
+  RECOMMENDATION_MAX_AGE = 6.hours
+
   def initialize(post)
     @post = post
+  end
+
+  def self.recommendable_feed_scope(viewer)
+    feed_scope(viewer).where("posts.created_at >= ?", RECOMMENDATION_MAX_AGE.ago)
   end
 
   def self.feed_scope(viewer)

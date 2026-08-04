@@ -65,7 +65,6 @@ class Post::Devlog < ApplicationRecord
   has_many :likes, as: :likeable, dependent: :destroy
   has_many :comments, as: :commentable, dependent: :destroy
 
-  has_many :lookout_sessions, foreign_key: :devlog_id
 
   # only for images – not for videos or gif!
   has_many_attached :attachments do |attachable|

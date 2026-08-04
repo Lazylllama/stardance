@@ -1,6 +1,8 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer certification--ysws--complete-review certification--ysws--return-to-ship-cert" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>" data-certification--ysws--complete-review-review-id-value="<%= @review.id %>" data-certification--ysws--return-to-ship-cert-review-id-value="<%= @review.id %>">
+  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @mac_analysis) %>
+
   <!-- Header Section -->
   <div class="review-detail-header">
     <%= link_to "← back", admin_certification_ysws_reviews_path, class: "btn-secondary slim", "aria-label": "Back to review queue" %>
@@ -177,7 +179,11 @@
     </div>
 
     <!-- Right Column -->
-    <div class="review-detail-right" data-certification--ysws--review-sidebar-target="sidebar">
+    <div class="review-detail-right"
+         data-certification--ysws--review-sidebar-target="sidebar"
+         data-controller="certification--ysws--double-dip"
+         data-certification--ysws--double-dip-url-value="<%= admin_certification_ysws_double_dip_path(@review) %>"
+         data-certification--ysws--double-dip-outline-class="review-detail-right--double-dipped">
       <!-- Details Card -->
       <section class="review-card details-card">
         <div class="details-list">
@@ -270,6 +276,16 @@
             <span class="detail-link-btn disabled" title="No readme URL available">Readme</span>
           <% end %>
         </div>
+
+        <%# Revealed by the double-dip controller once the unified DB responds %>
+        <div class="double-dip-warning" role="alert" hidden
+             data-certification--ysws--double-dip-target="warning">
+          <p class="double-dip-warning__title">This project may have been double dipped</p>
+          <p class="double-dip-warning__detail">
+            This repo is already in the unified DB under
+            <span data-certification--ysws--double-dip-target="programs">another YSWS</span>.
+          </p>
+        </div>
       </section>
 
       <!-- Description Card -->
@@ -305,7 +321,7 @@
               <span class="devlog-review-group__meta">shipped <%= prior_review.created_at.to_date %> · read-only</span>
             </div>
             <% prior_review.devlog_reviews.each do |devlog_review| %>
-              <%= render "devlog_review", devlog_review: devlog_review, frozen: true %>
+              <%= render "devlog_review", devlog_review: devlog_review, frozen: true, mac_recommendation: nil %>
             <% end %>
           </div>
         <% end %>
@@ -317,7 +333,8 @@
             </div>
           <% end %>
           <% @review.devlog_reviews.each_with_index do |devlog_review, index| %>
-            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0 %>
+            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0,
+                  mac_recommendation: @mac_analysis&.recommendation_for(devlog_review.id) %>
           <% end %>
         </div>
       </div>

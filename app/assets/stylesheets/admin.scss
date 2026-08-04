@@ -1,4 +1,5 @@
 /* Import page-specific styles */
+@use "pages/admin/dashboard";
 @use "pages/admin/missions_edit";
 @use "pages/admin/ysws_reviews";
 @use "pages/admin/integrity_reviews";
@@ -69,7 +70,9 @@ body.admin-page {
     font-size: var(--font-size-l);
   }
 
-  a:not(.action-btn):not([class*="btn-"]):not(.ysws-queue__view-btn) {
+  a:not(.action-btn):not([class*="btn-"]):not(.ysws-queue__view-btn):not(
+      .ysws-dashboard__reviewer-link--on-pace
+    ) {
     color: var(--color-brand-highlight);
     text-decoration: none;
 
@@ -319,7 +322,8 @@ body.admin-page {
     content: unset;
   }
 
-  &:disabled {
+  &:disabled,
+  &.disabled {
     background: var(--color-space-surface-faint);
     color: var(--color-space-text-muted);
     cursor: not-allowed;

@@ -1,0 +1,87 @@
+<%# A funding request on the project timeline. Deliberately short: the whole
+    point is the amount and, once decided, the verdict.
+
+    Reviewer feedback is shown to the project owner only. The card itself is
+    already members-and-admins (see ProjectsController#visible_funding_requests),
+    but feedback names a reviewer and explains a rejection, so it stays with the
+    person who has to act on it.
+
+    Locals: funding_request, project, owner (required); resubmit_modal_id
+    (optional - when present a returned request offers a resubmit button). %>
+<%
+  decided_on = funding_request.decided_at || funding_request.created_at
+  reviewer = funding_request.reviewer
+  viewer_is_owner = owner.present? && owner == current_user
+  show_feedback = funding_request.feedback.present? && !funding_request.pending? && (viewer_is_owner || current_user&.admin?)
+
+  context, message =
+    case funding_request.status.to_sym
+    when :approved
+      [ "approved your funding request",
+        "Approved for $#{funding_request.final_amount_dollars}, and the project has moved to the build stage. Your grant card follows once it has been issued." ]
+    when :returned
+      [ "returned your funding request",
+        "This needs changes before it can be funded. Take a look at the feedback, then submit your design again." ]
+    else
+      [ "requested funding",
+        "Waiting on a reviewer. We'll let you know as soon as there's a decision." ]
+    end
+%>
+
+<article id="<%= dom_id(funding_request) %>"
+         class="<%= class_names("feed-post-card", "funding-request-card",
+                                "funding-request-card--#{funding_request.status}") %>">
+  <header class="feed-post-card__header">
+    <% if reviewer && !funding_request.pending? %>
+      <%= link_to profile_path(reviewer.display_name), class: "feed-post-card__avatar-link",
+            aria: { label: "@#{reviewer.display_name}" } do %>
+        <%= image_tag reviewer.avatar, alt: "", class: "feed-post-card__avatar" %>
+      <% end %>
+    <% else %>
+      <span class="feed-post-card__avatar feed-post-card__avatar--placeholder" aria-hidden="true">$</span>
+    <% end %>
+
+    <div class="feed-post-card__meta">
+      <p class="feed-post-card__byline">
+        <% if reviewer && !funding_request.pending? %>
+          <%= render "shared/username_link", user: reviewer, link_class: "feed-post-card__author",
+                data: { turbo_frame: "_top" }, badge: false %>
+        <% else %>
+          <span class="feed-post-card__author"><%= owner&.display_name || "Someone" %></span>
+        <% end %>
+        <span class="feed-post-card__context"><%= context %></span>
+        <time class="feed-post-card__time" datetime="<%= decided_on.iso8601 %>"
+              title="<%= l(decided_on, format: :long) %>">
+          · <%= time_ago_in_words(decided_on) %> ago
+        </time>
+      </p>
+    </div>
+
+    <span class="funding-request-card__amount">
+      $<%= funding_request.requested_amount_dollars %>
+      <span class="funding-request-card__tier"><%= funding_request.tier_label %></span>
+    </span>
+  </header>
+
+  <div class="feed-post-card__body funding-request-card__message">
+    <p><%= message %></p>
+  </div>
+
+  <% if show_feedback %>
+    <section class="feed-post-card__body funding-request-card__feedback" aria-label="Reviewer feedback">
+      <p class="funding-request-card__feedback-label">Feedback</p>
+      <div class="funding-request-card__feedback-body">
+        <%= simple_format(funding_request.feedback, {}, sanitize: true) %>
+      </div>
+    </section>
+  <% end %>
+
+  <% if funding_request.returned? && viewer_is_owner && resubmit_modal_id.present? %>
+    <div class="funding-request-card__actions">
+      <button type="button" class="action-btn action-btn--small action-btn--primary"
+              onclick="document.getElementById(<%= resubmit_modal_id.to_json %>).showModal()">
+        Submit design again
+      </button>
+    </div>
+  <% end %>
+</article>

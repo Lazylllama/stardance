@@ -121,6 +121,7 @@ class User < ApplicationRecord
   has_many :reviewed_mission_submissions, class_name: "Mission::Submission",
            foreign_key: :reviewed_by_id, dependent: :nullify
   has_many :shop_suggestions, dependent: :destroy
+  has_many :shop_suggestion_votes, dependent: :destroy
   has_many :shop_wishlists, dependent: :destroy
   has_many :wishlisted_shop_items, through: :shop_wishlists, source: :shop_item
   has_many :sold_items, class_name: "ShopItem::HackClubberItem", foreign_key: :user_id
@@ -333,23 +334,6 @@ class User < ApplicationRecord
                                                   .where(posts: { user_id: id })
                                                   .distinct
                                                   .pluck(:mission_id)
-  end
-
-  # Fires the Outpost email at most once per user, and adds them to the #outpost
-  # Slack channel. Locks the row so concurrent /outpost hits can't enqueue the
-  # work twice.
-  def deliver_outpost_email!
-    return if email.blank?
-
-    with_lock("FOR UPDATE OF users") do
-      return if outpost_email_sent_at.present?
-
-      update_column(:outpost_email_sent_at, Time.current)
-    end
-
-    UserMailer.outpost(self).deliver_later
-    # Slack invite temporarily disabled — re-enable to auto-add users to the #outpost channel.
-    # AddUserToOutpostChannelJob.perform_later(id)
   end
 
   private

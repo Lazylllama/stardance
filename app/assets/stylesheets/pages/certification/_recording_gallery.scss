@@ -27,7 +27,10 @@
 
   &__media {
     position: relative;
-    aspect-ratio: 9 / 16;
+    // Recordings come in both orientations (landscape Lookout screen captures,
+    // portrait or landscape Lapse timelapses), so the frame is a neutral 16:9
+    // and the clip is letterboxed inside it rather than cropped to portrait.
+    aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 12px;
     background: var(--color-space-card, rgba(255, 255, 255, 0.04));
@@ -52,7 +55,10 @@
   &__video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    // contain, not cover: show the whole frame at its true aspect ratio (a
+    // landscape clip was being cropped into the portrait box). The black
+    // background fills the letterbox bars cleanly.
+    object-fit: contain;
     background: #000;
   }
 

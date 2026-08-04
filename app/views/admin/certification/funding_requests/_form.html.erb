@@ -49,8 +49,7 @@
           value: (funding_request.approved_amount_dollars || funding_request.requested_amount_dollars),
           min: 0, max: funding_request.tier_max_dollars, step: 1 %>
     <p class="review-form__hint">
-      Requested $<%= funding_request.requested_amount_dollars %>. Approving earns the owner the <%= funding_request.tier_label %> discount:
-      <%= funding_request.tier_discount_percent %>% (✦<%= funding_request.tier_discount_stardust %>) off the Outpost Ticket.
+      Requested $<%= funding_request.requested_amount_dollars %>. Approving issues an HCB card grant for the approved amount.
     </p>
   </div>
 
@@ -63,10 +62,6 @@
     <%= f.submit "Submit verdict", class: "action-btn action-btn--large action-btn--primary" %>
     <%= link_to "Skip and get next", next_admin_certification_hardware_reviews_path(skip: "funding:#{funding_request.id}"),
           class: "action-btn action-btn--small action-btn--secondary" %>
-    <button type="submit" form="unclaim-form-<%= funding_request.id %>"
-            class="action-btn action-btn--small action-btn--destructive">
-      Unclaim review
-    </button>
-    <%= link_to "Back to queue", admin_certification_hardware_reviews_path, class: "review-form__back" %>
+    <%= link_to "Back to queue", design_admin_certification_hardware_reviews_path, class: "review-form__back" %>
   </div>
 <% end %>

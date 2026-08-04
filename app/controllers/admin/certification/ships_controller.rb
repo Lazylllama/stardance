@@ -136,7 +136,9 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
       count = ::Certification::Ship.reviewed_today(current_user)
       notice = "#{verb} \"#{@ship.project.title}.\" That's #{count} reviewed today. Keep going!"
       if params[:redirect_to_hardware].present?
-        redirect_to admin_certification_hardware_review_path(@ship.project_id), notice: notice
+        # Straight on to the next build review; `next` claims it, and falls back
+        # to the queue when there's nothing left.
+        redirect_to next_admin_certification_hardware_reviews_path(stage: "build"), notice: notice
       else
         redirect_to admin_certification_ships_path, notice: notice
       end

@@ -1,0 +1,40 @@
+<%# The facts a reviewer needs to make THIS decision, as a single scannable band
+    so the verdict form sits beside them rather than below a wall of detail.
+    Design reviews turn on the ask; build reviews turn on the effort.
+    Locals: project, owner, review (required); review_type (:funding/:ship). %>
+<dl class="hardware-review__facts">
+  <div class="hardware-review__fact">
+    <dt>Submitter</dt>
+    <dd><%= owner&.display_name || "—" %></dd>
+  </div>
+
+  <div class="hardware-review__fact">
+    <dt>Waiting</dt>
+    <% wait_days = ((Time.current - review.created_at) / 1.day).floor %>
+    <dd class="<%= "is-negative" if wait_days >= review.class::SLA_DAYS %>"><%= wait_days %>d</dd>
+  </div>
+
+  <% if review_type == :funding %>
+    <div class="hardware-review__fact hardware-review__fact--primary">
+      <dt>Requested</dt>
+      <dd>$<%= review.requested_amount_dollars %></dd>
+    </div>
+    <div class="hardware-review__fact">
+      <dt><%= review.tier_label %> max</dt>
+      <dd>$<%= review.tier_max_dollars %></dd>
+    </div>
+    <div class="hardware-review__fact hardware-review__fact--wide">
+      <dt>Tier examples</dt>
+      <dd><%= review.tier_examples %></dd>
+    </div>
+  <% else %>
+    <div class="hardware-review__fact hardware-review__fact--primary">
+      <dt>Hours logged</dt>
+      <dd><%= project.total_ship_hours.round(1) %>h</dd>
+    </div>
+    <div class="hardware-review__fact">
+      <dt>Build devlogs</dt>
+      <dd><%= project.devlogs.build_phase.where(deleted_at: nil).count %></dd>
+    </div>
+  <% end %>
+</dl>

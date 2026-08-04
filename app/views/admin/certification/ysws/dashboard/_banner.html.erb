@@ -8,23 +8,52 @@
           <tr>
             <th class="ysws-dashboard__col-rank">#</th>
             <th>Reviewer</th>
-            <th class="ysws-dashboard__col-num">Devlogs reviewed</th>
-            <th class="ysws-dashboard__col-num">Stardust ✦</th>
+            <th class="ysws-dashboard__col-num"
+                title="Devlogs reviewed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %> — reviewers with none in that window aren't ranked">
+              Devlogs reviewed (<%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>)
+            </th>
+            <% if daily_averages %>
+              <th class="ysws-dashboard__col-num"
+                  title="Devlogs reviewed per day so far this review week (goal: <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day)">
+                Locked In?
+              </th>
+            <% end %>
+            <th class="ysws-dashboard__col-num"
+                title="Distinct reviews completed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>">
+              Reviews (<%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>)
+            </th>
+            <th class="ysws-dashboard__col-num" title="Projected payout across all devlogs reviewed, all time">
+              Stardust ✦
+            </th>
           </tr>
         </thead>
         <tbody>
           <% leaderboard.each_with_index do |row, index| %>
-            <tr>
+            <% on_pace = on_pace_reviewer_ids.include?(row[:reviewer_id]) %>
+            <%= tag.tr class: ("ysws-dashboard__row--on-pace" if on_pace),
+                       title: ("Meeting the #{::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY}/day average this week" if on_pace) do %>
               <td class="ysws-dashboard__col-rank"><%= index + 1 %></td>
-              <td><%= link_to row[:name].presence || "Unknown", admin_user_path(row[:reviewer_id]) %></td>
+              <td>
+                <%= link_to row[:name].presence || "Unknown", admin_user_path(row[:reviewer_id]),
+                            class: ("ysws-dashboard__reviewer-link--on-pace" if on_pace) %>
+              </td>
               <td class="ysws-dashboard__col-num"><%= row[:devlogs] %></td>
+              <% if daily_averages %>
+                <td class="ysws-dashboard__col-num">
+                  <%= number_with_precision daily_averages[row[:reviewer_id]].to_f,
+                                            precision: 1, strip_insignificant_zeros: true %>
+                </td>
+              <% end %>
+              <td class="ysws-dashboard__col-num"><%= row[:reviews] %></td>
               <td class="ysws-dashboard__col-num"><%= row[:stardust] %></td>
-            </tr>
+            <% end %>
           <% end %>
         </tbody>
       </table>
     <% else %>
-      <p class="ysws-dashboard__empty">No reviewed devlogs yet.</p>
+      <p class="ysws-dashboard__empty">
+        No devlogs reviewed in the last <%= ::Certification::Ysws::LEADERBOARD_WINDOW.inspect %>.
+      </p>
     <% end %>
   </div>
 

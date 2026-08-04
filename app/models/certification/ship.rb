@@ -397,6 +397,24 @@ module Certification
       decided_at || updated_at
     end
 
+    # Read by Notifications::Hardware::BuildReviewed to render the Slack blocks,
+    # so this has to stay public.
+    def notification_locals
+      routes = Rails.application.routes.url_helpers
+      # default_url_options is only configured in production, so a bare
+      # reverse_merge on it raises NoMethodError in development and test.
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        approved: approved?,
+        reviewer_name: reviewer&.display_name,
+        feedback: feedback.to_s
+      }
+    end
+
 
     private
 
@@ -461,11 +479,29 @@ module Certification
       ).call
     end
 
+    # Software keeps the direct DM: its approval copy sends the project off to
+    # voting, which hardware never enters.
     def notify_owner!
+      return notify_owner_of_build! if project&.hardware?
+
+      notify_owner_by_slack!
+    end
+
+    def notify_owner_of_build!
+      Notifications::Hardware::BuildReviewed.notify(
+        recipient: owner,
+        actor: reviewer,
+        record: self
+      )
+    rescue StandardError => e
+      Rails.logger.error("Ship ##{id} notify_owner_of_build! failed: #{e.message}")
+    end
+
+    def notify_owner_by_slack!
       return unless owner&.slack_id.present?
 
       routes = Rails.application.routes.url_helpers
-      url_opts = Rails.application.config.action_controller.default_url_options
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
                       .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
 
       locals = {

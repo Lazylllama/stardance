@@ -82,6 +82,12 @@ application.register(
   Certification__Ysws__DevlogTimeChartController,
 );
 
+import Certification__Ysws__DoubleDipController from "./certification/ysws/double_dip_controller";
+application.register(
+  "certification--ysws--double-dip",
+  Certification__Ysws__DoubleDipController,
+);
+
 import Certification__Ysws__FraudReportController from "./certification/ysws/fraud_report_controller";
 application.register(
   "certification--ysws--fraud-report",
@@ -210,12 +216,6 @@ application.register("image-dropzone", ImageDropzoneController);
 
 import JsonHighlightController from "./json_highlight_controller";
 application.register("json-highlight", JsonHighlightController);
-
-import LookoutCaptureController from "./lookout_capture_controller";
-application.register("lookout-capture", LookoutCaptureController);
-
-import LookoutRecorderController from "./lookout_recorder_controller";
-application.register("lookout-recorder", LookoutRecorderController);
 
 import MarkdownPreviewController from "./markdown_preview_controller";
 application.register("markdown-preview", MarkdownPreviewController);
@@ -363,6 +363,9 @@ application.register("streak", StreakController);
 
 import SubmitOnMetaEnterController from "./submit_on_meta_enter_controller";
 application.register("submit-on-meta-enter", SubmitOnMetaEnterController);
+
+import TextareaHintController from "./textarea_hint_controller";
+application.register("textarea-hint", TextareaHintController);
 
 import Tilt3dController from "./tilt_3d_controller";
 application.register("tilt-3d", Tilt3dController);

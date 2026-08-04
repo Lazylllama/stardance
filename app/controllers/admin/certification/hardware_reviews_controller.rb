@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# Unified hardware review queue and project page. A hardware project moves
-# through design funding and build certification, but reviewers should see one
-# queue and one active review at a time. Mutations still go through the existing
-# funding/ship endpoints so PaperTrail remains attached to the underlying record.
+# Hardware review queues and project page. Design funding and build
+# certification are genuinely different jobs, with different evidence and a
+# different decision, so they get one queue each rather than a merged list with
+# a type column. Mutations still go through the existing funding/ship endpoints
+# so PaperTrail remains attached to the underlying record.
 class Admin::Certification::HardwareReviewsController < Admin::Certification::ApplicationController
   before_action -> { head :not_found unless Flipper.enabled?(:hardware_flow, current_user) }
   before_action :set_project, only: [ :show ]
@@ -11,62 +12,50 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
   before_action :set_body_class
 
   # GET /admin/certification/hardware
+  # Kept so older links land somewhere sensible.
   def index
     authorize Project, policy_class: Admin::Certification::HardwareReviewPolicy
-
-    @status = params[:status].presence_in(%w[pending approved returned all]) || "pending"
-    @sort = params[:sort] == "newest" ? "newest" : "oldest"
-    @search = params[:search].to_s.strip
-    @from = parse_date(params[:from])
-    @to = parse_date(params[:to])
-    @stage = params[:stage].presence_in(%w[design build]).to_s
-    @lb_period = params[:lb].presence_in(%w[daily weekly alltime]) || "daily"
-
-    funding_scope = apply_queue_filters(hardware_funding_list_scope, ::Certification::FundingRequest)
-    ship_scope = apply_queue_filters(hardware_ship_list_scope, ::Certification::Ship)
-
-    @stage_counts = {
-      "design" => funding_scope.count,
-      "build" => ship_scope.count
-    }
-
-    funding_scope = funding_scope.none if @stage == "build"
-    ship_scope = ship_scope.none if @stage == "design"
-
-    funding_items = funding_scope.includes(:reviewer, project: { memberships: :user }).map do |request|
-      review_item(:funding, request, request.project, request.owner, request.created_at)
-    end
-
-    ship_items = ship_scope.includes(:reviewer, project: { memberships: :user, posts: :postable }).map do |ship|
-      review_item(:ship, ship, ship.project, ship.owner, ship.created_at)
-    end
-
-    @review_items = sort_review_items(funding_items + ship_items)
-    @hackpad_project_ids = hackpad_project_ids(@review_items.map { |item| item[:project].id })
-    @stats = hardware_queue_stats
-    @leaderboards = {
-      "daily" => hardware_leaderboard(:daily),
-      "weekly" => hardware_leaderboard(:weekly),
-      "alltime" => hardware_leaderboard(:alltime)
-    }
-    @reviewed_today = reviewed_today_count
+    # Only the queue's own filters carry over; splatting raw query params would
+    # let reserved url_for keys (host, script_name, ...) retarget the redirect.
+    redirect_to design_admin_certification_hardware_reviews_path(
+      params.permit(:status, :sort, :search, :from, :to, :lb).to_h.compact_blank
+    )
   end
 
-  # GET /admin/certification/hardware/next
+  # GET /admin/certification/hardware/design
+  def design
+    authorize Project, policy_class: Admin::Certification::HardwareReviewPolicy
+    load_queue(:design)
+    render :queue
+  end
+
+  # GET /admin/certification/hardware/build
+  def build
+    authorize Project, policy_class: Admin::Certification::HardwareReviewPolicy
+    load_queue(:build)
+    render :queue
+  end
+
+  # GET /admin/certification/hardware/next?stage=design|build
+  # Stays within the queue the reviewer started from, so "Start reviewing" on the
+  # design queue never hands them a build certification.
   def next
     authorize Project, policy_class: Admin::Certification::HardwareReviewPolicy
 
+    stage = params[:stage].presence_in(%w[design build]) || "design"
     skip = parse_skip_tokens
-    candidate = next_candidate(skip)
+    candidate = next_candidate(skip, stage)
     if candidate.nil?
-      redirect_to admin_certification_hardware_reviews_path, notice: "Hardware queue is empty." and return
+      redirect_to queue_path_for(stage), notice: "#{stage.capitalize} queue is empty." and return
     end
 
     claimed = claim_candidate(candidate)
     if claimed
       redirect_to admin_certification_hardware_review_path(claimed.project_id)
     else
-      redirect_to next_admin_certification_hardware_reviews_path(skip: (skip[:tokens] + [ candidate[:token] ]).join(","))
+      redirect_to next_admin_certification_hardware_reviews_path(
+        stage: stage, skip: (skip[:tokens] + [ candidate[:token] ]).join(",")
+      )
     end
   end
 
@@ -78,6 +67,85 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
   end
 
   private
+
+  # One stage's queue: its own rows, its own counts. Nothing about the other
+  # stage leaks in except the tab count, so the two read as separate queues.
+  def load_queue(stage)
+    @stage = stage.to_s
+    @status = params[:status].presence_in(%w[pending approved returned all]) || "pending"
+    @sort = params[:sort] == "newest" ? "newest" : "oldest"
+    @search = params[:search].to_s.strip
+    @from = parse_date(params[:from])
+    @to = parse_date(params[:to])
+    @lb_period = params[:lb].presence_in(%w[daily weekly alltime]) || "daily"
+
+    @review_items = sort_review_items(queue_items(@stage))
+    @hackpad_project_ids = hackpad_project_ids(@review_items.map { |item| item[:project].id })
+    @stats = stage_stats(@stage)
+    @tab_counts = {
+      "design" => stage_list_scope("design").pending.count,
+      "build" => stage_list_scope("build").pending.count
+    }
+    @leaderboards = {
+      "daily" => hardware_leaderboard(:daily),
+      "weekly" => hardware_leaderboard(:weekly),
+      "alltime" => hardware_leaderboard(:alltime)
+    }
+    @my_stats = my_hardware_stats
+  end
+
+  # The reviewer's own numbers, scoped to hardware. The site-wide My Stats page
+  # counts Certification::Ship only, so a design reviewer shows up there as
+  # having done nothing even though their payout balance includes the work.
+  def my_hardware_stats
+    hardware = Project.where.not(hardware_stage: nil)
+    design = ::Certification::FundingRequest.where(reviewer: current_user, project: hardware).where.not(status: :pending)
+    build = ::Certification::Ship.where(reviewer: current_user, project: hardware).where.not(status: :pending)
+    today = Time.current.beginning_of_day
+
+    {
+      design: decision_tally(design),
+      build: decision_tally(build),
+      stardust: design.sum(:stardust_earned).to_f + build.sum(:stardust_earned).to_f,
+      today: design.where(decided_at: today..).count + build.where(decided_at: today..).count
+    }
+  end
+
+  def decision_tally(scope)
+    by_status = scope.group(:status).count
+    approved = by_status["approved"].to_i
+    returned = by_status["returned"].to_i
+    total = approved + returned
+
+    {
+      total: total,
+      approved: approved,
+      returned: returned,
+      approval_rate: total.zero? ? nil : (approved * 100.0 / total).round
+    }
+  end
+
+  def stage_model(stage)
+    stage.to_s == "design" ? ::Certification::FundingRequest : ::Certification::Ship
+  end
+
+  def stage_list_scope(stage)
+    stage.to_s == "design" ? hardware_funding_list_scope : hardware_ship_list_scope
+  end
+
+  def queue_items(stage)
+    scope = apply_queue_filters(stage_list_scope(stage), stage_model(stage))
+
+    if stage == "design"
+      scope.includes(:reviewer, project: { memberships: :user }).map do |request|
+        review_item(:funding, request, request.project, request.owner, request.created_at)
+      end
+    else
+      scope.includes(:reviewer, :post_ship_event, project: { memberships: :user }).map do |ship|
+        review_item(:ship, ship, ship.project, ship.owner, ship.created_at)
+      end
+    end
+  end
 
   def set_project
     @project = Project.find(params[:project_id])
@@ -102,9 +170,21 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
       when ::Certification::FundingRequest then :funding
       when ::Certification::Ship then :ship
       end
-    @reviewed_today = reviewed_today_count
+    @past_reviews = past_reviews
     @lapse_timelapses = lapse_timelapses_for_review
     @lookout_recordings = lookout_recordings_for_review
+  end
+
+  # Every decided funding request and ship for this project, newest first, so a
+  # reviewer sees the full history and any prior feedback under "More context".
+  # The active (pending) review is left out - it's the thing being decided.
+  def past_reviews
+    reviews = @project.certification_funding_requests.includes(:reviewer).to_a +
+              @project.ship_reviews.includes(:reviewer).to_a
+    reviews
+      .reject { |review| review.pending? || review == @active_review }
+      .sort_by(&:created_at)
+      .reverse
   end
 
   def hardware_funding_scope
@@ -144,11 +224,6 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
     }
   end
 
-  def reviewed_today_count
-    ::Certification::FundingRequest.reviewed_today(current_user) +
-      ::Certification::Ship.reviewed_today(current_user)
-  end
-
   # Of the given project ids, those whose active mission is Hackpad — so the
   # queue can flag them with a pill without an N+1 of Project#current_mission
   # per row. Returns a Set for O(1) lookup in the view.
@@ -162,43 +237,24 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
       .to_set
   end
 
-  def hardware_queue_stats
-    funding_scope = hardware_funding_list_scope
-    ship_scope = hardware_ship_list_scope
-    funding_pending = funding_scope.pending.count
-    ship_pending = ship_scope.pending.count
-    funding_approved = funding_scope.approved.count
-    funding_returned = funding_scope.returned.count
-    ship_approved = ship_scope.approved.count
-    ship_returned = ship_scope.returned.count
-    approved_count = funding_approved + ship_approved
-    returned_count = funding_returned + ship_returned
-    decided_count = approved_count + returned_count
-    oldest = [ funding_scope.pending.order(:created_at).first, ship_scope.pending.order(:created_at).first ]
-      .compact
-      .min_by(&:created_at)
+  # Only what a reviewer working this queue can act on: how much is waiting, how
+  # stale the worst of it is, and whether today is keeping up with intake.
+  def stage_stats(stage)
+    scope = stage_list_scope(stage)
+    model = stage_model(stage)
+    sla_days = model::SLA_DAYS
     today = Time.current.beginning_of_day
-    week = Time.current.beginning_of_week
+    oldest = scope.pending.order(:created_at).first
 
     {
-      pending: funding_pending + ship_pending,
-      funding_pending: funding_pending,
-      ship_pending: ship_pending,
-      approved: approved_count,
-      returned: returned_count,
-      decided: decided_count,
-      approval_rate: decided_count.zero? ? nil : (approved_count * 100.0 / decided_count).round,
-      decisions_today: funding_scope.where.not(status: :pending).where(decided_at: today..).count +
-        ship_scope.where.not(status: :pending).where(decided_at: today..).count,
-      new_today: funding_scope.where(created_at: today..).count + ship_scope.where(created_at: today..).count,
-      decisions_this_week: funding_scope.where.not(status: :pending).where(decided_at: week..).count +
-        ship_scope.where.not(status: :pending).where(decided_at: week..).count,
-      new_this_week: funding_scope.where(created_at: week..).count + ship_scope.where(created_at: week..).count,
-      oldest_pending: oldest && review_item(oldest.is_a?(::Certification::FundingRequest) ? :funding : :ship, oldest, oldest.project, oldest.respond_to?(:owner) ? oldest.owner : nil, oldest.created_at),
-      queue_target: ::Certification::Ship::QUEUE_TARGET,
-      sla_days: ::Certification::Ship::SLA_DAYS,
-      overdue_pending: funding_scope.pending.where("#{::Certification::FundingRequest.table_name}.created_at < ?", Time.current - ::Certification::FundingRequest::SLA_DAYS.days).count +
-        ship_scope.pending.where("#{::Certification::Ship.table_name}.created_at < ?", Time.current - ::Certification::Ship::SLA_DAYS.days).count
+      pending: scope.pending.count,
+      oldest_pending: oldest && review_item(
+        stage == "design" ? :funding : :ship, oldest, oldest.project, oldest.owner, oldest.created_at
+      ),
+      overdue_pending: scope.pending.where("#{model.table_name}.created_at < ?", Time.current - sla_days.days).count,
+      sla_days: sla_days,
+      decisions_today: scope.where.not(status: :pending).where(decided_at: today..).count,
+      new_today: scope.where(created_at: today..).count
     }
   end
 
@@ -254,22 +310,24 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
     }
   end
 
-  def next_candidate(skip)
-    funding = hardware_funding_scope
-    funding = funding.where.not(id: skip[:funding_ids]) if skip[:funding_ids].any?
-    ship = hardware_ship_scope
-    ship = ship.where.not(id: skip[:ship_ids]) if skip[:ship_ids].any?
-
-    candidates = []
-    if (request = funding.order(claim_order_sql(::Certification::FundingRequest), :created_at).first)
-      candidates << review_item(:funding, request, request.project, request.owner, request.created_at)
+  def next_candidate(skip, stage)
+    if stage == "design"
+      scope = hardware_funding_scope
+      scope = scope.where.not(id: skip[:funding_ids]) if skip[:funding_ids].any?
+      record = scope.order(claim_order_sql(::Certification::FundingRequest), :created_at).first
+      record && review_item(:funding, record, record.project, record.owner, record.created_at)
+    else
+      scope = hardware_ship_scope
+      scope = scope.where.not(id: skip[:ship_ids]) if skip[:ship_ids].any?
+      record = scope.order(claim_order_sql(::Certification::Ship), :created_at).first
+      record && review_item(:ship, record, record.project, record.owner, record.created_at)
     end
-    if (ship_review = ship.order(claim_order_sql(::Certification::Ship), :created_at).first)
-      candidates << review_item(:ship, ship_review, ship_review.project, ship_review.owner, ship_review.created_at)
-    end
-
-    candidates.min_by { |item| [ item[:record].reviewer_id == current_user.id ? 0 : 1, item[:submitted_at] ] }
   end
+
+  def queue_path_for(stage)
+    stage == "build" ? build_admin_certification_hardware_reviews_path : design_admin_certification_hardware_reviews_path
+  end
+  helper_method :queue_path_for
 
   def claim_candidate(candidate)
     case candidate[:type]
