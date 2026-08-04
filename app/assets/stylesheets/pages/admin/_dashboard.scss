@@ -27,4 +27,10 @@
     background: var(--color-space-surface-strong);
     color: var(--color-space-text-muted);
   }
+
+  &__count-note {
+    color: var(--color-space-text-muted);
+    font-size: 0.75em;
+    font-weight: 400;
+  }
 }

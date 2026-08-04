@@ -8,13 +8,101 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   PRESERVED_FILTER_KEYS = [
     :user_search, :shop_item_id, :status, :date_from, :date_to, :sort, :view,
     :goob, :region, :item_type, :min_tickets, :max_tickets, :has_tracking,
-    :order_type, { assignee_ids: [] }
+    :order_type, { assignee_ids: [], hidden_types: [] }
   ].freeze
 
-  helper_method :preserved_filter_params
+  # Item-type groups the fulfillment queue can fold away, one toggle each.
+  # TutorialNothing and FreeStickers need no human work and WarehouseItem is
+  # fulfilled by the external warehouse, so those start folded away. Mail is
+  # packed by hand and stays visible — HQ mail and letter mail share a single
+  # toggle because they're worked as one pile. Add new LetterMail subclasses to
+  # the mail group so they fold with the rest of it.
+  ITEM_TYPE_TOGGLES = [
+    { label: "Tutorial Nothing", hidden_by_default: true, types: %w[ShopItem::TutorialNothing] },
+    { label: "Free Stickers", hidden_by_default: true, types: %w[ShopItem::FreeStickers] },
+    { label: "Warehouse Item", hidden_by_default: true, types: %w[ShopItem::WarehouseItem] },
+    { label: "HQ Mail", hidden_by_default: false, types: %w[
+      ShopItem::HQMailItem
+      ShopItem::LetterMail
+      ShopItem::NonmachinableLetterMail
+    ] }
+  ].freeze
+
+  TOGGLEABLE_ITEM_TYPES = ITEM_TYPE_TOGGLES.flat_map { |toggle| toggle[:types] }.freeze
+
+  DEFAULT_HIDDEN_ITEM_TYPES = ITEM_TYPE_TOGGLES.select { |toggle| toggle[:hidden_by_default] }
+                                               .flat_map { |toggle| toggle[:types] }.freeze
+
+  # Number of user groups shown per page when grouping by user.
+  GROUPS_PER_PAGE = 25
+
+  helper_method :preserved_filter_params, :grouped_by_user?, :item_type_toggles,
+                :hidden_item_types, :grouping_toggle_params, :item_type_toggle_params,
+                :item_type_toggle_hidden?, :assigned_to_me?, :assigned_to_me_toggle_params
 
   def preserved_filter_params
     params.permit(*PRESERVED_FILTER_KEYS)
+  end
+
+  # Fulfillment works order-by-order per person, so the queue groups by user
+  # unless explicitly ungrouped. Every other view stays flat by default.
+  def grouped_by_user?
+    return params[:goob] != "false" if @view == "fulfillment"
+
+    params[:goob] == "true"
+  end
+
+  def item_type_toggles
+    ITEM_TYPE_TOGGLES
+  end
+
+  def item_type_toggle_hidden?(toggle)
+    toggle[:types].all? { |type| hidden_item_types.include?(type) }
+  end
+
+  def hidden_item_types
+    @hidden_item_types ||= begin
+      types = if @view != "fulfillment"
+        []
+      elsif params.key?(:hidden_types)
+        Array(params[:hidden_types]) & TOGGLEABLE_ITEM_TYPES
+      else
+        DEFAULT_HIDDEN_ITEM_TYPES
+      end
+
+      # An explicit item-type filter beats the folded-away defaults, otherwise
+      # filtering down to a hidden type would come back empty.
+      types - [ params[:item_type] ]
+    end
+  end
+
+  def grouping_toggle_params
+    preserved_filter_params.merge(goob: !grouped_by_user?)
+  end
+
+  # Shortcut for the assignee filter below: narrowed to just the viewer's own
+  # orders, or off. Mixed selections are made in the filter form itself.
+  def assigned_to_me?
+    Array(params[:assignee_ids]).map(&:to_s) == [ current_user.id.to_s ]
+  end
+
+  def assigned_to_me_toggle_params
+    return preserved_filter_params.except(:assignee_ids) if assigned_to_me?
+
+    preserved_filter_params.merge(assignee_ids: [ current_user.id.to_s ])
+  end
+
+  def item_type_toggle_params(toggle)
+    next_hidden = if item_type_toggle_hidden?(toggle)
+      hidden_item_types - toggle[:types]
+    else
+      hidden_item_types | toggle[:types]
+    end
+
+    # An empty array is dropped from the query string entirely, which would read
+    # back as "no param given" and restore the defaults — send a blank entry so
+    # "nothing hidden" survives the round trip.
+    preserved_filter_params.merge(hidden_types: next_hidden.presence || [ "" ])
   end
 
   def index
@@ -63,6 +151,19 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     orders = apply_shared_filters(orders)
     base = apply_shared_filters(ShopOrder.includes(:shop_item, :user))
 
+    # Folded-away item types only come off the list itself — the stats below and
+    # the counts on the toggles stay whole so nothing vanishes silently.
+    if hidden_item_types.any?
+      orders = orders.where.not(shop_item_id: ShopItem.where(type: hidden_item_types))
+    end
+
+    if @view == "fulfillment"
+      @awaiting_counts_by_type = apply_shared_filters(ShopOrder.joins(:shop_item))
+                                   .where(aasm_state: "awaiting_periodical_fulfillment",
+                                          shop_items: { type: TOGGLEABLE_ITEM_TYPES })
+                                   .group("shop_items.type").count
+    end
+
     @c = {
       pending: base.where(aasm_state: "pending").count,
       awaiting_verification: base.where(aasm_state: "awaiting_verification").count,
@@ -89,9 +190,15 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     else orders.order(created_at: :desc)
     end
 
-    # Grouping
-    if params[:goob] == "true"
-      @grouped_orders = orders.group_by(&:user).map do |user, user_orders|
+    # Grouping. Paginate the *users* rather than the orders so every page holds
+    # whole groups — grouping is the fulfillment default, so loading the entire
+    # matching set at once isn't an option.
+    if grouped_by_user?
+      order_counts_by_user = orders.unscope(:includes).reorder(nil).group(:user_id).count
+      user_ids = order_counts_by_user.sort_by { |user_id, count| [ -count, user_id ] }.map(&:first)
+      @pagy, page_user_ids = pagy(:offset, user_ids, limit: GROUPS_PER_PAGE)
+
+      @grouped_orders = orders.where(user_id: page_user_ids).group_by(&:user).map do |user, user_orders|
         {
           user: user,
           orders: user_orders,
