@@ -195,10 +195,25 @@ module Certification
       project&.current_mission&.prizes&.after_design&.exists? || false
     end
 
+    # True unless a newer funding request has superseded this one (a resubmit
+    # after a return). A superseded request's verdict is inert: it must not
+    # advance the project or issue a grant/kit, so approving the wrong one can't
+    # move the project while a newer request is still live.
+    def latest_for_project?
+      return true unless project
+      !project.certification_funding_requests.where("id > ?", id).exists?
+    end
+
     # The after-design kit this request can redeem for `shop_item`, if any.
     # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
     def redeemable_prize_for(shop_item)
       project&.current_mission&.prizes&.after_design&.find_by(shop_item_id: shop_item.id)
+    end
+
+    # The kit shipped when this design is approved (the mission's first
+    # after_design prize), for reviewer-facing copy.
+    def design_kit_shop_item
+      project&.current_mission&.prizes&.after_design&.ordered&.first&.shop_item
     end
 
     # Locals for the verdict notification's Slack template.
@@ -249,7 +264,7 @@ module Certification
     # retries the next time the request is saved instead of being stranded.
     # issue_hcb_grant! already returns early when a grant exists.
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? && !awards_design_kit? }
+    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? && !awards_design_kit? && latest_for_project? }
 
     private
 
@@ -312,6 +327,7 @@ module Certification
     # before_save so it's set by the time this runs.
     def apply_verdict_to_project!
       return if pending?
+      return unless latest_for_project?
       project.with_lock do
         case status.to_sym
         when :approved

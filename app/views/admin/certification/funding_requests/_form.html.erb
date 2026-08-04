@@ -43,15 +43,21 @@
     </label>
   </fieldset>
 
-  <div class="review-form__field">
-    <%= f.label :approved_amount_dollars, "Approved amount ($) — up to the #{funding_request.tier_label} max of $#{funding_request.tier_max_dollars}" %>
-    <%= f.number_field :approved_amount_dollars,
-          value: (funding_request.approved_amount_dollars || funding_request.requested_amount_dollars),
-          min: 0, max: funding_request.tier_max_dollars, step: 1 %>
+  <% if funding_request.awards_design_kit? %>
     <p class="review-form__hint">
-      Requested $<%= funding_request.requested_amount_dollars %>. Approving issues an HCB card grant for the approved amount.
+      Approving ships the <%= funding_request.design_kit_shop_item&.name || "design kit" %> and moves the project to the build stage. No grant is issued.
     </p>
-  </div>
+  <% else %>
+    <div class="review-form__field">
+      <%= f.label :approved_amount_dollars, "Approved amount ($) — up to the #{funding_request.tier_label} max of $#{funding_request.tier_max_dollars}" %>
+      <%= f.number_field :approved_amount_dollars,
+            value: (funding_request.approved_amount_dollars || funding_request.requested_amount_dollars),
+            min: 0, max: funding_request.tier_max_dollars, step: 1 %>
+      <p class="review-form__hint">
+        Requested $<%= funding_request.requested_amount_dollars %>. Approving issues an HCB card grant for the approved amount.
+      </p>
+    </div>
+  <% end %>
 
   <div class="review-form__field">
     <%= f.label :feedback, "Feedback for the user (visible to the project owner)" %>
@@ -60,8 +66,8 @@
 
   <div class="review-form__actions">
     <%= f.submit "Submit verdict", class: "action-btn action-btn--large action-btn--primary" %>
-    <%= link_to "Skip and get next", next_admin_certification_hardware_reviews_path(skip: "funding:#{funding_request.id}"),
+    <%= link_to "Skip and get next", hardware_next_path(stage: "design", skip: "funding:#{funding_request.id}"),
           class: "action-btn action-btn--small action-btn--secondary" %>
-    <%= link_to "Back to queue", design_admin_certification_hardware_reviews_path, class: "review-form__back" %>
+    <%= link_to "Back to queue", hardware_queue_path("design"), class: "review-form__back" %>
   </div>
 <% end %>

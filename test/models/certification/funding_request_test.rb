@@ -141,6 +141,27 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     assert_equal true, fr.notification_locals[:awards_kit]
   end
 
+  test "approving a superseded funding request does not advance the project or issue a grant" do
+    old = @project.certification_funding_requests.create!(
+      user: @owner, complexity_tier: 2, requested_amount_cents: 3_000, status: :pending
+    )
+    old.update!(reviewer: @reviewer, status: :returned, feedback: "needs work")
+    # Resubmit: a newer request supersedes the returned one.
+    newer = @project.certification_funding_requests.create!(
+      user: @owner, complexity_tier: 2, requested_amount_cents: 3_000, status: :pending
+    )
+
+    assert_not old.latest_for_project?
+    assert newer.latest_for_project?
+
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      old.update!(reviewer: @reviewer, status: :approved)
+    end
+
+    assert_equal "design", @project.reload.hardware_stage, "a superseded request must not advance the project"
+    assert_nil old.reload.hcb_grant_hashid, "a superseded request must not issue a grant"
+  end
+
   private
 
   PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
