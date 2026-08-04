@@ -38,11 +38,8 @@ class Mission::Prize < ApplicationRecord
   # after_design gates a kit on funding/design approval.
   enum :category, { after_shipping: 0, after_design: 1 }, default: :after_shipping
 
-  # Builder-facing heading for each category on the mission page.
+  # Admin-facing label for each category (mission prize editor).
   CATEGORY_LABELS = { "after_design" => "After design", "after_shipping" => "After shipping" }.freeze
-
-  # Order categories follow in the mission flow (earn the kit, then ship).
-  CATEGORY_ORDER = %w[after_design after_shipping].freeze
 
   validates :position, presence: true, numericality: { only_integer: true }
 

@@ -19,7 +19,7 @@ class MissionPrizeGroupsTest < ActionDispatch::IntegrationTest
     assert_select ".mission-home__prize-group-label", count: 0
   end
 
-  test "prizes spanning two categories render group headers" do
+  test "a mission with an after-design kit splits into design and building sections" do
     add_prize(:after_design, "Kit")
     add_prize(:after_shipping, "Sticker")
 
@@ -28,7 +28,29 @@ class MissionPrizeGroupsTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select ".mission-home__prize-group-label", count: 2
     assert_select ".mission-home__prize-group-label", text: "After design"
-    assert_select ".mission-home__prize-group-label", text: "After shipping"
+    assert_select ".mission-home__prize-group-label", text: "After building"
+  end
+
+  test "an after-design kit alone still splits into design and building sections" do
+    add_prize(:after_design, "Kit")
+
+    sign_in @user
+    get mission_path(@mission.slug)
+    assert_response :success
+    assert_select ".mission-home__prize-group-label", text: "After design"
+    assert_select ".mission-home__prize-group-label", text: "After building"
+  end
+
+  test "a hardware mission shows the per-hour stardust payout instead of community rating" do
+    @mission.update!(hardware: true)
+    add_prize(:after_design, "Kit")
+
+    sign_in @user
+    get mission_path(@mission.slug)
+    assert_response :success
+    assert_select ".mission-home__prize-title", text: "Gets stardust"
+    assert_select ".mission-home__prize-blurb", text: /per hour/
+    assert_select ".mission-home__prize-title", text: "Goes into rating", count: 0
   end
 
   private
