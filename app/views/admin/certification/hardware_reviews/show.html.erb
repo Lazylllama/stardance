@@ -6,7 +6,7 @@
   ship_can_review = @active_review_type == :ship && @ship.claim_held_by?(current_user)
   can_review = funding_can_review || ship_can_review
   stage_label = @active_review_type == :funding ? "Design funding" : "Build certification"
-  queue_path = queue_path_for(@active_review_type == :ship ? "build" : "design")
+  queue_path = hardware_queue_path(@active_review_type == :ship ? "build" : "design")
 %>
 
 <div class="app-layout app-layout--wide"
@@ -29,7 +29,7 @@
       </div>
 
       <% if @active_review %>
-        <%= render "review_facts", project: @project, owner: @owner,
+        <%= render "admin/certification/hardware_reviews/review_facts", project: @project, owner: @owner,
               review: @active_review, review_type: @active_review_type %>
       <% end %>
 
@@ -73,8 +73,12 @@
                 <% if @funding_request %>
                   <span class="status-pill status-pill--<%= @funding_request.status %>"><%= @funding_request.status.capitalize %></span>
                   <span class="hardware-review__timeline-meta">
-                    $<%= @funding_request.final_amount_dollars %>
-                    <% if @funding_request.approved? %> approved<% elsif @funding_request.pending? %> requested<% end %>
+                    <% if @funding_request.awards_design_kit? %>
+                      <%= @funding_request.design_kit_shop_item&.name || "Kit" %>
+                    <% else %>
+                      $<%= @funding_request.final_amount_dollars %>
+                      <% if @funding_request.approved? %> approved<% elsif @funding_request.pending? %> requested<% end %>
+                    <% end %>
                   </span>
                 <% else %>
                   <span class="hardware-review__timeline-meta">Skipped</span>
@@ -107,7 +111,9 @@
                       <span class="hardware-review__timeline-label"><%= is_funding ? "Design funding" : "Build certification" %></span>
                       <span class="status-pill status-pill--<%= review.status %>"><%= review.status.capitalize %></span>
                       <% if is_funding %>
-                        <span class="hardware-review__timeline-meta">$<%= review.final_amount_dollars %> · <%= review.tier_label %></span>
+                        <span class="hardware-review__timeline-meta">
+                          <%= review.awards_design_kit? ? (review.design_kit_shop_item&.name || "Kit") : "$#{review.final_amount_dollars} · #{review.tier_label}" %>
+                        </span>
                       <% end %>
                       <% if review.decided_at %>
                         <span class="hardware-review__timeline-meta"><%= l(review.decided_at.to_date, format: :short) %></span>

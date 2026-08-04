@@ -120,6 +120,19 @@ class Mission::Submission < ApplicationRecord
     mission.prizes.after_shipping.find_by(shop_item_id: shop_item.id)
   end
 
+  # Rewards granted when a submission is approved: the mission achievement and
+  # any fixed stardust. Idempotent. reviewer_id is recorded on the ledger entry.
+  def grant_rewards!(reviewer_id:)
+    grant_mission_achievement
+    grant_fixed_stardust(reviewer_id: reviewer_id)
+  end
+
+  # Undoes grant_rewards! when a decision is reversed.
+  def reverse_rewards!(reviewer_id:)
+    reverse_fixed_stardust(reviewer_id: reviewer_id)
+    revoke_mission_achievement
+  end
+
   # Per-mission reviewers/owners, minus teammates (no self-review). Global
   # mission_reviewers manage every mission but are deliberately left out here —
   # they opt into the queue rather than being paged for each submission.
@@ -153,6 +166,51 @@ class Mission::Submission < ApplicationRecord
   end
 
   private
+
+  def reward_recipient
+    ship_event&.post&.user
+  end
+
+  def grant_mission_achievement
+    return if mission.achievement_slug.blank?
+    return unless reward_recipient
+    return if reward_recipient.achievements.exists?(achievement_slug: mission.achievement_slug)
+
+    reward_recipient.achievements.create!(achievement_slug: mission.achievement_slug, earned_at: Time.current)
+  end
+
+  def grant_fixed_stardust(reviewer_id:)
+    return unless mission.fixed_stardust_payout&.positive?
+    return unless ledger_entries.sum(:amount).zero?
+    return unless reward_recipient
+
+    ledger_entries.create!(
+      user: reward_recipient,
+      amount: mission.fixed_stardust_payout,
+      reason: "Mission: #{mission.name}",
+      created_by: "mission_submission:#{id} (#{reviewer_id})"
+    )
+  end
+
+  def reverse_fixed_stardust(reviewer_id:)
+    net = ledger_entries.sum(:amount)
+    return unless net.positive?
+    return unless reward_recipient
+
+    ledger_entries.create!(
+      user: reward_recipient,
+      amount: -net,
+      reason: "Mission reversal: #{mission.name}",
+      created_by: "mission_submission:#{id} undo (#{reviewer_id})"
+    )
+  end
+
+  def revoke_mission_achievement
+    return if mission.achievement_slug.blank?
+    return unless reward_recipient
+
+    reward_recipient.achievements.where(achievement_slug: mission.achievement_slug).destroy_all
+  end
 
   def stamp_pending_at
     self.pending_at = Time.current

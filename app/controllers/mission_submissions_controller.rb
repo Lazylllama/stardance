@@ -4,7 +4,7 @@ class MissionSubmissionsController < ApplicationController
 
   def redeem
     authorize @submission
-    prizes = @submission.mission.prizes.ordered.includes(:shop_item).to_a
+    prizes = @submission.mission.prizes.after_shipping.ordered.includes(:shop_item).to_a
 
     if prizes.size == 1
       redirect_to shop_item_path(prizes.first.shop_item, mission_submission_id: @submission.id)
