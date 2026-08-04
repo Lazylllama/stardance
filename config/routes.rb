@@ -817,6 +817,16 @@ Rails.application.routes.draw do
           post :undo
         end
       end
+      # A hardware mission's own two-stage review queue (design funding + build
+      # certification), reviewed by the mission's team. Verdicts reuse the global
+      # funding/ship mutation endpoints so PaperTrail stays attached.
+      resources :hardware_reviews, path: "hardware", param: :project_id, only: [ :index, :show ], controller: "missions/hardware_reviews" do
+        collection do
+          get :design
+          get :build
+          get :next
+        end
+      end
     end
     get "mission_reviews", to: "missions/submissions#overview", as: :mission_reviews
 

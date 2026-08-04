@@ -138,7 +138,7 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
       if params[:redirect_to_hardware].present?
         # Straight on to the next build review; `next` claims it, and falls back
         # to the queue when there's nothing left.
-        redirect_to next_admin_certification_hardware_reviews_path(stage: "build"), notice: notice
+        redirect_to hardware_review_next_path_for(@ship.project, "build"), notice: notice
       else
         redirect_to admin_certification_ships_path, notice: notice
       end
@@ -191,7 +191,7 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
 
   def ship_redirect_path
     if params[:redirect_to_hardware].present?
-      admin_certification_hardware_review_path(@ship.project_id)
+      hardware_review_path_for(@ship.project)
     else
       admin_certification_ship_path(@ship)
     end

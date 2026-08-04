@@ -163,6 +163,12 @@ class Project < ApplicationRecord
     current_mission_attachment&.mission
   end
 
+  # The active mission delivers a physical kit at design approval (an
+  # after_design prize) instead of a cash grant.
+  def awards_design_kit?
+    current_mission&.prizes&.after_design&.exists? || false
+  end
+
   def display_banner
     if banner.attached?
       banner

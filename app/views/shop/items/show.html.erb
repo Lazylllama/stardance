@@ -92,12 +92,16 @@
             <div class="shop-order__customs-warning" data-customs-warning-target="warning" style="display: none;"></div>
         </div>
         <% if current_user %>
-        <div class="shop-order__details" data-controller="order-form" data-order-form-has-addresses-value="<%= @user_addresses.any? %>" data-order-form-base-ticket-cost-value="<%= @sale_price || @shop_item.ticket_cost || 0 %>" data-order-form-user-balance-value="<%= @user_balance %>" data-order-form-free-value="<%= @mission_submission.present? %>" data-order-form-addresses-value="<%= @user_addresses.to_json %>" data-order-form-blocked-countries-value="<%= @shop_item.blocked_countries.to_json %>" data-order-form-stardust-icon-url-value="<%= image_path('icons/stardust.png') %>" data-action="address-select:change@document->order-form#addressChanged">
+        <div class="shop-order__details" data-controller="order-form" data-order-form-has-addresses-value="<%= @user_addresses.any? %>" data-order-form-base-ticket-cost-value="<%= @sale_price || @shop_item.ticket_cost || 0 %>" data-order-form-user-balance-value="<%= @user_balance %>" data-order-form-free-value="<%= @redeemable.present? %>" data-order-form-addresses-value="<%= @user_addresses.to_json %>" data-order-form-blocked-countries-value="<%= @shop_item.blocked_countries.to_json %>" data-order-form-stardust-icon-url-value="<%= image_path('icons/stardust.png') %>" data-action="address-select:change@document->order-form#addressChanged">
             <h2>Complete your order:</h2>
             <%= form_with url: shop_orders_path(shop_item_id: @shop_item.id), method: :post, local: true, id: "order-form" do |form| %>
-                <% if @mission_submission %>
+                <% if @redeemable %>
                     <%= form.hidden_field :quantity, value: 1 %>
-                    <%= form.hidden_field :mission_submission_id, value: @mission_submission.id %>
+                    <% if @redeemable.is_a?(Mission::Submission) %>
+                        <%= form.hidden_field :mission_submission_id, value: @redeemable.id %>
+                    <% elsif @redeemable.is_a?(Certification::FundingRequest) %>
+                        <%= form.hidden_field :funding_request_id, value: @redeemable.id %>
+                    <% end %>
                 <% elsif not @shop_item.one_per_person_ever %>
                     <div class="shop-order__quantity">
                         <label class="shop-order__quantity-label" for="shop-order__quantity-input">Quantity</label>
@@ -296,7 +300,7 @@
                     </div>
                 <% end %>
             </div>
-            <div class="shop-order__summary <%= "shop-order__summary--hidden" if @mission_submission %>">
+            <div class="shop-order__summary <%= "shop-order__summary--hidden" if @redeemable %>">
                 <h3 class="shop-order__summary-heading">Order Summary</h3>
                 <p class="shop-order__summary-balance"><%= safe_join([ "Current Balance: ", stardust_icon, " ", @user_balance.to_s ]) %></p>
                 <div class="shop-order__summary-content">

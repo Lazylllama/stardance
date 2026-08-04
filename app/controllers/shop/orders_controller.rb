@@ -18,14 +18,14 @@ class Shop::OrdersController < Shop::BaseController
     end
 
     @shop_item = ShopItem.find(params[:shop_item_id])
-    @mission_submission = load_redeemable_submission(@shop_item)
+    @redeemable = load_redeemable_gate(@shop_item)
 
     unless @shop_item.enabled?
       redirect_to shop_path, alert: "This item cannot be ordered."
       return
     end
 
-    if @mission_submission.nil? && @shop_item.mission_prize_only?
+    if @redeemable.nil? && @shop_item.mission_prize_only?
       redirect_to shop_path, alert: "This item can only be claimed by redeeming a mission prize."
       return
     end
@@ -98,7 +98,7 @@ class Shop::OrdersController < Shop::BaseController
         current_user.lock!
         @shop_item.lock! if @shop_item.limited?
 
-        if @mission_submission.nil?
+        if @redeemable.nil?
           user_balance = current_user.balance
           if total_cost > user_balance
             redirect_to shop_item_path(@shop_item), alert: "Insufficient balance. You need #{total_cost} Stardust but only have #{user_balance} Stardust."
@@ -108,20 +108,17 @@ class Shop::OrdersController < Shop::BaseController
 
         @order = current_user.shop_orders.new(
           shop_item: @shop_item,
-          quantity: @mission_submission ? 1 : quantity,
+          quantity: @redeemable ? 1 : quantity,
           frozen_address: selected_address,
-          frozen_modifiers_price: @mission_submission ? 0 : modifiers_total
+          frozen_modifiers_price: @redeemable ? 0 : modifiers_total
         )
-        @order.redeeming_mission_submission = @mission_submission if @mission_submission
+        assign_redemption_gate(@order, @redeemable) if @redeemable
         @order.aasm_state = "pending" if @order.respond_to?(:aasm_state=)
         @order.save!
 
-        if @mission_submission
-          chosen_prize = @mission_submission.mission.prizes.find_by(shop_item_id: @shop_item.id)
-          @mission_submission.update!(shop_order_id: @order.id, chosen_prize_id: chosen_prize&.id)
-        end
+        Mission::PrizeRedemption.record!(shop_order: @order, gate: @redeemable) if @redeemable
 
-        unless @mission_submission
+        unless @redeemable
           @accessories.each do |accessory|
             accessory_order = current_user.shop_orders.new(
               shop_item: accessory,
@@ -195,6 +192,15 @@ class Shop::OrdersController < Shop::BaseController
   end
 
   private
+
+  # The free-price accessor differs by gate; it must be set before save so the
+  # price freezes to 0.
+  def assign_redemption_gate(order, gate)
+    case gate
+    when Mission::Submission           then order.redeeming_mission_submission = gate
+    when Certification::FundingRequest then order.redeeming_funding_request = gate
+    end
+  end
 
   def find_sharable_order
     return nil unless Flipper.enabled?(:sharable_purchase, current_user)

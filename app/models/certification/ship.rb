@@ -446,6 +446,7 @@ module Certification
             project.approve! if project.may_approve?
           end
           create_ysws_review_for_ship(ship_event) if ship_event
+          collapse_mission_build_review!(ship_event)
         when :returned
           ship_event&.update!(certification_status: "returned")
           if latest
@@ -454,6 +455,20 @@ module Certification
           end
         end
       end
+    end
+
+    # Hardware missions review the build as one decision: certifying the ship
+    # (just above, which cascades the mission submission to `pending`) also
+    # finalizes that submission, granting the after-ship prize and any
+    # achievement. Software missions keep their separate mission approval.
+    def collapse_mission_build_review!(ship_event)
+      submission = ship_event&.mission_submission
+      return unless submission&.mission&.hardware?
+      return unless submission.may_approve?
+
+      submission.update!(reviewed_by: reviewer, reviewed_at: Time.current, rejection_message: nil)
+      submission.approve!
+      submission.grant_rewards!(reviewer_id: reviewer&.id)
     end
 
     def create_ysws_review_for_ship(ship_event)

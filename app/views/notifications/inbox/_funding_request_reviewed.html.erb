@@ -1,7 +1,12 @@
 <% request = notification.record %>
 <% if request&.approved? %>
-  <span class="notifications-item__verb">Your funding request was</span>
-  <strong>approved<%= " for $#{request.final_amount_dollars}" if request.final_amount_dollars.to_i.positive? %></strong>
+  <% if request.awards_design_kit? %>
+    <span class="notifications-item__verb">Your design was</span>
+    <strong>approved</strong>
+  <% else %>
+    <span class="notifications-item__verb">Your funding request was</span>
+    <strong>approved<%= " for $#{request.final_amount_dollars}" if request.final_amount_dollars.to_i.positive? %></strong>
+  <% end %>
 <% else %>
   <span class="notifications-item__verb">Your funding request</span>
   <strong>needs changes</strong>

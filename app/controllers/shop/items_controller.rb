@@ -20,14 +20,14 @@ class Shop::ItemsController < Shop::BaseController
     authorize :shop
 
     @shop_item = ShopItem.find(params[:id])
-    @mission_submission = load_redeemable_submission(@shop_item)
+    @redeemable = load_redeemable_gate(@shop_item)
 
-    if @mission_submission.nil? && @shop_item.mission_prize_only?
+    if @redeemable.nil? && @shop_item.mission_prize_only?
       redirect_to shop_path, alert: "This item can only be claimed by redeeming a mission prize."
       return
     end
 
-    unless @shop_item.enabled? || @mission_submission.present?
+    unless @shop_item.enabled? || @redeemable.present?
       redirect_to shop_path, alert: "This item cannot be ordered."
       return
     end
@@ -37,7 +37,7 @@ class Shop::ItemsController < Shop::BaseController
       return
     end
 
-    @mission_locked = @mission_submission.nil? && @shop_item.mission_locked_for?(current_user)
+    @mission_locked = @redeemable.nil? && @shop_item.mission_locked_for?(current_user)
     @unlocking_missions = @mission_locked ? @shop_item.unlocking_missions : []
 
     @user_region = user_region

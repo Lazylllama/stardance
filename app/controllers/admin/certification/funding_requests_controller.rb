@@ -11,7 +11,7 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
       notice = "#{verb} funding for “#{@funding_request.project.title}.” That's #{count} reviewed today. Keep going!"
       # Straight on to the next design review; `next` claims it, and falls back
       # to the queue when there's nothing left.
-      redirect_to next_admin_certification_hardware_reviews_path(stage: "design"), notice: notice
+      redirect_to hardware_review_next_path_for(@funding_request.project, "design"), notice: notice
     else
       load_hardware_review_context
       render "admin/certification/hardware_reviews/show", status: :unprocessable_entity
