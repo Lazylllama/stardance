@@ -73,7 +73,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
   def show
     @review = ::Certification::Ysws
-      .includes(:project, :user, :reviewer, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
+      .includes(:project, :user, :reviewer, :mac_analysis, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .find(params[:id])
     authorize @review
 
