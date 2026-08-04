@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_152459) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -222,6 +222,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_152459) do
     t.index ["reviewer_id"], name: "index_certification_integrities_on_reviewer_id"
     t.index ["ship_event_id"], name: "index_certification_integrities_on_ship_event_id", unique: true
     t.index ["status"], name: "index_certification_integrities_on_status"
+  end
+
+  create_table "certification_mac_analyses", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "generated_at", null: false
+    t.jsonb "report", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "ysws_review_id", null: false
+    t.index ["ysws_review_id"], name: "index_certification_mac_analyses_on_ysws_review_id", unique: true
   end
 
   create_table "certification_ship_reviews", force: :cascade do |t|
@@ -1606,6 +1615,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_152459) do
   add_foreign_key "certification_integrities", "post_ship_events", column: "ship_event_id"
   add_foreign_key "certification_integrities", "users", column: "claimed_by_id"
   add_foreign_key "certification_integrities", "users", column: "reviewer_id"
+  add_foreign_key "certification_mac_analyses", "certification_ysws_reviews", column: "ysws_review_id"
   add_foreign_key "certification_ship_reviews", "post_ship_events", on_delete: :nullify
   add_foreign_key "certification_ship_reviews", "projects"
   add_foreign_key "certification_ship_reviews", "users", column: "reviewer_id"

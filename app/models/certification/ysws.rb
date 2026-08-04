@@ -63,6 +63,9 @@ module Certification
     # An integrity check hangs off the ship event (one per ship event), so a
     # review maps 1-1 to one through its own ship event.
     has_one :integrity_check, through: :post_ship_event, source: :integrity_check
+    has_one :mac_analysis, class_name: "Certification::MACAnalysis",
+                           foreign_key: :ysws_review_id,
+                           dependent: :destroy
 
     validates :original_minutes, numericality: { greater_than_or_equal_to: 0 }, allow_nil: false
     validates :approved_minutes, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
