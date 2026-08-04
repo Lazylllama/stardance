@@ -98,7 +98,7 @@ class UsersController < ApplicationController
     can_view_deleted_devlogs = policy(@user).view_deleted_devlogs?
 
     scope = Post.left_outer_joins(:project)
-                .where("projects.deleted_at IS NULL OR posts.postable_type = ?", "Post::Repost")
+                .where("projects.id IS NOT NULL OR posts.postable_type = ?", "Post::Repost")
                 .visible_to(current_user)
                 .where(user_id: @user.id)
                 .preload(:postable)
