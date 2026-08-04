@@ -5,7 +5,7 @@ class Admin::Certification::ShipPolicy < ApplicationPolicy
 
   def logs? = user&.can_review?
 
-  def show? = user&.can_review? && not_own_project?
+  def show? = can_review_hardware? && not_own_project?
 
   def update? = show?
 
