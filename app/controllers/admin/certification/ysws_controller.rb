@@ -127,6 +127,10 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       @contribution_data = ::Certification::YswsService.fetch_contributions(platform, username)
     end
 
+    # The MAC pre-screen is flagged per reviewer: left nil when it's off so the
+    # banner and the per-devlog notes both disappear from a single check.
+    @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
+
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
       load_commits_with_stats(

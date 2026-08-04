@@ -4,9 +4,12 @@ require "test_helper"
 
 # End-to-end coverage for the MAC pre-screen on the YSWS review page: the banner
 # along the top and the read-only recommendation on the devlog whose id the report
-# names. The page must also render unchanged when a review has no pre-screen.
+# names. The page must also render unchanged when a review has no pre-screen, or
+# when the reviewer doesn't have the :mac_analysis flag.
 class Admin::Certification::YswsMacAnalysisTest < ActionDispatch::IntegrationTest
   setup do
+    Flipper.enable(:mac_analysis)
+
     @reviewer = create_user(slack_id: "U_MAC_REV", display_name: "mac-reviewer")
     @reviewer.grant_role!(:admin)
 
@@ -17,20 +20,10 @@ class Admin::Certification::YswsMacAnalysisTest < ActionDispatch::IntegrationTes
     sign_in @reviewer
   end
 
+  teardown { Flipper.disable(:mac_analysis) }
+
   test "the banner and the devlog recommendation show when the review has a pre-screen" do
-    @review.create_mac_analysis!(
-      generated_at: 1.hour.ago,
-      report: {
-        "summary_note" => "57% of heartbeats came from an AI editor.",
-        "flags" => [ { "type" => "understated_ai", "severity" => "orange", "detail" => "declared minimal" } ],
-        "signals" => { "ai_coding_pct" => 57.2, "total_heartbeats" => 33_911 },
-        "devlog_recommendations" => [
-          { "devlog_review_id" => @devlog_review.id, "original_minutes" => 60,
-            "recommended_minutes" => 13, "justification" => "mostly AI-authored" }
-        ],
-        "cached_data" => { "commits" => [ { "sha" => "804a7868", "message" => "persist profiles" } ] }
-      }
-    )
+    seed_mac_analysis
 
     get admin_certification_ysws_review_path(@review)
 
@@ -61,7 +54,35 @@ class Admin::Certification::YswsMacAnalysisTest < ActionDispatch::IntegrationTes
     assert_select ".minutes-input"
   end
 
+  test "nothing about the pre-screen shows when the reviewer doesn't have the flag" do
+    seed_mac_analysis
+    Flipper.disable(:mac_analysis)
+
+    get admin_certification_ysws_review_path(@review)
+
+    assert_response :success
+    assert_select ".mac-banner", count: 0
+    assert_select ".mac-hint", count: 0
+    assert_select ".devlogs-card"
+  end
+
   private
+
+    def seed_mac_analysis
+      @review.create_mac_analysis!(
+        generated_at: 1.hour.ago,
+        report: {
+          "summary_note" => "57% of heartbeats came from an AI editor.",
+          "flags" => [ { "type" => "understated_ai", "severity" => "orange", "detail" => "declared minimal" } ],
+          "signals" => { "ai_coding_pct" => 57.2, "total_heartbeats" => 33_911 },
+          "devlog_recommendations" => [
+            { "devlog_review_id" => @devlog_review.id, "original_minutes" => 60,
+              "recommended_minutes" => 13, "justification" => "mostly AI-authored" }
+          ],
+          "cached_data" => { "commits" => [ { "sha" => "804a7868", "message" => "persist profiles" } ] }
+        }
+      )
+    end
 
     # Minimal review graph: a project with one devlog, a ship event, and the YSWS
     # review the page renders. Mirrors script/make_review.rb, trimmed to what the

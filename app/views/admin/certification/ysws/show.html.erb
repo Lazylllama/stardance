@@ -1,7 +1,7 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer certification--ysws--complete-review certification--ysws--return-to-ship-cert" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>" data-certification--ysws--complete-review-review-id-value="<%= @review.id %>" data-certification--ysws--return-to-ship-cert-review-id-value="<%= @review.id %>">
-  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @review.mac_analysis) %>
+  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @mac_analysis) %>
 
   <!-- Header Section -->
   <div class="review-detail-header">
@@ -334,7 +334,7 @@
           <% end %>
           <% @review.devlog_reviews.each_with_index do |devlog_review, index| %>
             <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0,
-                  mac_recommendation: @review.mac_analysis&.recommendation_for(devlog_review.id) %>
+                  mac_recommendation: @mac_analysis&.recommendation_for(devlog_review.id) %>
           <% end %>
         </div>
       </div>
