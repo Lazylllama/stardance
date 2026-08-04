@@ -1370,6 +1370,10 @@ body:has(.certification-ysws) {
       padding-bottom: var(--space-xl);
       border-bottom: 1px solid var(--color-space-border);
 
+      // Anchor target for the MAC banner's recommendation rows — keeps the card's
+      // header clear of the top of the viewport when jumped to.
+      scroll-margin-top: var(--space-xxl);
+
       &:last-child {
         border-bottom: none;
         padding-bottom: 0;

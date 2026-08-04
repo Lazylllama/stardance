@@ -42,6 +42,23 @@ module GitHost
       raise NotImplementedError
     end
 
+    # Web URL for one commit on this host, or nil when there's nothing to build
+    # from. Derived from the repo URL's path shape rather than an API call, so an
+    # abbreviated SHA works and callers never pay a request to render a link.
+    def commit_url(sha)
+      return nil if repo_url.blank? || sha.blank?
+
+      base = repo_url.sub(/\.git$/, "")
+
+      if base.include?("gitlab")
+        "#{base}/-/commit/#{sha}"
+      elsif base.include?("bitbucket")
+        "#{base}/commits/#{sha}"
+      else
+        "#{base}/commit/#{sha}"
+      end
+    end
+
     protected
 
     def parse_url!
