@@ -11,14 +11,17 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     :order_type, { assignee_ids: [], hidden_types: [] }
   ].freeze
 
+  # TutorialNothing is never fulfilled by a human, so it's dropped from the
+  # queue outright rather than given a toggle nobody would reach for.
+  ALWAYS_HIDDEN_ITEM_TYPES = %w[ShopItem::TutorialNothing].freeze
+
   # Item-type groups the fulfillment queue can fold away, one toggle each.
-  # TutorialNothing and FreeStickers need no human work and WarehouseItem is
-  # fulfilled by the external warehouse, so those start folded away. Mail is
-  # packed by hand and stays visible — HQ mail and letter mail share a single
-  # toggle because they're worked as one pile. Add new LetterMail subclasses to
-  # the mail group so they fold with the rest of it.
+  # FreeStickers needs no human work and WarehouseItem is fulfilled by the
+  # external warehouse, so those start folded away. Mail is packed by hand and
+  # stays visible — HQ mail and letter mail share a single toggle because
+  # they're worked as one pile. Add new LetterMail subclasses to the mail group
+  # so they fold with the rest of it.
   ITEM_TYPE_TOGGLES = [
-    { label: "Tutorial Nothing", hidden_by_default: true, types: %w[ShopItem::TutorialNothing] },
     { label: "Free Stickers", hidden_by_default: true, types: %w[ShopItem::FreeStickers] },
     { label: "Warehouse Item", hidden_by_default: true, types: %w[ShopItem::WarehouseItem] },
     { label: "HQ Mail", hidden_by_default: false, types: %w[
@@ -61,10 +64,10 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   end
 
   def hidden_item_types
-    @hidden_item_types ||= begin
-      types = if @view != "fulfillment"
-        []
-      elsif params.key?(:hidden_types)
+    @hidden_item_types ||= if @view != "fulfillment"
+      []
+    else
+      toggled = if params.key?(:hidden_types)
         Array(params[:hidden_types]) & TOGGLEABLE_ITEM_TYPES
       else
         DEFAULT_HIDDEN_ITEM_TYPES
@@ -72,7 +75,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
 
       # An explicit item-type filter beats the folded-away defaults, otherwise
       # filtering down to a hidden type would come back empty.
-      types - [ params[:item_type] ]
+      (toggled | ALWAYS_HIDDEN_ITEM_TYPES) - [ params[:item_type] ]
     end
   end
 
