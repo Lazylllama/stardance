@@ -114,6 +114,12 @@ class Mission::Submission < ApplicationRecord
     pending_at || created_at
   end
 
+  # The after-ship prize this submission can redeem for `shop_item`, if any.
+  # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
+  def redeemable_prize_for(shop_item)
+    mission.prizes.after_shipping.find_by(shop_item_id: shop_item.id)
+  end
+
   # Per-mission reviewers/owners, minus teammates (no self-review). Global
   # mission_reviewers manage every mission but are deliberately left out here —
   # they opt into the queue rather than being paged for each submission.

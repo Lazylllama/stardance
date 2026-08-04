@@ -116,7 +116,46 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     assert_not_includes @project.ship_blocking_errors, label
   end
 
+  test "kit mission: funding request needs no tier or amount" do
+    attach_kit_mission
+    fr = @project.certification_funding_requests.new(user: @owner)
+    assert fr.valid?, fr.errors.full_messages.to_sentence
+    assert fr.save
+    assert_equal Certification::FundingRequest::TIER_MAX_CENTS.keys.min, fr.complexity_tier
+    assert_equal 0, fr.requested_amount_cents
+    assert fr.awards_design_kit?
+  end
+
+  test "kit mission: approval delivers a kit instead of a cash grant" do
+    attach_kit_mission
+    fr = @project.certification_funding_requests.create!(user: @owner, status: :pending)
+
+    grant_called = false
+    HCBService.stub(:create_card_grant, ->(*) { grant_called = true; HCB_GRANT_RESPONSE }) do
+      fr.update!(reviewer: @reviewer, status: :approved)
+    end
+
+    assert_not grant_called, "kit mission should not issue an HCB grant"
+    assert_nil fr.reload.hcb_grant_hashid
+    assert_equal "build", @project.reload.hardware_stage
+    assert_equal true, fr.notification_locals[:awards_kit]
+  end
+
   private
+
+  PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
+
+  def attach_kit_mission
+    mission = create_mission
+    mission.update!(hardware: true)
+    kit = ShopItem.new(name: "Hackpad Kit #{SecureRandom.hex(3)}", description: "The kit for this mission",
+                       ticket_cost: 0, type: "ShopItem::ThirdPartyPhysical", enabled: true, mission_prize_only: true)
+    kit.image.attach(io: StringIO.new(PIXEL_PNG), filename: "kit.png", content_type: "image/png")
+    kit.save!
+    mission.prizes.create!(shop_item: kit, position: 0, category: :after_design)
+    @project.mission_attachments.create!(mission: mission)
+    mission
+  end
 
   def create_devlog(phase:)
     devlog = Post::Devlog.new(body: "work log", duration_seconds: 3600, phase: phase)

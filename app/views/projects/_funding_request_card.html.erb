@@ -14,11 +14,23 @@
   viewer_is_owner = owner.present? && owner == current_user
   show_feedback = funding_request.feedback.present? && !funding_request.pending? && (viewer_is_owner || current_user&.admin?)
 
+  awards_kit = funding_request.awards_design_kit?
+  kit_prize = awards_kit ? project.current_mission.prizes.after_design.ordered.first : nil
+  kit_redeemed = awards_kit && Mission::PrizeRedemption.exists?(source: funding_request)
+
+  approved_message =
+    if awards_kit && kit_redeemed
+      "Approved! Your kit is on the way. Log your build hours with a timelapse, then ship when you're ready."
+    elsif awards_kit
+      "Approved, and the project has moved to the build stage. Redeem your kit below to get it shipped."
+    else
+      "Approved for $#{funding_request.final_amount_dollars}, and the project has moved to the build stage. Your grant card follows once it has been issued."
+    end
+
   context, message =
     case funding_request.status.to_sym
     when :approved
-      [ "approved your funding request",
-        "Approved for $#{funding_request.final_amount_dollars}, and the project has moved to the build stage. Your grant card follows once it has been issued." ]
+      [ awards_kit ? "approved your design" : "approved your funding request", approved_message ]
     when :returned
       [ "returned your funding request",
         "This needs changes before it can be funded. Take a look at the feedback, then submit your design again." ]
@@ -57,10 +69,12 @@
       </p>
     </div>
 
-    <span class="funding-request-card__amount">
-      $<%= funding_request.requested_amount_dollars %>
-      <span class="funding-request-card__tier"><%= funding_request.tier_label %></span>
-    </span>
+    <% unless awards_kit %>
+      <span class="funding-request-card__amount">
+        $<%= funding_request.requested_amount_dollars %>
+        <span class="funding-request-card__tier"><%= funding_request.tier_label %></span>
+      </span>
+    <% end %>
   </header>
 
   <div class="feed-post-card__body funding-request-card__message">
@@ -82,6 +96,13 @@
               onclick="document.getElementById(<%= resubmit_modal_id.to_json %>).showModal()">
         Submit design again
       </button>
+    </div>
+  <% end %>
+
+  <% if funding_request.approved? && viewer_is_owner && kit_prize && !kit_redeemed %>
+    <div class="funding-request-card__actions">
+      <%= link_to "Redeem your kit", shop_item_path(kit_prize.shop_item, funding_request_id: funding_request.id),
+            class: "action-btn action-btn--small action-btn--primary" %>
     </div>
   <% end %>
 </article>

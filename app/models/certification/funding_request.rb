@@ -43,6 +43,11 @@ module Certification
   # ship certifications (Certification::Reviewable). On approval the project
   # switches to the build stage and an HCB card grant is issued for the approved
   # amount, capped by the tier's max.
+  #
+  # When the project's mission hands out a design kit (an after_design prize),
+  # approval delivers that kit for redemption instead of a cash grant: no HCB
+  # grant is issued and the tier/amount fields are vestigial (defaulted, hidden
+  # in the request form).
   class FundingRequest < ApplicationRecord
     self.table_name = "certification_funding_requests"
 
@@ -84,8 +89,11 @@ module Certification
     # Stardust a reviewer earns per completed funding review.
     REVIEW_BOUNTY = 1
 
+    before_validation :default_kit_request_fields, on: :create, if: :awards_design_kit?
+
     validates :complexity_tier, inclusion: { in: TIER_MAX_CENTS.keys }
-    validates :requested_amount_cents, numericality: { only_integer: true, greater_than: 0 }
+    validates :requested_amount_cents,
+              numericality: { only_integer: true, greater_than: 0 }, unless: :awards_design_kit?
     validates :approved_amount_cents,
               numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
     validates :feedback, length: { maximum: 10_000 }, allow_blank: true
@@ -181,6 +189,18 @@ module Certification
       @owner ||= project.memberships.owner.first&.user || user
     end
 
+    # True when the project's active mission delivers a physical kit at design
+    # approval (an after_design prize) rather than a cash grant.
+    def awards_design_kit?
+      project&.current_mission&.prizes&.after_design&.exists? || false
+    end
+
+    # The after-design kit this request can redeem for `shop_item`, if any.
+    # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
+    def redeemable_prize_for(shop_item)
+      project&.current_mission&.prizes&.after_design&.find_by(shop_item_id: shop_item.id)
+    end
+
     # Locals for the verdict notification's Slack template.
     def notification_locals
       routes = Rails.application.routes.url_helpers
@@ -193,6 +213,7 @@ module Certification
         project_title: project.title,
         project_url: routes.project_url(project, **url_opts),
         approved: approved?,
+        awards_kit: awards_design_kit?,
         amount_dollars: final_amount_dollars,
         tier_label: tier_label,
         reviewer_name: reviewer&.display_name,
@@ -228,7 +249,7 @@ module Certification
     # retries the next time the request is saved instead of being stranded.
     # issue_hcb_grant! already returns early when a grant exists.
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? }
+    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? && !awards_design_kit? }
 
     private
 
@@ -265,6 +286,14 @@ module Certification
 
     def default_approved_amount
       self.approved_amount_cents ||= requested_amount_cents
+    end
+
+    # Kit missions have no cash amount, but the columns are NOT NULL. Seed the
+    # smallest valid tier and a zero amount so the record persists; the form
+    # hides both fields for these requests.
+    def default_kit_request_fields
+      self.complexity_tier ||= TIER_MAX_CENTS.keys.min
+      self.requested_amount_cents ||= 0
     end
 
     def assign_stardust_earned

@@ -1,7 +1,11 @@
 if approved
-  header ":tada: Your funding request was approved!"
+  header ":tada: Your design was approved!"
 
-  section "*<#{project_url}|#{project_title}>* is approved for *$#{amount_dollars}* in funding (#{tier_label}) and has moved to the build phase.", markdown: true
+  if awards_kit
+    section "*<#{project_url}|#{project_title}>* is approved and has moved to the build phase. Head to your project to redeem your kit.", markdown: true
+  else
+    section "*<#{project_url}|#{project_title}>* is approved for *$#{amount_dollars}* in funding (#{tier_label}) and has moved to the build phase.", markdown: true
+  end
 
   section "Log your build hours with a timelapse, then ship when you're ready."
 else

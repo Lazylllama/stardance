@@ -196,25 +196,37 @@
                 </li>
                 <% tone_idx += 1 %>
               <% end %>
-              <% @ordered_prizes.each_with_index do |prize, idx| %>
-                <% tone = tones[(tone_idx + idx) % tones.length] %>
-                <li class="mission-home__prize mission-home__prize--<%= tone %>">
-                  <div class="mission-home__prize-tile">
-                    <% if prize.shop_item.respond_to?(:image) && prize.shop_item.image.respond_to?(:attached?) && prize.shop_item.image.attached? %>
-                      <%= image_tag prize.shop_item.image, alt: "", class: "mission-home__prize-img" %>
-                    <% else %>
-                      <svg viewBox="0 0 24 24" width="28" height="28" class="mission-home__prize-glyph" aria-hidden="true">
-                        <path d="M12 1.5 13.6 10.4 22.5 12 13.6 13.6 12 22.5 10.4 13.6 1.5 12 10.4 10.4Z" />
-                      </svg>
-                    <% end %>
-                  </div>
-                  <div class="mission-home__prize-body">
-                    <p class="mission-home__prize-title"><%= prize.shop_item.name %></p>
-                    <% if prize.shop_item.description.present? %>
-                      <p class="mission-home__prize-blurb"><%= prize.shop_item.description %></p>
-                    <% end %>
-                  </div>
-                </li>
+              <%# Group prizes by category, but only label the groups when the
+                  mission actually spans more than one category. %>
+              <% prize_groups = @ordered_prizes.group_by(&:category) %>
+              <% ordered_categories = Mission::Prize::CATEGORY_ORDER & prize_groups.keys %>
+              <% show_group_labels = ordered_categories.size > 1 %>
+              <% prize_idx = 0 %>
+              <% ordered_categories.each do |category| %>
+                <% if show_group_labels %>
+                  <li class="mission-home__prize-group-label"><%= Mission::Prize::CATEGORY_LABELS.fetch(category, category.humanize) %></li>
+                <% end %>
+                <% prize_groups[category].each do |prize| %>
+                  <% tone = tones[(tone_idx + prize_idx) % tones.length] %>
+                  <li class="mission-home__prize mission-home__prize--<%= tone %>">
+                    <div class="mission-home__prize-tile">
+                      <% if prize.shop_item.respond_to?(:image) && prize.shop_item.image.respond_to?(:attached?) && prize.shop_item.image.attached? %>
+                        <%= image_tag prize.shop_item.image, alt: "", class: "mission-home__prize-img" %>
+                      <% else %>
+                        <svg viewBox="0 0 24 24" width="28" height="28" class="mission-home__prize-glyph" aria-hidden="true">
+                          <path d="M12 1.5 13.6 10.4 22.5 12 13.6 13.6 12 22.5 10.4 13.6 1.5 12 10.4 10.4Z" />
+                        </svg>
+                      <% end %>
+                    </div>
+                    <div class="mission-home__prize-body">
+                      <p class="mission-home__prize-title"><%= prize.shop_item.name %></p>
+                      <% if prize.shop_item.description.present? %>
+                        <p class="mission-home__prize-blurb"><%= prize.shop_item.description %></p>
+                      <% end %>
+                    </div>
+                  </li>
+                  <% prize_idx += 1 %>
+                <% end %>
               <% end %>
               <% @shop_unlocks.each_with_index do |shop_unlock, idx| %>
                 <% tone = tones[(tone_idx + @ordered_prizes.size + idx) % tones.length] %>

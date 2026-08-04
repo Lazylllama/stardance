@@ -3,6 +3,7 @@
 # Table name: mission_prizes
 #
 #  id           :bigint           not null, primary key
+#  category     :integer          default("after_shipping"), not null
 #  deleted_at   :datetime
 #  position     :integer          default(0), not null
 #  created_at   :datetime         not null
@@ -31,6 +32,17 @@ class Mission::Prize < ApplicationRecord
 
   belongs_to :mission, inverse_of: :prizes, counter_cache: true
   belongs_to :shop_item
+  has_many :redemptions, class_name: "Mission::PrizeRedemption", inverse_of: :mission_prize, dependent: :destroy
+
+  # after_shipping is the historical default (redeemed once a ship is approved);
+  # after_design gates a kit on funding/design approval.
+  enum :category, { after_shipping: 0, after_design: 1 }, default: :after_shipping
+
+  # Builder-facing heading for each category on the mission page.
+  CATEGORY_LABELS = { "after_design" => "After design", "after_shipping" => "After shipping" }.freeze
+
+  # Order categories follow in the mission flow (earn the kit, then ship).
+  CATEGORY_ORDER = %w[after_design after_shipping].freeze
 
   validates :position, presence: true, numericality: { only_integer: true }
 

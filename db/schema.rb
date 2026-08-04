@@ -511,7 +511,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.index ["prerequisite_mission_id"], name: "index_mission_prerequisites_on_prerequisite_mission_id"
   end
 
+  create_table "mission_prize_redemptions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "mission_id", null: false
+    t.bigint "mission_prize_id", null: false
+    t.bigint "shop_order_id", null: false
+    t.bigint "source_id", null: false
+    t.string "source_type", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["mission_id"], name: "index_mission_prize_redemptions_on_mission_id"
+    t.index ["mission_prize_id"], name: "index_mission_prize_redemptions_on_mission_prize_id"
+    t.index ["shop_order_id"], name: "index_mission_prize_redemptions_on_shop_order_id", unique: true
+    t.index ["source_type", "source_id", "mission_prize_id"], name: "index_prize_redemptions_on_source_and_prize", unique: true
+    t.index ["source_type", "source_id"], name: "index_mission_prize_redemptions_on_source"
+    t.index ["user_id"], name: "index_mission_prize_redemptions_on_user_id"
+  end
+
   create_table "mission_prizes", force: :cascade do |t|
+    t.integer "category", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.bigint "mission_id", null: false
@@ -1649,6 +1667,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
   add_foreign_key "mission_memberships", "users"
   add_foreign_key "mission_prerequisites", "missions", column: "dependent_mission_id"
   add_foreign_key "mission_prerequisites", "missions", column: "prerequisite_mission_id"
+  add_foreign_key "mission_prize_redemptions", "mission_prizes"
+  add_foreign_key "mission_prize_redemptions", "missions"
+  add_foreign_key "mission_prize_redemptions", "shop_orders"
+  add_foreign_key "mission_prize_redemptions", "users"
   add_foreign_key "mission_prizes", "missions"
   add_foreign_key "mission_prizes", "shop_items"
   add_foreign_key "mission_section_completions", "mission_steps", on_delete: :cascade

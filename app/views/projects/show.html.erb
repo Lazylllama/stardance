@@ -642,7 +642,7 @@
                   ) %>
             <% else %>
               <%= render ActionButtonComponent.new(
-                    text: "Submit for funding",
+                    text: @project.awards_design_kit? ? "Submit your design" : "Submit for funding",
                     variant: :primary,
                     type: :button,
                     icon: "icons/rocket.png",
@@ -1161,6 +1161,32 @@
               class="ship-modal ship-modal--post funding-modal"
               data-controller="modal"
               aria-label="Request project funding">
+        <% if @project.awards_design_kit? %>
+        <%= form_with url: project_funding_request_path(@project),
+                      method: :post,
+                      data: { turbo: false },
+                      html: { class: "ship-modal__form" } do |form| %>
+          <div class="ship-modal__panel funding-modal__panel">
+            <header class="funding-modal__header">
+              <h2 class="funding-modal__title">Submit your design</h2>
+              <p class="funding-modal__tagline">Get your design approved and we'll ship you the kit to build with.</p>
+            </header>
+
+            <p class="funding-modal__note">
+              Once a reviewer approves your design, your kit becomes available to redeem and your project moves to the build stage.
+            </p>
+
+            <div class="ship-modal__actions">
+              <button type="button"
+                      class="ship-modal__btn ship-modal__btn--secondary"
+                      onclick="document.getElementById('funding-request-modal-' + <%= @project.id.to_json %>).close()">
+                Cancel
+              </button>
+              <%= form.submit "Submit design", class: "ship-modal__btn ship-modal__btn--primary funding-modal__submit", data: { disable_with: "Submitting…" } %>
+            </div>
+          </div>
+        <% end %>
+        <% else %>
         <%= form_with url: project_funding_request_path(@project),
                       method: :post,
                       data: { turbo: false },
@@ -1214,6 +1240,7 @@
               <%= form.submit "Submit for funding", class: "ship-modal__btn ship-modal__btn--primary funding-modal__submit", data: { disable_with: "Submitting…" } %>
             </div>
           </div>
+        <% end %>
         <% end %>
       </dialog>
       <script>

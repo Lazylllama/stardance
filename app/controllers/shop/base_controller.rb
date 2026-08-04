@@ -69,6 +69,13 @@ class Shop::BaseController < ApplicationController
     }
   end
 
+  # The approval that unlocks a free prize redemption for this item: an
+  # after-ship submission or an after-design funding kit. Returns the gate
+  # record (used as the PrizeRedemption source) or nil.
+  def load_redeemable_gate(shop_item)
+    load_redeemable_submission(shop_item) || load_redeemable_funding_request(shop_item)
+  end
+
   def load_redeemable_submission(shop_item)
     return nil unless current_user
     submission_id = params[:mission_submission_id]
@@ -81,8 +88,27 @@ class Shop::BaseController < ApplicationController
     return nil unless submission.approved?
     return nil unless submission.shop_order_id.nil?
     return nil unless submission.ship_event&.post&.user_id == current_user.id
-    return nil unless submission.mission.prizes.exists?(shop_item_id: shop_item.id)
+    return nil unless submission.mission.prizes.after_shipping.exists?(shop_item_id: shop_item.id)
 
     submission
+  end
+
+  def load_redeemable_funding_request(shop_item)
+    return nil unless current_user
+    funding_request_id = params[:funding_request_id]
+    return nil if funding_request_id.blank?
+
+    funding_request = Certification::FundingRequest
+      .includes(project: [ :memberships, { mission_attachments: :mission } ])
+      .find_by(id: funding_request_id)
+    return nil unless funding_request&.approved?
+    return nil unless funding_request.owner == current_user
+
+    mission = funding_request.project.current_mission
+    return nil unless mission&.prizes&.after_design&.exists?(shop_item_id: shop_item.id)
+    # One design kit per approved request.
+    return nil if Mission::PrizeRedemption.exists?(source: funding_request)
+
+    funding_request
   end
 end
