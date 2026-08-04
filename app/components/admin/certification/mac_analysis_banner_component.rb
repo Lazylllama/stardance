@@ -322,16 +322,21 @@ module Admin
           link_to(value, url, class: "mac-banner__sha", target: "_blank", rel: "noopener noreferrer")
         end
 
+        # Web URL for a commit on the project's repo host, built from the repo URL's
+        # path shape. No API call, so an abbreviated SHA works and a link costs no
+        # request; an unrecognised host just gets the common /commit/<sha> shape.
         def commit_url(sha)
-          git_host&.commit_url(sha)
-        end
+          return if repo_url.blank? || sha.blank?
 
-        # Memoised including the nil case: an unrecognised repo URL shouldn't be
-        # re-parsed once per evidence row.
-        def git_host
-          return @git_host if defined?(@git_host)
+          base = repo_url.sub(/\.git$/, "")
 
-          @git_host = GitHost::Base.for(repo_url)
+          if base.include?("gitlab")
+            "#{base}/-/commit/#{sha}"
+          elsif base.include?("bitbucket")
+            "#{base}/commits/#{sha}"
+          else
+            "#{base}/commit/#{sha}"
+          end
         end
 
         def format_cell(value)

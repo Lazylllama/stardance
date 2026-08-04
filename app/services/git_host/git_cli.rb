@@ -130,13 +130,27 @@ module GitHost
           author_name: author_name,
           author_email: author_email,
           authored_at: Time.parse(authored_at),
-          url: commit_url(sha),
+          url: build_commit_url(sha),
           additions: nil,
           deletions: nil,
           files_changed: nil
         }
       rescue ArgumentError
         nil
+      end
+    end
+
+    def build_commit_url(sha)
+      return nil unless repo_url.present?
+
+      base = repo_url.sub(/\.git$/, "")
+
+      if base.include?("gitlab")
+        "#{base}/-/commit/#{sha}"
+      elsif base.include?("bitbucket")
+        "#{base}/commits/#{sha}"
+      else
+        "#{base}/commit/#{sha}"
       end
     end
   end
