@@ -4,7 +4,11 @@ module Admin
 
     COUNTS = {
       "shop_fulfillment" => -> {
-        ::ShopOrder.where(aasm_state: "awaiting_periodical_fulfillment").count
+        awaiting = ::ShopOrder.where(aasm_state: "awaiting_periodical_fulfillment")
+        {
+          count: awaiting.count,
+          mine: awaiting.where(assigned_to_user_id: current_user.id).count
+        }
       },
       "fraud_checks" => -> {
         ::ShopOrder.where(aasm_state: "pending").count +
@@ -29,8 +33,14 @@ module Admin
       count = COUNTS[params[:key]]
       return head :not_found unless count
 
+      # A count is either a plain total or a hash carrying extras, e.g. how many
+      # of the total belong to the viewer.
+      result = instance_exec(&count)
+      result = { count: result } unless result.is_a?(Hash)
+
       @key = params[:key]
-      @count = instance_exec(&count)
+      @count = result[:count]
+      @mine = result[:mine]
     end
   end
 end

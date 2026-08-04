@@ -37,13 +37,17 @@
     <% end %>
   </div>
 
-  <div class="shop-orders__group-toggle">
-    <% if params[:goob] == "true" %>
-      <%= link_to "Ungroup", admin_shop_orders_path(preserved_filter_params.except(:goob)) %>
-    <% else %>
-      <%= link_to "Group by User", admin_shop_orders_path(preserved_filter_params.merge(goob: true)) %>
+  <div class="shop-orders__list-toggles">
+    <%= link_to grouped_by_user? ? "Ungroup" : "Group by User", admin_shop_orders_path(grouping_toggle_params) %>
+    <% if @fulfillment_users.present? %>
+      <%= link_to "👤 Assigned to me", admin_shop_orders_path(assigned_to_me_toggle_params),
+                  class: ("is-active" if assigned_to_me?) %>
     <% end %>
   </div>
+
+  <% if @view == 'fulfillment' %>
+    <%= render partial: "item_type_toggles", locals: { awaiting_counts: @awaiting_counts_by_type } %>
+  <% end %>
 
   <%= render partial: "filters" %>
 
@@ -51,8 +55,9 @@
     <%= render partial: "grouped_table", locals: { grouped_orders: @grouped_orders } %>
   <% elsif @shop_orders %>
     <%= render partial: "table", locals: { orders: @shop_orders } %>
-    <% if @pagy %>
-      <%== @pagy.series_nav %>
-    <% end %>
+  <% end %>
+
+  <% if @pagy %>
+    <%== @pagy.series_nav %>
   <% end %>
 </div>
