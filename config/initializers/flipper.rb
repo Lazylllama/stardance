@@ -42,7 +42,7 @@ Rails.application.config.after_initialize do
         payout_recommendations
         disable_internal_sw_dash_reviews
         sharable_purchase
-        shigimi_eyes
+        no_shigimi_eyes
         devlog_review_pace
         mac_analysis
       ].each { |flag| Flipper.add(flag) }
