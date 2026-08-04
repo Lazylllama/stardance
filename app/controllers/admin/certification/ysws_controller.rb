@@ -73,7 +73,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
   def show
     @review = ::Certification::Ysws
-      .includes(:project, :user, :reviewer, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
+      .includes(:project, :user, :reviewer, :mac_analysis, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .find(params[:id])
     authorize @review
 
@@ -126,6 +126,10 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       username = @repo_info[:username]
       @contribution_data = ::Certification::YswsService.fetch_contributions(platform, username)
     end
+
+    # The MAC pre-screen is flagged per reviewer: left nil when it's off so the
+    # banner and the per-devlog notes both disappear from a single check.
+    @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
 
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin

@@ -1467,11 +1467,28 @@ body:has(.certification-ysws) {
         letter-spacing: 0.05em;
       }
 
+      // Thumbnails share a row with the MAC pre-screen note (.mac-hint--aside),
+      // which wraps below them on narrow viewports.
+      .media-row {
+        align-items: flex-start;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-s);
+
+        // Sized to its thumbnails so the note can take the width left over
+        // after the last one; shrinks (re-wrapping the grid) when space is tight.
+        &__media {
+          flex: 0 1 auto;
+          min-width: 0;
+        }
+      }
+
+      // No margin-top: the label sits above .media-row, so the thumbnails must
+      // line up with the top of the note beside them.
       .media-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: var(--space-s);
-        margin-top: var(--space-s);
       }
 
       .media-item {

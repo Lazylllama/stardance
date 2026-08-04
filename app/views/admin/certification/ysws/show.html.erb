@@ -1,6 +1,8 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer certification--ysws--complete-review certification--ysws--return-to-ship-cert" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>" data-certification--ysws--complete-review-review-id-value="<%= @review.id %>" data-certification--ysws--return-to-ship-cert-review-id-value="<%= @review.id %>">
+  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @mac_analysis) %>
+
   <!-- Header Section -->
   <div class="review-detail-header">
     <%= link_to "← back", admin_certification_ysws_reviews_path, class: "btn-secondary slim", "aria-label": "Back to review queue" %>
@@ -319,7 +321,7 @@
               <span class="devlog-review-group__meta">shipped <%= prior_review.created_at.to_date %> · read-only</span>
             </div>
             <% prior_review.devlog_reviews.each do |devlog_review| %>
-              <%= render "devlog_review", devlog_review: devlog_review, frozen: true %>
+              <%= render "devlog_review", devlog_review: devlog_review, frozen: true, mac_recommendation: nil %>
             <% end %>
           </div>
         <% end %>
@@ -331,7 +333,8 @@
             </div>
           <% end %>
           <% @review.devlog_reviews.each_with_index do |devlog_review, index| %>
-            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0 %>
+            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0,
+                  mac_recommendation: @mac_analysis&.recommendation_for(devlog_review.id) %>
           <% end %>
         </div>
       </div>
