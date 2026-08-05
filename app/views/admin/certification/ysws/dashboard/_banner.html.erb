@@ -64,5 +64,7 @@
       data-certification--ysws--reviewer-chart-chart-value="<%= chart_data %>">
       <canvas data-certification--ysws--reviewer-chart-target="canvas"></canvas>
     </div>
+
+    <%= render "progress", progress: progress if progress %>
   </div>
 </section>

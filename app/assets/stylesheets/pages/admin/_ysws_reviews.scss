@@ -99,6 +99,7 @@
 
   // Per-reviewer pace widget, sits beside the project-type dropdown and shows the
   // running devlogs-per-day average for this review week plus the catch-up count.
+  // Superseded by the dashboard's progress panel when that flag is on.
   & &__goal {
     display: flex;
     flex-direction: column;
@@ -2682,6 +2683,141 @@ body:has(.certification-ysws) {
   &__chart {
     position: relative;
     height: 280px;
+  }
+
+  // "See your progress" — the reviewer's own numbers, sitting under the crew-wide
+  // chart in the same panel. Ruled off from the canvas so the two read as
+  // separate ideas rather than one long block.
+  &__progress {
+    margin-block-start: var(--space-m);
+    padding-block-start: var(--space-m);
+    border-block-start: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  &__progress-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xxxs);
+    padding: var(--space-xs) var(--space-s);
+    background: var(--color-set-1-bg);
+    border: 2px solid var(--color-set-1-fg-secondary);
+    border-radius: var(--profile-radius);
+  }
+
+  // Hitting the daily average earns the same top-spot gradient the #1 leaderboard
+  // row wears — the one loud surface on this panel. It's a light background, so
+  // every label inside flips to the dark set-1 colour to stay legible.
+  &__progress-hero--on-pace {
+    background: var(--gradient-extra-highlight) center / cover no-repeat;
+    border-color: transparent;
+
+    .ysws-dashboard__progress-count,
+    .ysws-dashboard__progress-label,
+    .ysws-dashboard__progress-note {
+      color: var(--color-set-1-bg);
+    }
+  }
+
+  &__progress-primary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    margin: 0;
+  }
+
+  &__progress-count {
+    color: var(--color-brand-highlight);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__progress-label {
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__progress-note {
+    margin: 0;
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  &__progress-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-s);
+    margin-block: var(--space-m) 0;
+
+    @media (max-width: 1200px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__progress-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xxxs);
+  }
+
+  &__progress-stat-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__progress-stat-value {
+    margin: 0;
+    color: var(--color-brand-off-white);
+    font-size: var(--font-size-l);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__progress-stat-note {
+    margin: 0;
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  &__progress-tier {
+    margin-block-start: var(--space-m);
+  }
+
+  &__progress-tier-note {
+    margin: 0 0 var(--space-xxs);
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+
+    strong {
+      color: var(--color-brand-off-white);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  // Fill percentage arrives as the --tier-fill custom property so the only
+  // inline value is the number itself; all styling stays here.
+  &__progress-tier-track {
+    height: var(--space-xxs);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--space-xxs);
+    overflow: hidden;
+  }
+
+  &__progress-tier-fill {
+    width: var(--tier-fill, 0%);
+    height: 100%;
+    background: var(--color-brand-lilac);
+    border-radius: inherit;
   }
 
   &__empty,
