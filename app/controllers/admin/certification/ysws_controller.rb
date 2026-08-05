@@ -67,8 +67,11 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
     # Per-reviewer pace against the daily devlog-review goal, averaged across the
     # current review week (Wednesday 4pm to the following Wednesday 4pm). Left nil
-    # when the flag is off so the queue skips both the query and the widget.
-    @devlog_pace = ::Certification::Ysws.reviewer_devlog_pace(current_user.id) if Flipper.enabled?(:devlog_review_pace, current_user)
+    # when the flag is off so the queue skips both the query and the widget — and
+    # when the progress panel is on, since that panel leads with the same figure.
+    @devlog_pace = ::Certification::Ysws.reviewer_devlog_pace(current_user.id) if
+      Flipper.enabled?(:devlog_review_pace, current_user) &&
+      !Flipper.enabled?(:reviewer_progress_panel, current_user)
   end
 
   def show

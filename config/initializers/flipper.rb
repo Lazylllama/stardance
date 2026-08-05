@@ -44,6 +44,7 @@ Rails.application.config.after_initialize do
         sharable_purchase
         shigimi_eyes
         devlog_review_pace
+        reviewer_progress_panel
         mac_analysis
       ].each { |flag| Flipper.add(flag) }
     end
