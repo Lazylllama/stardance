@@ -337,6 +337,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     end
 
     @review.update_columns(reviewer_id: current_user.id, reviewed_at: Time.current)
+    @review.touch
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Marked reviewed_at=#{@review.reviewed_at}; enqueuing AirtableSyncJob"
 
     ::Certification::YswsAirtableSyncJob.perform_later(@review.id)
