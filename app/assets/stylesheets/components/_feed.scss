@@ -1182,10 +1182,12 @@
     }
   }
 
+  // Opens upward: feed cards carry content-visibility, whose paint containment
+  // clips anything hanging below the card.
   &__repost-panel {
     position: absolute;
     z-index: 5;
-    top: calc(100% + var(--space-xs));
+    bottom: calc(100% + var(--space-xs));
     left: 50%;
     width: max-content;
     min-width: 128px;
