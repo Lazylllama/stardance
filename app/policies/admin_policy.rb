@@ -46,4 +46,8 @@ class AdminPolicy < ApplicationPolicy
   def manage_draft_shop_items?
     user.admin? || user.shop_manager?
   end
+
+  def import_devlogs?
+    user.admin?
+  end
 end
