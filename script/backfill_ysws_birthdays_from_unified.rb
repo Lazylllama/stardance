@@ -78,7 +78,11 @@ end
 # them, refuse to look up any address containing one (or whitespace/control
 # characters) — none of those can appear in an address we'd match on, so an
 # email carrying one is malformed or hostile either way.
-SAFE_EMAIL = /\A[^"\\[:space:][:cntrl:]]+@[^"\\[:space:][:cntrl:]]+\z/
+#
+# "@" is excluded from both halves so exactly one split point exists: an
+# ambiguous split makes the match quadratic on adversarial input, and it would
+# also let a multi-"@" string through.
+SAFE_EMAIL = /\A[^"\\@[:space:][:cntrl:]]+@[^"\\@[:space:][:cntrl:]]+\z/
 
 def airtable_get(url, api_key, params)
   attempt = 0
