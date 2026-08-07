@@ -64,6 +64,7 @@
       <%= admin_page_button "Blazer", admin_blazer_path, enabled: policy(:admin).access_blazer? %>
       <%= admin_page_button "Flipper", admin_flipper_path, enabled: policy(:admin).access_flipper? %>
       <%= admin_page_button "Jobs", admin_mission_control_jobs_path, enabled: policy(:admin).access_jobs? %>
+      <%= admin_page_button "Import Devlogs", new_admin_devlog_import_path, enabled: policy(:admin).import_devlogs? %>
     </div>
   </section>
 </div>

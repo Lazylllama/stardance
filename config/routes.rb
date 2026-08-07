@@ -763,6 +763,7 @@ Rails.application.routes.draw do
     end
     resources :messages, only: [ :index, :create ]
     resources :email_templates, only: [ :index, :create, :destroy ]
+    resources :devlog_imports, only: [ :new, :create ]
     resources :audit_logs, only: [ :index, :show ]
     resources :fulfillment_payouts, only: [ :index, :show ] do
       member do
