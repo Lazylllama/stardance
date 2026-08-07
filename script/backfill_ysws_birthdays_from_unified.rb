@@ -73,11 +73,12 @@ def airtable_url(base_id, table)
   "https://api.airtable.com/v0/#{base_id}/#{ERB::Util.url_encode(table)}"
 end
 
-# Airtable formulas are double-quoted strings; escape anything that would break
-# out of one.
-def formula_string(value)
-  %("#{value.to_s.gsub('\\', '\\\\\\\\').gsub('"', '\\"')}")
-end
+# The email is interpolated into a double-quoted Airtable formula string, where
+# only a quote or a backslash could break out of the literal. Rather than escape
+# them, refuse to look up any address containing one (or whitespace/control
+# characters) — none of those can appear in an address we'd match on, so an
+# email carrying one is malformed or hostile either way.
+SAFE_EMAIL = /\A[^"\\[:space:][:cntrl:]]+@[^"\\[:space:][:cntrl:]]+\z/
 
 def airtable_get(url, api_key, params)
   attempt = 0
@@ -153,13 +154,14 @@ end
 
 # Distinct birthdays recorded against this email anywhere in the unified base.
 # More than one means the source data disagrees with itself, and the caller
-# skips rather than guessing.
+# skips rather than guessing. Callers must screen the email against SAFE_EMAIL
+# first — it is interpolated straight into the lookup formula.
 def unified_birthdays_for(email)
   body = airtable_get(
     airtable_url(UNIFIED_BASE_ID, UNIFIED_TABLE_ID),
     UNIFIED_API_KEY,
     {
-      "filterByFormula" => "LOWER({#{EMAIL_FIELD}}) = #{formula_string(email.to_s.strip.downcase)}",
+      "filterByFormula" => %(LOWER({#{EMAIL_FIELD}}) = "#{email.to_s.strip.downcase}"),
       "fields[0]" => EMAIL_FIELD,
       "fields[1]" => BIRTHDAY_FIELD,
       "pageSize" => 100
@@ -219,6 +221,12 @@ rows.each do |row|
   review_id = fields[REVIEW_ID_FIELD].presence || "?"
   label = "review ##{review_id} (#{row['id']}, #{email})"
 
+  unless email.match?(SAFE_EMAIL)
+    counts[:unsafe_email] += 1
+    puts "  SKIP    #{label} — email is not a well-formed address, not looking it up"
+    next
+  end
+
   cache_key = email.downcase
   unless unified_cache.key?(cache_key)
     unified_cache[cache_key] = unified_birthdays_for(email)
@@ -262,6 +270,7 @@ puts "Scanned      : #{rows.size}"
 puts "#{APPLY ? 'Updated      ' : 'Would update '}: #{APPLY ? counts[:updated] : counts[:would_update]}"
 puts "No match     : #{counts[:no_match]}"
 puts "Conflicting  : #{counts[:conflict]}"
+puts "Unsafe email : #{counts[:unsafe_email]}" if counts[:unsafe_email].positive?
 puts "Errors       : #{counts[:error]}" if counts[:error].positive?
 puts
 puts "Dry run — re-run with APPLY=1 to write." unless APPLY
