@@ -79,6 +79,7 @@ module Certification
     # ---- Review-queue scopes ---------------------------------------------
 
     scope :pending, -> { where(reviewed_at: nil, returned_at: nil) }
+    scope :without_mac_analysis, -> { left_joins(:mac_analysis).where(certification_mac_analyses: { id: nil }) }
 
     # A review is visible to a reviewer if nobody holds an active claim on it,
     # or they're the one holding it.

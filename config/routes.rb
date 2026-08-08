@@ -450,7 +450,11 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :ambassador_referrals, only: [ :index, :show ]
       resources :certification_decisions, only: [ :create ]
-      resources :mac_analyses, only: [ :create, :update ]
+      resources :mac_analyses, only: [ :create, :update ] do
+        collection do
+          get :pending
+        end
+      end
       resources :fraud_reports, only: [ :create ]
       resources :reviewer_payouts, only: [ :index, :create ] do
         member do
