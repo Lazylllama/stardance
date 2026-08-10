@@ -43,6 +43,7 @@
 require "net/http"
 
 class Project < ApplicationRecord
+  include Project::HackatimeDevlogResync
   include AASM
   include SoftDeletable
   include SemanticSearchIndexable

@@ -45,6 +45,7 @@ class ProjectsController < ApplicationController
     @total_hours = (@project.duration_seconds / 3600.0).round
     @test_time_granted = session[test_time_session_key].present?
     @hackatime_times = {}
+    @project_has_devlogs = @project.posts.where(postable_type: "Post::Devlog").exists?
 
     if @is_member && current_user
       @composer_devlog = Post::Devlog.new

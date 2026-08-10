@@ -236,7 +236,8 @@
                     No Hackatime projects yet — start coding with Hackatime installed to see them here.
                   </span>
                 <% else %>
-                  <div data-controller="hackatime-link">
+                  <div data-controller="hackatime-link"
+                       data-hackatime-link-has-existing-devlogs-value="<%= @project_has_devlogs %>">
                     <div class="project-show__hackatime-picker">
                       <div class="project-show__hackatime-box" role="button" tabindex="0" aria-pressed="false" data-contoller="addBtn" data-action="click->hackatime-link#toggle keydown.enter->hackatime-link#toggle">
                         <div class="project-show__hackatime-add" aria-label="Add Hackatime project">
@@ -249,7 +250,7 @@
                             Link a Project
                           </span>
                           <% @linked_hackatime_projects.each do |hp| %>
-                            <span class="project-show__hackatime-tag" data-hackatime-id="<%= hp.id %>">
+                            <span class="project-show__hackatime-tag" data-hackatime-id="<%= hp.id %>" data-previously-linked="true">
                               <span class="project-show__hackatime-tag-name"><%= hp.name %></span>
                               <span class="project-show__hackatime-tag-time"><%= format_seconds(@hackatime_times[hp.name] || 0) %></span>
                               <button type="button" class="project-show__hackatime-tag-remove" data-action="hackatime-link#remove" data-id="<%= hp.id %>" aria-label="Remove <%= hp.name %>">
