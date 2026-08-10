@@ -570,6 +570,7 @@ class Project < ApplicationRecord
   def shipping_requirements
     owner_vote_balance = memberships.owner.first&.user&.vote_balance.to_i
     votes_needed = [ -owner_vote_balance, 0 ].max
+    mission_review = blocking_mission_submission
     [
       {
         key: :demo_url,
@@ -652,6 +653,17 @@ class Project < ApplicationRecord
         passed: previous_ship_event_has_payout?
       },
       {
+        key: :mission_review,
+        label: "Your mission submission must clear review before you ship again",
+        fail_label: mission_review&.rejected? ?
+          "Your mission submission was returned. Address the feedback and request a re-review" :
+          "Wait for your mission submission to be reviewed before shipping again",
+        tooltip: mission_review&.rejected? ?
+          "A reviewer returned your mission submission. Address their feedback, then request a re-review from the ship on your timeline." :
+          "Your ship is waiting on a mission reviewer. You can ship again once they've made a decision.",
+        passed: mission_review.nil?
+      },
+      {
         key: :vote_balance,
         label: "Maintain a non-negative vote balance",
         fail_label: "Vote at least #{votes_needed} #{'time'.pluralize(votes_needed)} before shipping!",
@@ -707,12 +719,34 @@ class Project < ApplicationRecord
 
   def ship_blocking_errors = shipping_requirements.reject { |r| r[:passed] }.map { |r| r[:label] }
 
+  # The latest ship's mission submission while it still owes a decision:
+  # `pending` waits on a reviewer, `rejected` waits on the builder to address
+  # the feedback and request a re-review. Either way the project can't ship
+  # again. A ship the certifier rejected is left to the re-certification flow.
+  def blocking_mission_submission
+    ship = last_ship_event
+    return nil if ship.nil? || ship.certification_status == "rejected"
+
+    submission = ship.mission_submission
+    submission if submission&.pending? || submission&.rejected?
+  end
+
   # The single most relevant reason the project can't ship yet, as a short
   # actionable message — used for the ship button's disabled tooltip. Returns
   # nil when the project is shippable.
   def ship_blocker_message
     req = shipping_requirements.find { |r| !r[:passed] }
     req && (req[:fail_label] || req[:label])
+  end
+
+  # The mission-review blocker, when that's what's holding the ship button.
+  # Takes precedence over the other blockers in the UI: nothing the builder
+  # fixes on the project itself unblocks a review that hasn't landed yet.
+  def mission_review_blocker_message
+    req = shipping_requirements.find { |r| r[:key] == :mission_review }
+    return nil if req[:passed]
+
+    req[:fail_label] || req[:label]
   end
 
   # Whether every project-info requirement (see INFO_REQUIREMENT_KEYS) passes,

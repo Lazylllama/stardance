@@ -698,7 +698,9 @@
           <% else %>
             <%
               ship_disabled_message =
-                if @project.received_grant? && !@project.has_build_devlog_since_last_ship?
+                if (mission_review_message = @project.mission_review_blocker_message)
+                  mission_review_message
+                elsif @project.received_grant? && !@project.has_build_devlog_since_last_ship?
                   "Post at least one build devlog before you can ship!"
                 elsif !@project.has_devlog_since_last_ship?
                   "Post at least one devlog before shipping!"

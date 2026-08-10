@@ -82,7 +82,8 @@ class Projects::ShipsController < ApplicationController
 
     def require_shippable
       return if @project.shippable?
-      redirect_to project_path(@project), alert: "Finish the remaining requirements before shipping."
+      redirect_to project_path(@project),
+                  alert: @project.mission_review_blocker_message || "Finish the remaining requirements before shipping."
     end
 
     def mission_submission_guide_ack_required?
