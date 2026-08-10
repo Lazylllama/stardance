@@ -48,6 +48,10 @@ module Certification
   # approval delivers that kit for redemption instead of a cash grant: no HCB
   # grant is issued and the tier/amount fields are vestigial (defaulted, hidden
   # in the request form).
+  #
+  # A reviewer can also approve without any funding at all (the builder already
+  # has the parts, or is covered some other way). That is an ordinary approval
+  # recorded as an approved amount of $0, which issues no grant.
   class FundingRequest < ApplicationRecord
     self.table_name = "certification_funding_requests"
 
@@ -89,7 +93,13 @@ module Certification
     # Stardust a reviewer earns per completed funding review.
     REVIEW_BOUNTY = 1
 
+    # The three choices a reviewer picks from on the design review form.
+    VERDICTS = %w[approved approved_without_grant returned].freeze
+
     before_validation :default_kit_request_fields, on: :create, if: :awards_design_kit?
+    # Zeroed here rather than in the writer so it wins regardless of the order
+    # the verdict and the approved amount arrive in from the form.
+    before_validation :zero_approved_amount, if: -> { @verdict == "approved_without_grant" }
 
     validates :complexity_tier, inclusion: { in: TIER_MAX_CENTS.keys }
     validates :requested_amount_cents,
@@ -97,6 +107,7 @@ module Certification
     validates :approved_amount_cents,
               numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
     validates :feedback, length: { maximum: 10_000 }, allow_blank: true
+    validates :verdict, inclusion: { in: VERDICTS }, allow_nil: true
     validate :requested_within_tier_max
     validate :approved_within_tier_max
     validate :project_in_design_stage, on: :create
@@ -195,6 +206,35 @@ module Certification
       project&.current_mission&.prizes&.after_design&.exists? || false
     end
 
+    # True when approving this request pays out an HCB card grant, as opposed to
+    # shipping a kit or approving the build with no funding at all.
+    def issues_grant?
+      approved? && !awards_design_kit? && final_amount_cents.to_i.positive?
+    end
+
+    # An approval that funds nothing: the project moves to the build stage, but
+    # no grant is issued and no kit is owed.
+    def approved_without_grant?
+      approved? && !awards_design_kit? && !issues_grant?
+    end
+
+    # The review form's verdict radio. Collapses the status and the "no grant"
+    # approval into one choice; the amount is zeroed before validation.
+    def verdict
+      @verdict ||= if approved_without_grant?
+        "approved_without_grant"
+      elsif status.present? && !pending?
+        status
+      end
+    end
+
+    def verdict=(value)
+      @verdict = value.presence
+      return unless VERDICTS.include?(@verdict)
+
+      self.status = @verdict == "approved_without_grant" ? "approved" : @verdict
+    end
+
     # True unless a newer funding request has superseded this one (a resubmit
     # after a return). A superseded request's verdict is inert: it must not
     # advance the project or issue a grant/kit, so approving the wrong one can't
@@ -229,6 +269,7 @@ module Certification
         project_url: routes.project_url(project, **url_opts),
         approved: approved?,
         awards_kit: awards_design_kit?,
+        issues_grant: issues_grant?,
         amount_dollars: final_amount_dollars,
         tier_label: tier_label,
         reviewer_name: reviewer&.display_name,
@@ -264,7 +305,7 @@ module Certification
     # retries the next time the request is saved instead of being stranded.
     # issue_hcb_grant! already returns early when a grant exists.
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? && !awards_design_kit? && latest_for_project? }
+    after_save_commit :issue_hcb_grant!, if: -> { issues_grant? && hcb_grant_hashid.blank? && latest_for_project? }
 
     private
 
@@ -301,6 +342,10 @@ module Certification
 
     def default_approved_amount
       self.approved_amount_cents ||= requested_amount_cents
+    end
+
+    def zero_approved_amount
+      self.approved_amount_cents = 0
     end
 
     # Kit missions have no cash amount, but the columns are NOT NULL. Seed the

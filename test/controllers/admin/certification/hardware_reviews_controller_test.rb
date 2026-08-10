@@ -170,10 +170,26 @@ class Admin::Certification::HardwareReviewsControllerTest < ActionDispatch::Inte
     HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
       patch admin_certification_funding_request_path(@funding),
             params: { redirect_to_hardware: @design_project.id,
-                      certification_funding_request: { status: "approved", feedback: "looks good" } }
+                      certification_funding_request: { verdict: "approved", feedback: "looks good" } }
     end
 
     assert_redirected_to next_admin_certification_hardware_reviews_path(stage: "design")
+  end
+
+  test "a reviewer can approve a design without issuing a grant" do
+    ::Certification::FundingRequest.atomic_claim!(@funding.id, @reviewer)
+
+    grant_called = false
+    HCBService.stub(:create_card_grant, ->(*) { grant_called = true; HCB_GRANT_RESPONSE }) do
+      patch admin_certification_funding_request_path(@funding),
+            params: { redirect_to_hardware: @design_project.id,
+                      certification_funding_request: { verdict: "approved_without_grant", feedback: "you're covered" } }
+    end
+
+    assert_not grant_called
+    assert @funding.reload.approved_without_grant?
+    assert_nil @funding.hcb_grant_hashid
+    assert_equal "build", @design_project.reload.hardware_stage
   end
 
   test "an emptied design queue lands back on the design queue, not a dead end" do
@@ -181,7 +197,7 @@ class Admin::Certification::HardwareReviewsControllerTest < ActionDispatch::Inte
     HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
       patch admin_certification_funding_request_path(@funding),
             params: { redirect_to_hardware: @design_project.id,
-                      certification_funding_request: { status: "approved", feedback: "looks good" } }
+                      certification_funding_request: { verdict: "approved", feedback: "looks good" } }
     end
     follow_redirect!
 

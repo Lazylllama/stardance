@@ -5,8 +5,10 @@
 <% if approved %>
 Your funding request was approved!
 
-<% if project %>
+<% if project && @record.issues_grant? %>
 "<%= project.title %>" is approved for $<%= @record.final_amount_dollars %> in funding<% if @actor %>, reviewed by @<%= @actor.display_name %><% end %>.
+<% elsif project %>
+"<%= project.title %>" is approved<% if @actor %>, reviewed by @<%= @actor.display_name %><% end %>.
 <% else %>
 Your hardware funding request was approved.
 <% end %>

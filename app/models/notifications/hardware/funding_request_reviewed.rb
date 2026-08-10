@@ -24,7 +24,8 @@ module Notifications
       def email_subject
         title = record&.project&.title
         if record&.approved?
-          title.present? ? "#{title} was approved for funding" : "Your funding request was approved"
+          approval = record.issues_grant? ? "approved for funding" : "approved"
+          title.present? ? "#{title} was #{approval}" : "Your funding request was approved"
         else
           title.present? ? "#{title} needs changes before funding" : "Your funding request needs changes"
         end

@@ -23,6 +23,8 @@
       "Approved! Your kit is on the way. Log your build hours with a timelapse, then ship when you're ready."
     elsif awards_kit
       "Approved, and the project has moved to the build stage. Redeem your kit below to get it shipped."
+    elsif funding_request.approved_without_grant?
+      "Approved, and the project has moved to the build stage. This one comes without a grant, so keep logging your build hours and ship when you're ready."
     else
       "Approved for $#{funding_request.final_amount_dollars}, and the project has moved to the build stage. Your grant card follows once it has been issued."
     end

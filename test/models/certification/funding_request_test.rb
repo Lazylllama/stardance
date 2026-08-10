@@ -141,6 +141,40 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     assert_equal true, fr.notification_locals[:awards_kit]
   end
 
+  test "approving without a grant advances the project but issues no grant" do
+    fr = @project.certification_funding_requests.create!(
+      user: @owner, complexity_tier: 3, requested_amount_cents: 6_000, status: :pending
+    )
+
+    grant_called = false
+    HCBService.stub(:create_card_grant, ->(*) { grant_called = true; HCB_GRANT_RESPONSE }) do
+      fr.update!(reviewer: @reviewer, verdict: "approved_without_grant", approved_amount_dollars: 60)
+    end
+
+    assert_not grant_called, "approving without a grant should not issue an HCB grant"
+    fr.reload
+    assert fr.approved?
+    assert fr.approved_without_grant?
+    assert_not fr.issues_grant?
+    assert_equal 0, fr.approved_amount_cents, "the submitted amount is ignored"
+    assert_nil fr.hcb_grant_hashid
+    assert_equal "build", @project.reload.hardware_stage
+    assert_equal Certification::FundingRequest::REVIEW_BOUNTY, fr.stardust_earned
+  end
+
+  test "the verdict reader reflects how an approval was funded" do
+    fr = @project.certification_funding_requests.create!(
+      user: @owner, complexity_tier: 2, requested_amount_cents: 3_000, status: :pending
+    )
+    assert_nil fr.verdict
+
+    HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
+      fr.update!(reviewer: @reviewer, status: :approved)
+    end
+
+    assert_equal "approved", Certification::FundingRequest.find(fr.id).verdict
+  end
+
   test "approving a superseded funding request does not advance the project or issue a grant" do
     old = @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 2, requested_amount_cents: 3_000, status: :pending
