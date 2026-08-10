@@ -42,6 +42,29 @@ class HardwareKitRedemptionTest < ActionDispatch::IntegrationTest
     assert_redirected_to shop_path
   end
 
+  test "a second kit on the same mission stays claimable after the first is claimed" do
+    second_kit = ShopItem.new(name: "Extra Kit #{SecureRandom.hex(3)}", description: "the other kit", ticket_cost: 0,
+                              type: "ShopItem::ThirdPartyPhysical", enabled: true, mission_prize_only: true)
+    second_kit.image.attach(io: StringIO.new(PIXEL_PNG), filename: "kit2.png", content_type: "image/png")
+    second_kit.save!
+    @mission.prizes.create!(shop_item: second_kit, position: 1, category: :after_design)
+
+    @owner.update!(has_gotten_free_stickers: true) # clears the shop-tutorial gate
+    order = @owner.shop_orders.new(shop_item: @kit, quantity: 1,
+                                   frozen_address: { "country" => "US", "phone_number" => "+15555550123" })
+    order.redeeming_funding_request = @funding_request
+    order.aasm_state = "pending"
+    order.save!
+    Mission::PrizeRedemption.record!(shop_order: order, gate: @funding_request)
+
+    sign_in @owner
+    get shop_item_path(second_kit, funding_request_id: @funding_request.id)
+    assert_response :success
+
+    get shop_item_path(@kit, funding_request_id: @funding_request.id)
+    assert_redirected_to shop_path, "an already-claimed kit stops being redeemable"
+  end
+
   test "the kit is not redeemable without an approved request" do
     @funding_request.update!(status: :returned, feedback: "nope")
     sign_in @owner

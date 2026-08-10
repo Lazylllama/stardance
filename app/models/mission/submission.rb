@@ -50,6 +50,7 @@ class Mission::Submission < ApplicationRecord
   include Ledgerable
   include AASM
   include MissionReviewable
+  include Mission::PrizeRedeemable
 
   has_paper_trail
 
@@ -103,7 +104,6 @@ class Mission::Submission < ApplicationRecord
   scope :in_review, -> { where.not(status: %w[approved rejected]) }
 
   scope :reviewable,  -> { pending }
-  scope :unredeemed,  -> { approved.where(shop_order_id: nil) }
   scope :stale_pending, ->(days: 7) {
     pending.where("pending_at < ?", days.days.ago)
   }
@@ -114,11 +114,10 @@ class Mission::Submission < ApplicationRecord
     pending_at || created_at
   end
 
-  # The after-ship prize this submission can redeem for `shop_item`, if any.
-  # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
-  def redeemable_prize_for(shop_item)
-    mission.prizes.after_shipping.find_by(shop_item_id: shop_item.id)
-  end
+  # Redemption-gate interface (see Mission::PrizeRedeemable): an approved
+  # submission claims the mission's after-shipping prizes.
+  def redemption_mission = mission
+  def redemption_prize_category = :after_shipping
 
   # Rewards granted when a submission is approved: the mission achievement and
   # any fixed stardust. Idempotent. reviewer_id is recorded on the ledger entry.

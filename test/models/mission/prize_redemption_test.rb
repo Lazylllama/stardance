@@ -80,6 +80,47 @@ class Mission::PrizeRedemptionTest < ActiveSupport::TestCase
     assert_equal ship_prize.id, submission.chosen_prize_id
   end
 
+  test "an approved design claims every after-design kit, once each" do
+    kits = [ prize_item("Kit A"), prize_item("Kit B") ]
+    kits.each_with_index { |kit, i| @mission.prizes.create!(shop_item: kit, position: i, category: :after_design) }
+    other = prize_item("After ship")
+    @mission.prizes.create!(shop_item: other, position: 0, category: :after_shipping)
+
+    funding_request = @project.certification_funding_requests.create!(user: @owner, status: :pending)
+    funding_request.update!(status: :approved)
+
+    assert_equal 2, funding_request.unredeemed_prizes.count
+    assert_nil funding_request.redeemable_prize_for(other), "an after-ship prize is not claimable at design"
+
+    kits.each do |kit|
+      Mission::PrizeRedemption.record!(shop_order: free_order(kit, funding_request), gate: funding_request)
+    end
+
+    assert_equal 2, funding_request.prize_redemptions.count
+    assert_empty funding_request.unredeemed_prizes
+    assert_not funding_request.prizes_to_claim?
+    # A second go at a kit already claimed is no longer redeemable.
+    assert_nil funding_request.redeemable_prize_for(kits.first)
+  end
+
+  test "an approved submission claims every after-ship prize, once each" do
+    rewards = [ prize_item("Reward A"), prize_item("Reward B") ]
+    rewards.each_with_index { |item, i| @mission.prizes.create!(shop_item: item, position: i, category: :after_shipping) }
+    submission = ship_to_mission!(@project, @owner, @mission, status: "approved")
+
+    first_order = free_order(rewards.first, submission)
+    Mission::PrizeRedemption.record!(shop_order: first_order, gate: submission)
+
+    assert submission.prizes_to_claim?, "the second prize is still claimable"
+
+    Mission::PrizeRedemption.record!(shop_order: free_order(rewards.second, submission), gate: submission)
+
+    assert_equal 2, submission.prize_redemptions.count
+    assert_not submission.prizes_to_claim?
+    # The legacy inline link keeps pointing at the first claim.
+    assert_equal first_order.id, submission.reload.shop_order_id
+  end
+
   test "record! ignores an item that is not a prize on the gate's mission" do
     kit = prize_item("Kit")
     @mission.prizes.create!(shop_item: kit, position: 0, category: :after_design)

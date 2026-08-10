@@ -75,6 +75,8 @@
                   <span class="hardware-review__timeline-meta">
                     <% if @funding_request.awards_design_kit? %>
                       <%= @funding_request.design_kit_shop_item&.name || "Kit" %>
+                    <% elsif @funding_request.approved_without_grant? %>
+                      Approved, no grant
                     <% else %>
                       $<%= @funding_request.final_amount_dollars %>
                       <% if @funding_request.approved? %> approved<% elsif @funding_request.pending? %> requested<% end %>
@@ -112,7 +114,13 @@
                       <span class="status-pill status-pill--<%= review.status %>"><%= review.status.capitalize %></span>
                       <% if is_funding %>
                         <span class="hardware-review__timeline-meta">
-                          <%= review.awards_design_kit? ? (review.design_kit_shop_item&.name || "Kit") : "$#{review.final_amount_dollars} · #{review.tier_label}" %>
+                          <% if review.awards_design_kit? %>
+                            <%= review.design_kit_shop_item&.name || "Kit" %>
+                          <% elsif review.approved_without_grant? %>
+                            No grant
+                          <% else %>
+                            $<%= review.final_amount_dollars %> · <%= review.tier_label %>
+                          <% end %>
                         </span>
                       <% end %>
                       <% if review.decided_at %>

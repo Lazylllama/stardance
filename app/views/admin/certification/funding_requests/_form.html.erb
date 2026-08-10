@@ -34,11 +34,17 @@
   <fieldset class="review-form__fieldset">
     <legend>Verdict</legend>
     <label class="review-form__option">
-      <%= f.radio_button :status, "approved", required: true %>
-      <span>Approve</span>
+      <%= f.radio_button :verdict, "approved", required: true %>
+      <span><%= funding_request.awards_design_kit? ? "Approve" : "Approve and issue a grant" %></span>
     </label>
+    <% unless funding_request.awards_design_kit? %>
+      <label class="review-form__option">
+        <%= f.radio_button :verdict, "approved_without_grant", required: true %>
+        <span>Approve without a grant</span>
+      </label>
+    <% end %>
     <label class="review-form__option">
-      <%= f.radio_button :status, "returned", required: true %>
+      <%= f.radio_button :verdict, "returned", required: true %>
       <span>Return for changes</span>
     </label>
   </fieldset>
@@ -48,6 +54,9 @@
       Approving ships the <%= funding_request.design_kit_shop_item&.name || "design kit" %> and moves the project to the build stage. No grant is issued.
     </p>
   <% else %>
+    <p class="review-form__hint">
+      Approving without a grant still moves the project to the build stage and pays out for build hours as usual. The amount below is ignored.
+    </p>
     <div class="review-form__field">
       <%= f.label :approved_amount_dollars, "Approved amount ($) — up to the #{funding_request.tier_label} max of $#{funding_request.tier_max_dollars}" %>
       <%= f.number_field :approved_amount_dollars,

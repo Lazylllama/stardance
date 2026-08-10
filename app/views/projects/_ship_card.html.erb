@@ -66,10 +66,10 @@
         <% else %>
           <span class="project-show__latest-ship-status project-show__latest-ship-status--returned">Mission returned</span>
         <% end %>
-      <% elsif mission_sub&.approved? && mission_sub.shop_order_id.nil? && mission_sub.mission.prizes_count > 0 %>
+      <% elsif mission_sub&.approved? && (unclaimed_prizes = mission_sub.unredeemed_prizes.count) > 0 %>
         <%= link_to redeem_mission_submission_path(mission_sub),
                     class: "project-show__latest-ship-status project-show__latest-ship-status--approved project-show__latest-ship-status--clickable" do %>
-          Claim prize ↗
+          <%= "Claim #{"prize".pluralize(unclaimed_prizes)} ↗" %>
         <% end %>
       <% end %>
     <% end %>

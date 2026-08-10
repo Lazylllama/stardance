@@ -47,8 +47,9 @@ class Mission::PrizeRedemption < ApplicationRecord
   # Records a redemption for a freshly-placed free order. `gate` is the approval
   # that unlocked it (a Mission::Submission or Certification::FundingRequest) and
   # answers `redeemable_prize_for`. Submissions keep their inline link populated
-  # until that column is retired. Returns the redemption, or nil if the item is
-  # not actually a prize on the gate's mission.
+  # until that column is retired; it points at the first claim, since a gate can
+  # now redeem every prize in its category. Returns the redemption, or nil if the
+  # item is not a claimable prize on the gate's mission.
   def self.record!(shop_order:, gate:)
     prize = gate.redeemable_prize_for(shop_order.shop_item)
     return unless prize
@@ -60,7 +61,9 @@ class Mission::PrizeRedemption < ApplicationRecord
       shop_order: shop_order,
       source: gate
     )
-    gate.update!(shop_order_id: shop_order.id, chosen_prize_id: prize.id) if gate.is_a?(Mission::Submission)
+    if gate.is_a?(Mission::Submission) && gate.shop_order_id.nil?
+      gate.update!(shop_order_id: shop_order.id, chosen_prize_id: prize.id)
+    end
     redemption
   end
 end

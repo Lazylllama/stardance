@@ -1,6 +1,11 @@
 <%# A funding request on the project timeline. Deliberately short: the whole
     point is the amount and, once decided, the verdict.
 
+    The reviewer's feedback is the card's body text, since that is the part
+    written for this project. The verdict's standing explanation (what the
+    status means, what happens next) moves into a "?" tooltip on the byline,
+    and only falls back to being the body when there is no feedback to show.
+
     Reviewer feedback is shown to the project owner only. The card itself is
     already members-and-admins (see ProjectsController#visible_funding_requests),
     but feedback names a reviewer and explains a rejection, so it stays with the
@@ -15,14 +20,15 @@
   show_feedback = funding_request.feedback.present? && !funding_request.pending? && (viewer_is_owner || current_user&.admin?)
 
   awards_kit = funding_request.awards_design_kit?
-  kit_prize = awards_kit ? project.current_mission.prizes.after_design.ordered.first : nil
-  kit_redeemed = awards_kit && Mission::PrizeRedemption.exists?(source: funding_request)
+  unclaimed_kits = awards_kit ? funding_request.unredeemed_prizes.to_a : []
 
   approved_message =
-    if awards_kit && kit_redeemed
-      "Approved! Your kit is on the way. Log your build hours with a timelapse, then ship when you're ready."
+    if awards_kit && unclaimed_kits.none?
+      "Approved! Everything you claimed is on the way. Log your build hours with a timelapse, then ship when you're ready."
     elsif awards_kit
-      "Approved, and the project has moved to the build stage. Redeem your kit below to get it shipped."
+      "Approved, and the project has moved to the build stage. Claim your #{"kit".pluralize(unclaimed_kits.size)} below to get shipped."
+    elsif funding_request.approved_without_grant?
+      "Approved, and the project has moved to the build stage. This one comes without a grant, so keep logging your build hours and ship when you're ready."
     else
       "Approved for $#{funding_request.final_amount_dollars}, and the project has moved to the build stage. Your grant card follows once it has been issued."
     end
@@ -43,7 +49,7 @@
 <article id="<%= dom_id(funding_request) %>"
          class="<%= class_names("feed-post-card", "funding-request-card",
                                 "funding-request-card--#{funding_request.status}") %>">
-  <header class="feed-post-card__header">
+  <header class="feed-post-card__header funding-request-card__header">
     <% if reviewer && !funding_request.pending? %>
       <%= link_to profile_path(reviewer.display_name), class: "feed-post-card__avatar-link",
             aria: { label: "@#{reviewer.display_name}" } do %>
@@ -62,6 +68,9 @@
           <span class="feed-post-card__author"><%= owner&.display_name || "Someone" %></span>
         <% end %>
         <span class="feed-post-card__context"><%= context %></span>
+        <% if show_feedback %>
+          <%= render "shared/help_tooltip", text: message %>
+        <% end %>
         <time class="feed-post-card__time" datetime="<%= decided_on.iso8601 %>"
               title="<%= l(decided_on, format: :long) %>">
           · <%= time_ago_in_words(decided_on) %> ago
@@ -78,17 +87,12 @@
   </header>
 
   <div class="feed-post-card__body funding-request-card__message">
-    <p><%= message %></p>
+    <% if show_feedback %>
+      <%= simple_format(funding_request.feedback, {}, sanitize: true) %>
+    <% else %>
+      <p><%= message %></p>
+    <% end %>
   </div>
-
-  <% if show_feedback %>
-    <section class="feed-post-card__body funding-request-card__feedback" aria-label="Reviewer feedback">
-      <p class="funding-request-card__feedback-label">Feedback</p>
-      <div class="funding-request-card__feedback-body">
-        <%= simple_format(funding_request.feedback, {}, sanitize: true) %>
-      </div>
-    </section>
-  <% end %>
 
   <% if funding_request.returned? && viewer_is_owner && resubmit_modal_id.present? %>
     <div class="funding-request-card__actions">
@@ -99,10 +103,13 @@
     </div>
   <% end %>
 
-  <% if funding_request.approved? && viewer_is_owner && kit_prize && !kit_redeemed %>
+  <% if funding_request.approved? && viewer_is_owner && unclaimed_kits.any? %>
     <div class="funding-request-card__actions">
-      <%= link_to "Redeem your kit", shop_item_path(kit_prize.shop_item, funding_request_id: funding_request.id),
-            class: "action-btn action-btn--small action-btn--primary" %>
+      <% unclaimed_kits.each do |prize| %>
+        <%= link_to "Claim #{prize.shop_item.name}",
+              shop_item_path(prize.shop_item, funding_request_id: funding_request.id),
+              class: "action-btn action-btn--small action-btn--primary" %>
+      <% end %>
     </div>
   <% end %>
 </article>

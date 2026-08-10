@@ -86,9 +86,9 @@ class Shop::BaseController < ApplicationController
       .find_by(id: submission_id)
     return nil unless submission
     return nil unless submission.approved?
-    return nil unless submission.shop_order_id.nil?
     return nil unless submission.ship_event&.post&.user_id == current_user.id
-    return nil unless submission.mission.prizes.after_shipping.exists?(shop_item_id: shop_item.id)
+    # Each after-ship prize is claimable once per submission.
+    return nil unless submission.redeemable_prize_for(shop_item)
 
     submission
   end
@@ -103,11 +103,8 @@ class Shop::BaseController < ApplicationController
       .find_by(id: funding_request_id)
     return nil unless funding_request&.approved?
     return nil unless funding_request.owner == current_user
-
-    mission = funding_request.project.current_mission
-    return nil unless mission&.prizes&.after_design&.exists?(shop_item_id: shop_item.id)
-    # One design kit per approved request.
-    return nil if Mission::PrizeRedemption.exists?(source: funding_request)
+    # Each design kit is claimable once per approved request.
+    return nil unless funding_request.redeemable_prize_for(shop_item)
 
     funding_request
   end
