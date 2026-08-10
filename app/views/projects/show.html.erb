@@ -150,7 +150,7 @@
 
             <div class="project-show__edit-grid" data-controller="project-type">
               <div class="project-show__field project-show__field--inline">
-                <span>Project type <%= render "projects/help_tooltip", text: "Software projects track coding time with Hackatime. Hardware projects (electronics, 3D printing, robotics, etc.) record a screen/build timelapse instead." %></span>
+                <span>Project type <%= render "shared/help_tooltip", text: "Software projects track coding time with Hackatime. Hardware projects (electronics, 3D printing, robotics, etc.) record a screen/build timelapse instead." %></span>
                 <%# Locked once the project has asked for funding or shipped: the
                     stage decides how the ship is paid, so the model refuses the
                     change and a live control here would only fail validation. %>
@@ -188,7 +188,7 @@
               <div class="project-show__field project-show__field--inline"
                    data-project-type-target="stageSection"
                    <%= "hidden" unless @project.hardware? %>>
-                <span>Project stage <%= render "projects/help_tooltip", text: "\"I need Funding\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"I don't need Funding\" means you already have your parts and are building." %></span>
+                <span>Project stage <%= render "shared/help_tooltip", text: "\"I need Funding\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"I don't need Funding\" means you already have your parts and are building." %></span>
                 <% if @project.hardware_stage_locked? %>
                   <% fr = @project.latest_funding_request %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project stage (locked)">
@@ -298,7 +298,7 @@
               </div>
 
               <label class="project-show__field project-show__field--inline">
-                <span>AI usage declaration <%= render "projects/help_tooltip", text: "Describe how you used AI in this project (e.g. \"Used ChatGPT for debugging\", \"GitHub Copilot for code completion\"). AI use is OK, but it should feel like your own work! If you didn't use AI, write \"None\"." %></span>
+                <span>AI usage declaration <%= render "shared/help_tooltip", text: "Describe how you used AI in this project (e.g. \"Used ChatGPT for debugging\", \"GitHub Copilot for code completion\"). AI use is OK, but it should feel like your own work! If you didn't use AI, write \"None\"." %></span>
                 <%= form.text_area :ai_declaration,
                                    rows: 2,
                                    maxlength: 1000,
@@ -321,7 +321,7 @@
               <label class="project-show__field project-show__field--inline"
                      data-project-form-target="updateDescriptionContainer"
                      <%= "hidden" if @project.update_description.blank? %>>
-                <span>Update Description <%= render "projects/help_tooltip", text: "Describe the features you've added or updated, and the impact these changes have had on your project overall. Please be specific." %></span>
+                <span>Update Description <%= render "shared/help_tooltip", text: "Describe the features you've added or updated, and the impact these changes have had on your project overall. Please be specific." %></span>
                 <%= form.text_area :update_description,
                                    rows: 3,
                                    maxlength: 1000,
@@ -334,7 +334,7 @@
               <div class="project-show__sparkle" aria-hidden="true"></div>
 
               <label class="project-show__field project-show__field--inline">
-                <span>Demo URL <%= render "projects/help_tooltip", text: @project.hardware? ? "An IRL video of your project working." : "A live URL where anyone can try your project." %></span>
+                <span>Demo URL <%= render "shared/help_tooltip", text: @project.hardware? ? "An IRL video of your project working." : "A live URL where anyone can try your project." %></span>
                 <%= form.url_field :demo_url,
                                    class: "project-show__control",
                                    placeholder: "https://example.com",
@@ -346,7 +346,7 @@
               </label>
 
               <label class="project-show__field project-show__field--inline">
-                <span>Github URL <%= render "projects/help_tooltip", text: "A public repository URL." %></span>
+                <span>Github URL <%= render "shared/help_tooltip", text: "A public repository URL." %></span>
                 <%= form.url_field :repo_url,
                                    class: "project-show__control",
                                    placeholder: "https://github.com/user/repo",
@@ -360,7 +360,7 @@
               <label class="project-show__field project-show__field--inline"
                      data-project-form-target="readmeContainer"
                      <%= "hidden" if @project.readme_url.blank? %>>
-                <span>Readme URL <%= render "projects/help_tooltip", text: "A raw README URL for your project page." %></span>
+                <span>Readme URL <%= render "shared/help_tooltip", text: "A raw README URL for your project page." %></span>
                 <%= form.url_field :readme_url,
                                    class: "project-show__control",
                                    placeholder: "https://raw.githubusercontent.com/user/repo/main/README.md",

@@ -1,6 +1,11 @@
 <%# A funding request on the project timeline. Deliberately short: the whole
     point is the amount and, once decided, the verdict.
 
+    The reviewer's feedback is the card's body text, since that is the part
+    written for this project. The verdict's standing explanation (what the
+    status means, what happens next) moves into a "?" tooltip on the byline,
+    and only falls back to being the body when there is no feedback to show.
+
     Reviewer feedback is shown to the project owner only. The card itself is
     already members-and-admins (see ProjectsController#visible_funding_requests),
     but feedback names a reviewer and explains a rejection, so it stays with the
@@ -44,7 +49,7 @@
 <article id="<%= dom_id(funding_request) %>"
          class="<%= class_names("feed-post-card", "funding-request-card",
                                 "funding-request-card--#{funding_request.status}") %>">
-  <header class="feed-post-card__header">
+  <header class="feed-post-card__header funding-request-card__header">
     <% if reviewer && !funding_request.pending? %>
       <%= link_to profile_path(reviewer.display_name), class: "feed-post-card__avatar-link",
             aria: { label: "@#{reviewer.display_name}" } do %>
@@ -63,6 +68,9 @@
           <span class="feed-post-card__author"><%= owner&.display_name || "Someone" %></span>
         <% end %>
         <span class="feed-post-card__context"><%= context %></span>
+        <% if show_feedback %>
+          <%= render "shared/help_tooltip", text: message %>
+        <% end %>
         <time class="feed-post-card__time" datetime="<%= decided_on.iso8601 %>"
               title="<%= l(decided_on, format: :long) %>">
           · <%= time_ago_in_words(decided_on) %> ago
@@ -79,17 +87,12 @@
   </header>
 
   <div class="feed-post-card__body funding-request-card__message">
-    <p><%= message %></p>
+    <% if show_feedback %>
+      <%= simple_format(funding_request.feedback, {}, sanitize: true) %>
+    <% else %>
+      <p><%= message %></p>
+    <% end %>
   </div>
-
-  <% if show_feedback %>
-    <section class="feed-post-card__body funding-request-card__feedback" aria-label="Reviewer feedback">
-      <p class="funding-request-card__feedback-label">Feedback</p>
-      <div class="funding-request-card__feedback-body">
-        <%= simple_format(funding_request.feedback, {}, sanitize: true) %>
-      </div>
-    </section>
-  <% end %>
 
   <% if funding_request.returned? && viewer_is_owner && resubmit_modal_id.present? %>
     <div class="funding-request-card__actions">

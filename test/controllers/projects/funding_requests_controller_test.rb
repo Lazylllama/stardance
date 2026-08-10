@@ -102,7 +102,8 @@ class Projects::FundingRequestsControllerTest < ActionDispatch::IntegrationTest
     get project_path(@project)
 
     assert_select ".funding-request-card--returned"
-    assert_select ".funding-request-card__feedback-body", text: /bill of materials/
+    assert_select ".funding-request-card__message", text: /bill of materials/
+    assert_select ".funding-request-card .help-badge"
   end
 
   test "a returned request offers the owner a resubmit button" do
@@ -126,16 +127,17 @@ class Projects::FundingRequestsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".funding-request-card__actions button", count: 0
   end
 
-  # A pending request has nothing decided to explain yet.
-  test "a pending request shows no feedback section" do
+  # A pending request has nothing decided to explain yet, so the standing copy
+  # stays in the body instead of collapsing into the tooltip.
+  test "a pending request shows the standing message and no help tooltip" do
     @project.certification_funding_requests.create!(
       user: @owner, complexity_tier: 2, requested_amount_cents: 4_000, status: :pending
     )
 
     get project_path(@project)
 
-    assert_select ".funding-request-card"
-    assert_select ".funding-request-card__feedback", count: 0
+    assert_select ".funding-request-card__message", text: /Waiting on a reviewer/
+    assert_select ".funding-request-card .help-badge", count: 0
   end
 
   private

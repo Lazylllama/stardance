@@ -2284,6 +2284,12 @@
     --funding-accent: var(--color-brand-salmon);
   }
 
+  // The byline is a single line but the avatar is 39px, so the shared
+  // flex-start header would leave a dead strip under it before the body.
+  &__header {
+    align-items: center;
+  }
+
   &__amount {
     margin-left: auto;
     display: flex;
@@ -2301,28 +2307,17 @@
   }
 
   &__message {
+    color: var(--color-space-text);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
     p {
       margin: 0;
     }
-  }
 
-  &__feedback {
-    padding-left: var(--space-s);
-    border-left: 3px solid var(--funding-accent);
-  }
-
-  &__feedback-label {
-    margin: 0 0 var(--space-xxs);
-    color: var(--funding-accent);
-    font-size: var(--font-size-s);
-    font-weight: 700;
-  }
-
-  &__feedback-body {
-    color: var(--color-space-text);
-    font-size: var(--font-size-m);
-    line-height: 1.45;
-    overflow-wrap: anywhere;
+    p + p {
+      margin-top: var(--space-xs);
+    }
   }
 
   &__actions {
