@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_10_163646) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -733,11 +733,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.string "feedback_video_url"
     t.float "hours_at_payout"
     t.float "hours_at_ship"
+    t.string "lifecycle_data_quality"
     t.float "multiplier"
     t.decimal "originality_median", precision: 5, scale: 2
     t.decimal "originality_percentile", precision: 5, scale: 2
     t.decimal "overall_percentile", precision: 5, scale: 2
     t.decimal "overall_score", precision: 5, scale: 2
+    t.datetime "paid_at"
     t.float "payout"
     t.datetime "payout_basis_locked_at"
     t.decimal "payout_basis_overall_score", precision: 5, scale: 2
@@ -755,6 +757,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.decimal "usability_median", precision: 5, scale: 2
     t.decimal "usability_percentile", precision: 5, scale: 2
     t.integer "votes_count", default: 0, null: false
+    t.datetime "voting_completed_at"
+    t.datetime "voting_started_at"
+    t.index ["paid_at"], name: "index_post_ship_events_on_paid_at"
+    t.index ["voting_completed_at"], name: "index_post_ship_events_on_voting_completed_at"
+    t.index ["voting_started_at"], name: "index_post_ship_events_on_voting_started_at"
   end
 
   create_table "post_views", force: :cascade do |t|

@@ -633,6 +633,7 @@ Rails.application.routes.draw do
     get "dashboard/counts/:key", to: "dashboard_counts#show", as: :dashboard_count
 
     resource :funnel, only: [ :show ], controller: "funnel"
+    resource :rating_dashboard, only: [ :show ], controller: "rating_dashboard"
 
     mount Blazer::Engine, at: "blazer", constraints: ->(request) {
       AdminConstraint.allow?(request, :access_blazer?)

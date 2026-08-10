@@ -9,11 +9,13 @@
 #  feedback_video_url         :string
 #  hours_at_payout            :float
 #  hours_at_ship              :float
+#  lifecycle_data_quality     :string
 #  multiplier                 :float
 #  originality_median         :decimal(5, 2)
 #  originality_percentile     :decimal(5, 2)
 #  overall_percentile         :decimal(5, 2)
 #  overall_score              :decimal(5, 2)
+#  paid_at                    :datetime
 #  payout                     :float
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
@@ -30,8 +32,16 @@
 #  usability_median           :decimal(5, 2)
 #  usability_percentile       :decimal(5, 2)
 #  votes_count                :integer          default(0), not null
+#  voting_completed_at        :datetime
+#  voting_started_at          :datetime
 #  created_at                 :datetime         not null
 #  updated_at                 :datetime         not null
+#
+# Indexes
+#
+#  index_post_ship_events_on_paid_at              (paid_at)
+#  index_post_ship_events_on_voting_completed_at  (voting_completed_at)
+#  index_post_ship_events_on_voting_started_at    (voting_started_at)
 #
 require "test_helper"
 

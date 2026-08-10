@@ -13,6 +13,9 @@ application.register("address-select", AddressSelectController);
 import AdminLedgerChartController from "./admin_ledger_chart_controller";
 application.register("admin-ledger-chart", AdminLedgerChartController);
 
+import RatingDashboardChartController from "./rating_dashboard_chart_controller";
+application.register("rating-dashboard-chart", RatingDashboardChartController);
+
 import BioEditorController from "./bio_editor_controller";
 application.register("bio-editor", BioEditorController);
 

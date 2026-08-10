@@ -150,7 +150,7 @@ class Vote < ApplicationRecord
         ship_event.clear_payout_review
       end
 
-      ShipEventPayoutRefreshJob.perform_later
+      ShipEventPayoutRefreshJob.perform_later(ship_event_id)
       true
     else
       false
@@ -206,7 +206,7 @@ class Vote < ApplicationRecord
       )
     end
 
-    ShipEventPayoutRefreshJob.perform_later
+    ShipEventPayoutRefreshJob.perform_later(ship_event_id)
   end
 
   private
@@ -240,7 +240,7 @@ class Vote < ApplicationRecord
   end
 
   def refresh_ship_event_payout_later
-    ShipEventPayoutRefreshJob.perform_later
+    ShipEventPayoutRefreshJob.perform_later(ship_event_id)
   end
 
   def send_gorse_vote_later

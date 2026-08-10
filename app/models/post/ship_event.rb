@@ -9,11 +9,13 @@
 #  feedback_video_url         :string
 #  hours_at_payout            :float
 #  hours_at_ship              :float
+#  lifecycle_data_quality     :string
 #  multiplier                 :float
 #  originality_median         :decimal(5, 2)
 #  originality_percentile     :decimal(5, 2)
 #  overall_percentile         :decimal(5, 2)
 #  overall_score              :decimal(5, 2)
+#  paid_at                    :datetime
 #  payout                     :float
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
@@ -30,8 +32,16 @@
 #  usability_median           :decimal(5, 2)
 #  usability_percentile       :decimal(5, 2)
 #  votes_count                :integer          default(0), not null
+#  voting_completed_at        :datetime
+#  voting_started_at          :datetime
 #  created_at                 :datetime         not null
 #  updated_at                 :datetime         not null
+#
+# Indexes
+#
+#  index_post_ship_events_on_paid_at              (paid_at)
+#  index_post_ship_events_on_voting_completed_at  (voting_completed_at)
+#  index_post_ship_events_on_voting_started_at    (voting_started_at)
 #
 class Post::ShipEvent < ApplicationRecord
   include Postable
@@ -53,6 +63,7 @@ class Post::ShipEvent < ApplicationRecord
   RETURN_REASON_MAX_LENGTH = 1_000
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
+  LIFECYCLE_DATA_QUALITIES = %w[live backfilled_exact backfilled_estimated].freeze
 
   include HasPostAttachments
 
@@ -80,6 +91,7 @@ class Post::ShipEvent < ApplicationRecord
                             inverse_of: :ship_event,
                             dependent: :destroy
 
+  before_save :stamp_rating_lifecycle
   after_update :sync_mission_submission_status, if: :saved_change_to_certification_status?
 
   scope :voteable, -> {
@@ -104,6 +116,7 @@ class Post::ShipEvent < ApplicationRecord
   validates :body, presence: { message: "Update message can't be blank" }
   validates :body, length: { maximum: BODY_MAX_LENGTH }, on: :create
   validates :review_instructions, length: { maximum: REVIEW_INSTRUCTIONS_MAX_LENGTH }, allow_blank: true
+  validates :lifecycle_data_quality, inclusion: { in: LIFECYCLE_DATA_QUALITIES }, allow_nil: true
   validate :project_can_be_shipped, on: :create
   has_paper_trail ignore: [ :votes_count, :synced_at ]
 
@@ -138,6 +151,18 @@ class Post::ShipEvent < ApplicationRecord
   end
 
   private
+
+  def stamp_rating_lifecycle
+    if will_save_change_to_certification_status? && certification_status == "approved" && voting_started_at.nil?
+      self.voting_started_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+
+    if will_save_change_to_payout? && payout.present? && paid_at.nil?
+      self.paid_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+  end
 
   def hours_logged_in_ship_window
     return 0 unless post&.project && post.created_at
