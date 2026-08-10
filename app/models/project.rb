@@ -659,7 +659,7 @@ class Project < ApplicationRecord
           "Your mission submission was returned. Address the feedback and request a re-review" :
           "Wait for your mission submission to be reviewed before shipping again",
         tooltip: mission_review&.rejected? ?
-          "A reviewer returned your mission submission. Address their feedback, then request a re-review from the ship on your timeline." :
+          "A reviewer returned your mission submission. Address their feedback and request a re-review from the ship on your timeline, or detach the mission to carry on without it." :
           "Your ship is waiting on a mission reviewer. You can ship again once they've made a decision.",
         passed: mission_review.nil?
       },
@@ -884,7 +884,10 @@ class Project < ApplicationRecord
     # a "previous ship awaiting payout" — it's the one currently being
     # (re-)certified, so it must not block re-certification.
     return true unless last_ship_event.certification_status == "approved"
-    sub = last_ship_event.mission_submission
+    # with_deleted so a fixed-prize ship whose mission was detached doesn't
+    # strand the project: Post::ShipEvent.voteable keeps that ship out of the
+    # rating pool either way, so no payout is ever coming for it.
+    sub = Mission::Submission.with_deleted.find_by(ship_event_id: last_ship_event.id)
     return true if sub&.payout_path == "static_prize"
     false
   end

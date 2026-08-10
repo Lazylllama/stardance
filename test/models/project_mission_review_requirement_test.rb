@@ -54,6 +54,36 @@ class ProjectMissionReviewRequirementTest < ActiveSupport::TestCase
     assert mission_review_requirement[:passed]
   end
 
+  test "detaching the mission clears the rejected submission off the latest ship" do
+    submission = ship_to_mission!(@project, @owner, @mission, status: "rejected")
+
+    @project.detach_mission!
+
+    assert submission.reload.deleted?
+    assert_nil @project.last_ship_event.reload.mission_submission
+    assert mission_review_requirement[:passed]
+  end
+
+  test "detaching leaves a pending submission alone" do
+    submission = ship_to_mission!(@project, @owner, @mission, status: "pending")
+
+    @project.detach_mission!
+
+    refute submission.reload.deleted?
+    refute mission_review_requirement[:passed]
+  end
+
+  test "a detached fixed-prize ship does not block the next ship on its missing payout" do
+    submission = ship_to_mission!(@project, @owner, @mission, status: "rejected")
+    submission.update!(payout_path: "static_prize")
+    submission.ship_event.update!(certification_status: "approved")
+
+    @project.detach_mission!
+
+    assert @project.shipping_requirements.find { |r| r[:key] == :payout }[:passed],
+      "a detached fixed-prize ship never enters the rating pool, so it can't wait on a payout forever"
+  end
+
   test "a fixed-prize submission cannot skip the review gate" do
     submission = ship_to_mission!(@project, @owner, @mission, status: "pending")
     submission.update!(payout_path: "static_prize")
