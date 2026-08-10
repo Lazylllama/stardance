@@ -76,6 +76,8 @@ class Vote::Assignment < ApplicationRecord
     # rejected or already paid.
     if ship_event.project&.hardware?
       replace_with(matchmaker.next_ship_event)
+    elsif !ship_event.voting_links_present?
+      replace_with(matchmaker.next_ship_event)
     elsif ship_event.certification_status == "rejected"
       replace_with(matchmaker.next_ship_event)
     elsif ship_event.payout.present? || ship_event.votes.payout_countable.count >= Post::ShipEvent::VOTES_TO_LEAVE_POOL
@@ -159,6 +161,10 @@ class Vote::Assignment < ApplicationRecord
     def ship_event_can_be_assigned
       unless ship_event&.certification_status == "approved"
         errors.add(:ship_event, "must be approved")
+      end
+
+      unless ship_event&.voting_links_present?
+        errors.add(:ship_event, "must have both a demo and repository link")
       end
     end
 

@@ -86,8 +86,16 @@ class Post::ShipEvent < ApplicationRecord
     where(certification_status: "approved", payout: nil)
       .where(Vote.countable_count_lt(VOTES_TO_LEAVE_POOL))
       .where("post_ship_events.hours_at_ship > 0")
+      .joins(:project)
+      .where.not(projects: { demo_url: [ nil, "" ] })
+      .where.not(projects: { repo_url: [ nil, "" ] })
       .where.not(id: Mission::Submission.with_deleted.where(payout_path: "static_prize").select(:ship_event_id))
   }
+
+  def voting_links_present?
+    project&.demo_url.present? && project&.repo_url.present?
+  end
+
   scope :paid_out, -> { where(certification_status: "approved").where.not(payout: nil) }
 
   after_commit :decrement_user_vote_balance, on: :create
