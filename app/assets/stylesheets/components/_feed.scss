@@ -2327,6 +2327,8 @@
 
   &__actions {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
     justify-content: flex-start;
   }
 }

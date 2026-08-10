@@ -56,6 +56,7 @@ module Certification
     self.table_name = "certification_funding_requests"
 
     include Certification::Reviewable
+    include Mission::PrizeRedeemable
 
     belongs_to :project
     belongs_to :user
@@ -203,7 +204,7 @@ module Certification
     # True when the project's active mission delivers a physical kit at design
     # approval (an after_design prize) rather than a cash grant.
     def awards_design_kit?
-      project&.current_mission&.prizes&.after_design&.exists? || false
+      redeemable_prizes.exists?
     end
 
     # True when approving this request pays out an HCB card grant, as opposed to
@@ -244,16 +245,15 @@ module Certification
       !project.certification_funding_requests.where("id > ?", id).exists?
     end
 
-    # The after-design kit this request can redeem for `shop_item`, if any.
-    # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
-    def redeemable_prize_for(shop_item)
-      project&.current_mission&.prizes&.after_design&.find_by(shop_item_id: shop_item.id)
-    end
+    # Redemption-gate interface (see Mission::PrizeRedeemable): an approved
+    # design claims the mission's after-design kits.
+    def redemption_mission = project&.current_mission
+    def redemption_prize_category = :after_design
 
     # The kit shipped when this design is approved (the mission's first
     # after_design prize), for reviewer-facing copy.
     def design_kit_shop_item
-      project&.current_mission&.prizes&.after_design&.ordered&.first&.shop_item
+      redeemable_prizes.first&.shop_item
     end
 
     # Locals for the verdict notification's Slack template.
