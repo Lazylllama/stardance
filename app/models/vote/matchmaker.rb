@@ -39,7 +39,7 @@ class Vote::Matchmaker
     end
 
     def near_payout_in(pool)
-      pool.order(votes_count: :desc, created_at: :asc).first
+      pool.order(Vote.countable_count_for_ship_events.desc, created_at: :asc).first
     end
 
     def gated_pool
