@@ -9,7 +9,7 @@
 #  flags                  :integer          default(0), not null
 #  fraud_detection_data   :jsonb
 #  reviewed_at            :datetime
-#  status                 :integer          default("auto_passed"), not null
+#  status                 :integer          default(0), not null
 #  created_at             :datetime         not null
 #  updated_at             :datetime         not null
 #  claimed_by_id          :bigint

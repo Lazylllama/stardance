@@ -15,7 +15,7 @@
 #  lock_version              :integer          default(0), not null
 #  requested_amount_cents    :integer          not null
 #  stardust_earned           :integer
-#  status                    :integer          default("pending"), not null
+#  status                    :integer          default(0), not null
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  project_id                :bigint           not null
