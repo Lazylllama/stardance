@@ -256,7 +256,7 @@ class Vote < ApplicationRecord
   end
 
   def enqueue_auto_discard
-    Vote::AutoDiscardJob.perform_later(id)
+    Vote::AutoDiscardJob.set(wait: 1.minute).perform_later(id)
   end
 
   def cache_reason_embedding_later
