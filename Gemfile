@@ -130,6 +130,7 @@ gem "sentry-rails", "~> 6.6"
 # for pagination
 gem "pagy", "~> 43.5"
 gem "norairrecord"
+gem "anthropic", "~> 1.61"
 
 gem "awesome_print"
 gem "activeinsights"
