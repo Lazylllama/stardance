@@ -5,10 +5,14 @@ require "test_helper"
 # Auto-rejection of YSWS reviews left unreviewable by a soft-deleted project.
 class Certification::YswsReviewRejectorTest < ActiveJob::TestCase
   setup do
-    @avd = create_user(
-      slack_id: Certification::YswsReviewRejector::REVIEWER_SLACK_ID,
-      display_name: "avd"
+    # The rejector looks AVD up by a fixed id, so the account has to carry it.
+    @avd = User.create!(
+      id: Certification::YswsReviewRejector::REVIEWER_ID,
+      slack_id: "U_REJ_AVD", display_name: "avd", email: "avd@example.test"
     )
+    # An explicit id doesn't move the sequence, which would collide later.
+    User.connection.reset_pk_sequence!("users")
+
     @owner = create_user(slack_id: "U_REJ_OWNER", display_name: "rej-owner")
   end
 

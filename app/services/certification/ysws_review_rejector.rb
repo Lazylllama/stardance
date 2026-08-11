@@ -15,8 +15,8 @@ module Certification
   # certification_ysws_reviews: Certification::Ysws#review_status derives
   # :rejected on its own once reviewed_at is set and nothing is approved.
   class YswsReviewRejector
-    # AVD — auto-rejections are attributed to him.
-    REVIEWER_SLACK_ID = "U0823F39GV8"
+    # AVD — auto-rejections are attributed to them.
+    REVIEWER_ID = 513
 
     WHODUNNIT = "Certification::YswsReviewRejector"
 
@@ -36,7 +36,7 @@ module Certification
       # rejection — an unattributed review beats a ban that raises halfway
       # through.
       def reviewer
-        User.find_by(slack_id: REVIEWER_SLACK_ID)
+        User.find_by(id: REVIEWER_ID)
       end
 
       # Clears every pending review belonging to `user`. The ban flow's entry
