@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_10_163646) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_10_195448) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -420,6 +420,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_10_163646) do
     t.text "refresh_token_ciphertext"
     t.string "slug"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "jelly_conversations", force: :cascade do |t|
+    t.integer "assignee_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "first_response_seconds"
+    t.string "jelly_id", null: false
+    t.datetime "last_inbound_at"
+    t.datetime "last_outbound_at"
+    t.datetime "messages_synced_at"
+    t.datetime "opened_at"
+    t.datetime "remote_updated_at"
+    t.datetime "resolved_at"
+    t.string "status", null: false
+    t.datetime "synced_at"
+    t.datetime "updated_at", null: false
+    t.index ["jelly_id"], name: "index_jelly_conversations_on_jelly_id", unique: true
+    t.index ["remote_updated_at"], name: "index_jelly_conversations_on_remote_updated_at"
+    t.index ["status"], name: "index_jelly_conversations_on_status"
+  end
+
+  create_table "jelly_daily_stats", force: :cascade do |t|
+    t.integer "arrivals"
+    t.integer "awaiting_reply_count"
+    t.datetime "created_at", null: false
+    t.integer "median_first_response_seconds"
+    t.integer "open_count"
+    t.integer "p95_hang_seconds"
+    t.date "recorded_on", null: false
+    t.integer "resolutions"
+    t.datetime "updated_at", null: false
+    t.index ["recorded_on"], name: "index_jelly_daily_stats_on_recorded_on", unique: true
   end
 
   create_table "ledger_entries", force: :cascade do |t|
