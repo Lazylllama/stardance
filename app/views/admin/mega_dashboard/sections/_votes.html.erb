@@ -1,4 +1,4 @@
-<%= turbo_frame_tag "mega-dash-votes" do %>
+<%= turbo_frame_tag "mega-dash-votes", target: "_top" do %>
   <section class="mega-dash__section mega-dash__panel" aria-labelledby="mega-dash-votes-title"
            data-controller="mega-dash-chart"
            data-mega-dash-chart-data-value="<%= @votes[:chart_data].to_json %>"

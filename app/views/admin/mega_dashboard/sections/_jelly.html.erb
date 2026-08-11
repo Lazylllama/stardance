@@ -1,4 +1,4 @@
-<%= turbo_frame_tag "mega-dash-jelly" do %>
+<%= turbo_frame_tag "mega-dash-jelly", target: "_top" do %>
   <section class="mega-dash__section mega-dash__panel" aria-labelledby="mega-dash-jelly-title"
            data-controller="mega-dash-chart"
            data-mega-dash-chart-data-value="<%= @jelly[:chart_data].to_json %>">
