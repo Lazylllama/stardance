@@ -18,6 +18,14 @@ module Admin
       transcendent legendary infinite prodigious
     ].freeze
 
+    # Net figures read better with an explicit sign: "-4" and "+4" are opposite
+    # situations and a bare "4" hides which one it is.
+    def mega_dash_signed(value)
+      return "—" if value.blank?
+
+      value.positive? ? "+#{value}" : value.to_s
+    end
+
     def mega_dash_title
       "#{BIG_ADJECTIVES.sample(3).map(&:capitalize).join(' ')} Dashboard"
     end

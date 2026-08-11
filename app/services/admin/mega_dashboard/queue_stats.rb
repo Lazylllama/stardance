@@ -39,6 +39,9 @@ module Admin
           overdue: open_pairs.count { |entered, _| @now - entered > queue.sla_hours.hours },
           sla_hours: queue.sla_hours,
           net: decided_in_period.size - arrivals_in_period.size,
+          decisions_per_day: (decided_in_period.size / @period_days.to_f).round(1),
+          arrivals_per_day: (arrivals_in_period.size / @period_days.to_f).round(1),
+          net_per_day: ((decided_in_period.size - arrivals_in_period.size) / @period_days.to_f).round(1),
           days_to_clear: days_to_clear
         }
       end

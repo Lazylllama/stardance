@@ -12,13 +12,21 @@
     </div>
 
     <div class="mega-dash__tiles">
-      <%= render "admin/mega_dashboard/tile", label: "Votes cast", value: number_with_delimiter(@votes[:tiles][:votes]) %>
-      <%= render "admin/mega_dashboard/tile", label: "Active voters", value: number_with_delimiter(@votes[:tiles][:active_voters]) %>
-      <%= render "admin/mega_dashboard/tile", label: "Assignments outstanding", value: number_with_delimiter(@votes[:tiles][:outstanding_assignments]) %>
       <%= render "admin/mega_dashboard/tile",
-            label: "Votes needed to clear",
+            label: "Votes outstanding",
             value: number_with_delimiter(@votes[:tiles][:votes_needed_to_clear]),
-            note: "across every ship still in voting" %>
+            note: "to clear every ship in voting" %>
+      <%= render "admin/mega_dashboard/tile",
+            label: "Avg cast per day", value: @votes[:tiles][:cast_per_day],
+            note: "#{@votes[:tiles][:active_voters]} active voters" %>
+      <%= render "admin/mega_dashboard/tile",
+            label: "Net per day",
+            value: mega_dash_signed(@votes[:tiles][:net_per_day]),
+            note: "change in votes owed" %>
+      <%= render "admin/mega_dashboard/tile",
+            label: "Median time in rating",
+            value: mega_dash_duration(@votes[:tiles][:median_rating_hours]),
+            note: "ship enters voting to threshold" %>
     </div>
 
     <div class="mega-dash__meta">

@@ -27,7 +27,9 @@ module Admin
 
       private
 
-      def window_start = (@now - (PERIODS.fetch(@period) - 1).days).beginning_of_day
+      def period_days = PERIODS.fetch(@period)
+
+      def window_start = (@now - (period_days - 1).days).beginning_of_day
 
       def votes_in_period = ::Vote.where(created_at: window_start..)
 
@@ -36,15 +38,36 @@ module Admin
       def tiles
         durations = votes_in_period.where.not(time_taken_to_vote_in_seconds: nil)
                                    .pluck(:time_taken_to_vote_in_seconds)
+        cast = votes_in_period.count
+        deficits = deficit_by_date.values
 
         {
-          votes: votes_in_period.count,
+          votes: cast,
           active_voters: votes_in_period.distinct.count(:user_id),
           median_time_to_vote_minutes: percentile_minutes(durations, 50),
           p95_time_to_vote_minutes: percentile_minutes(durations, 95),
           outstanding_assignments: ::Vote::Assignment.where(status: "assigned").count,
-          votes_needed_to_clear: votes_needed_to_clear
+          votes_needed_to_clear: votes_needed_to_clear,
+          cast_per_day: (cast / period_days.to_f).round(1),
+          # How fast the deficit is actually shrinking, which is not the same as
+          # the casting rate: new ships entering voting add demand as we go.
+          net_per_day: deficits.size < 2 ? nil : ((deficits.first - deficits.last) / period_days.to_f).round(1),
+          median_rating_hours: median_rating_hours
         }
+      end
+
+      # How long a ship spends in the rating stage end to end. Backfilled
+      # estimates are excluded for the same reason the waterfall excludes them.
+      def median_rating_hours
+        spans = ::Post::ShipEvent
+          .where.not(voting_started_at: nil).where(voting_completed_at: window_start..)
+          .where(lifecycle_data_quality: %w[live backfilled_exact])
+          .pluck(:voting_started_at, :voting_completed_at)
+          .filter_map { |started, completed| (completed - started) if completed && started && completed > started }
+
+        return if spans.empty?
+
+        (spans.sort[(spans.size - 1) / 2] / 3600.0).round(1)
       end
 
       # The backlog expressed as work rather than as a count of ships: sum of
