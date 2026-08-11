@@ -5,6 +5,9 @@ module User::Moderation
     update!(banned: true, banned_at: Time.current, banned_reason: reason)
     reject_pending_orders!(reason: reason || "User banned")
     soft_delete_projects!
+    # Runs last: the ban has to be persisted and the projects gone before the
+    # rejections go out, so the Airtable sync reports the ban as the reason.
+    Certification::YswsReviewRejector.reject_pending_for_user!(self)
   end
 
   def soft_delete_projects!
