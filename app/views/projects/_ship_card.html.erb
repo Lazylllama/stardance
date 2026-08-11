@@ -15,6 +15,22 @@
   payout_review    = local_assigns[:payout_review]
   media_variant    = local_assigns.fetch(:media_variant, :large)
   lazy_media       = local_assigns.fetch(:lazy_media, false)
+  blessing_badge = case ship.payout_blessing
+  when "blessed"
+    {
+      modifier: "approved",
+      label: "✨ Blessed",
+      title: "Blessed",
+      message: "A blessing for thoughtful voting — this ship's Stardust includes a 20% bonus."
+    }
+  when "cursed"
+    {
+      modifier: "returned",
+      label: "💀 Cursed",
+      title: "Cursed",
+      message: "A curse for rushed voting — this ship's Stardust was halved."
+    }
+  end
   engagement_data = if track_engagement
     {
       controller: "feed-engagement",
@@ -73,10 +89,17 @@
         <% end %>
       <% end %>
     <% end %>
-    <% if ship.payout_blessing == "blessed" %>
-      <span class="project-show__latest-ship-status project-show__latest-ship-status--approved" title="Blessed (+20% bonus)">✨ Blessed</span>
-    <% elsif ship.payout_blessing == "cursed" %>
-      <span class="project-show__latest-ship-status project-show__latest-ship-status--returned" title="Cursed (-50% reduction)">💀 Cursed</span>
+    <% if blessing_badge %>
+      <%= tag.span blessing_badge[:label],
+            class: "project-show__latest-ship-status project-show__latest-ship-status--#{blessing_badge[:modifier]} project-show__latest-ship-status--info",
+            tabindex: 0,
+            aria: { label: "#{blessing_badge[:title]}: #{blessing_badge[:message]}" },
+            data: {
+              controller: "tooltip",
+              tooltip_title_value: blessing_badge[:title],
+              tooltip_message_value: blessing_badge[:message],
+              tooltip_position_value: "bottom"
+            } %>
     <% end %>
   </div>
 
