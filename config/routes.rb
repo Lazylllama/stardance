@@ -635,6 +635,12 @@ Rails.application.routes.draw do
     resource :funnel, only: [ :show ], controller: "funnel"
     resource :rating_dashboard, only: [ :show ], controller: "rating_dashboard"
 
+    # Sections load lazily so one slow data source can't hold up the page.
+    get    "mega_dashboard",                   to: "mega_dashboard#show",        as: :mega_dashboard
+    get    "mega_dashboard/sections/:section", to: "mega_dashboard#section",     as: :mega_dashboard_section, constraints: { section: %r{[^/]+} }
+    delete "mega_dashboard/cache",             to: "mega_dashboard#clear_cache", as: :mega_dashboard_cache
+    post   "mega_dashboard/nps_vibes",         to: "mega_dashboard#refresh_nps_vibes", as: :mega_dashboard_nps_vibes
+
     mount Blazer::Engine, at: "blazer", constraints: ->(request) {
       AdminConstraint.allow?(request, :access_blazer?)
     }

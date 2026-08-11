@@ -14,6 +14,22 @@
     text-align: center;
   }
 
+  // Filled rather than outlined, so the one page that aggregates every other
+  // dashboard reads as the entry point without needing a bigger tile.
+  &__button--featured {
+    background: var(--color-brand-lilac);
+    border-color: var(--color-brand-lilac);
+    color: var(--color-space-bg) !important;
+    font-weight: 700;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--color-brand-cream);
+      border-color: var(--color-brand-cream);
+      color: var(--color-space-bg) !important;
+    }
+  }
+
   &__count-pill {
     background: var(--color-brand-lilac);
     color: var(--color-space-bg);

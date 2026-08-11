@@ -16,6 +16,9 @@ application.register("admin-ledger-chart", AdminLedgerChartController);
 import RatingDashboardChartController from "./rating_dashboard_chart_controller";
 application.register("rating-dashboard-chart", RatingDashboardChartController);
 
+import MegaDashChartController from "./mega_dash_chart_controller";
+application.register("mega-dash-chart", MegaDashChartController);
+
 import BioEditorController from "./bio_editor_controller";
 application.register("bio-editor", BioEditorController);
 

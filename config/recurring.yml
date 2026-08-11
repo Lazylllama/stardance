@@ -176,3 +176,9 @@ production:
     schedule: every day at 5am America/New_York
     concurrency: 1
     description: "Backfill missing ahoy events from DB tables for funnel tracking"
+
+  jelly_sync:
+    class: JellySyncJob
+    schedule: every 15 minutes
+    concurrency: 1
+    description: "Mirror Jelly support conversations locally for the mega dashboard"
