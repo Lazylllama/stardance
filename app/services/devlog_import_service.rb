@@ -124,9 +124,11 @@ class DevlogImportService
     { devlog_id: devlog.id, post_id: post.id, hours: entry["hours"], project_id: project.id }
   end
 
+  MAX_REDIRECTS = 5
+
   def download_image(url, label)
     uri = URI.parse(url)
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) { |http| http.request(Net::HTTP::Get.new(uri)) }
+    response = follow_redirects(uri)
 
     return "#{label}: failed to download image (HTTP #{response.code})" unless response.is_a?(Net::HTTPSuccess)
     return "#{label}: image too large (#{response.body.bytesize} bytes)" if response.body.bytesize > MAX_IMAGE_SIZE
@@ -151,5 +153,19 @@ class DevlogImportService
     { io: tempfile, filename: File.basename(uri.path).presence || "image#{EXTENSIONS[content_type]}", content_type: content_type }
   rescue => e
     "#{label}: image download error: #{e.message}"
+  end
+
+  def follow_redirects(uri, limit = MAX_REDIRECTS)
+    raise "too many redirects" if limit == 0
+
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 10, read_timeout: 30) do |http|
+      http.request(Net::HTTP::Get.new(uri))
+    end
+
+    if response.is_a?(Net::HTTPRedirection) && response["location"]
+      follow_redirects(URI.parse(response["location"]), limit - 1)
+    else
+      response
+    end
   end
 end
