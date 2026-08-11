@@ -240,6 +240,10 @@
     &--payout {
       background: var(--color-brand-yellow);
     }
+
+    &--unattributed {
+      background: var(--color-space-surface-strong);
+    }
   }
 
   // Dark on every segment colour, since all four are light pastels.
@@ -291,6 +295,10 @@
 
     &--payout {
       background: var(--color-brand-yellow);
+    }
+
+    &--unattributed {
+      background: var(--color-space-surface-strong);
     }
   }
 }

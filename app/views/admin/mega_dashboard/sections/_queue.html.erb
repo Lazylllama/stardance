@@ -1,4 +1,4 @@
-<%= turbo_frame_tag "mega-dash-queue-#{@queue.key}" do %>
+<%= turbo_frame_tag "mega-dash-queue-#{@queue.key}", target: "_top" do %>
   <section class="mega-dash__section mega-dash__panel" aria-labelledby="mega-dash-<%= @queue.key %>-title"
            data-controller="mega-dash-chart"
            data-mega-dash-chart-data-value="<%= @payload[:chart_data].to_json %>">
@@ -8,13 +8,16 @@
     </div>
 
     <div class="mega-dash__tiles">
-      <%= render "admin/mega_dashboard/tile", label: "New in queue", value: number_with_delimiter(@payload[:tiles][:arrivals]) %>
-      <%= render "admin/mega_dashboard/tile", label: "Open now", value: number_with_delimiter(@payload[:tiles][:depth]) %>
+      <%= render "admin/mega_dashboard/tile", label: "Outstanding", value: number_with_delimiter(@payload[:tiles][:depth]) %>
       <%= render "admin/mega_dashboard/tile",
-            label: @queue.claimable? ? "Unclaimed" : "Overdue",
-            value: number_with_delimiter(@queue.claimable? ? @payload[:tiles][:unclaimed] : @payload[:metrics][:overdue]) %>
+            label: "Avg done per day", value: @payload[:metrics][:decisions_per_day],
+            note: "#{@payload[:metrics][:arrivals_per_day]} arriving" %>
       <%= render "admin/mega_dashboard/tile",
-            label: "Median time to decision",
+            label: "Net per day",
+            value: mega_dash_signed(@payload[:metrics][:net_per_day]),
+            note: @payload[:metrics][:days_to_clear] ? "clears in #{@payload[:metrics][:days_to_clear]}d" : "not clearing" %>
+      <%= render "admin/mega_dashboard/tile",
+            label: "Median time to review",
             value: mega_dash_duration(@payload[:tiles][:median_decision_hours]),
             note: "from #{pluralize(@payload[:tiles][:decided_sample], "decision")}" %>
     </div>
