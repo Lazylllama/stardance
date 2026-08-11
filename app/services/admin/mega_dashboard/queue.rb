@@ -53,11 +53,25 @@ module Admin
           path: ->(h) { h.admin_certification_ysws_reviews_path }
         },
         {
-          key: "mission_reviews",
-          label: "Mission reviews",
-          scope: -> { ::Mission::Submission.where(deleted_at: nil) },
-          pending: -> { ::Mission::Submission.where(deleted_at: nil, status: "pending") },
-          unclaimed: -> { ::Mission::Submission.where(deleted_at: nil, status: "pending", claimed_at: nil) },
+          key: "mission_reviews_software",
+          label: "Mission reviews (software)",
+          scope: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, missions: { hardware: false }) },
+          pending: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", missions: { hardware: false }) },
+          unclaimed: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", claimed_at: nil, missions: { hardware: false }) },
+          entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
+          decided_at: "mission_submissions.reviewed_at",
+          sla_hours: 72,
+          path: ->(h) { h.admin_mission_reviews_path }
+        },
+        {
+          key: "mission_reviews_hardware",
+          label: "Mission reviews (hardware)",
+          # Hardware missions are really reviewed through the funding and build
+          # queues; the build-review collapse auto-approves their submissions,
+          # so anything sitting here is unusual and worth seeing on its own.
+          scope: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, missions: { hardware: true }) },
+          pending: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", missions: { hardware: true }) },
+          unclaimed: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", claimed_at: nil, missions: { hardware: true }) },
           entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
           decided_at: "mission_submissions.reviewed_at",
           sla_hours: 72,
@@ -121,17 +135,6 @@ module Admin
           decided_at: "certification_funding_requests.decided_at",
           sla_hours: ::Certification::FundingRequest::SLA_DAYS * 24,
           path: ->(h) { h.design_admin_certification_hardware_reviews_path }
-        },
-        {
-          key: "payout_reviews",
-          label: "Payout reviews",
-          scope: -> { ::Post::ShipEvent.approved.voting_payout_path },
-          pending: -> { ::Post::ShipEvent.ready_for_payout },
-          unclaimed: nil,
-          entered_at: "post_ship_events.voting_completed_at",
-          decided_at: "post_ship_events.paid_at",
-          sla_hours: (::Post::ShipEvent::Payouts::PAYOUT_REVIEW_WINDOW / 1.hour).to_i,
-          path: ->(h) { h.admin_payout_reviews_path }
         },
         {
           key: "vote_flags",
