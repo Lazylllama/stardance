@@ -68,6 +68,13 @@ module Admin
         { error: e.message.presence || "HCB is temporarily unavailable" }
       end
 
+      # Airtable lookup and rollup fields come back as arrays even when they
+      # hold a single value, so every field is unwrapped before it reaches the
+      # view rather than trusting the column type.
+      def scalar(value) = value.is_a?(Array) ? value.first : value
+
+      def number(value) = scalar(value).to_f.round
+
       def program
         return { error: "No Airtable key configured" } unless NpsStats.configured?
 
@@ -77,14 +84,14 @@ module Admin
                                .fields
 
           {
-            cost_per_hour: fields["Cost/Hour"],
-            budget_per_hour: fields["Budget/Hour"],
-            over_budget: fields["Over Budget"],
-            total_spend: fields["Total Spend"],
-            total_sign_ups: fields["Total Sign Ups"],
-            unique_shippers: fields["Unique Shippers"],
-            grants_awarded: fields["Grants Awarded"],
-            weighted_total: fields["Weighted–Total"]
+            cost_per_hour: scalar(fields["Cost/Hour"]),
+            budget_per_hour: scalar(fields["Budget/Hour"]),
+            over_budget: scalar(fields["Over Budget"]),
+            total_spend: scalar(fields["Total Spend"]),
+            total_sign_ups: number(fields["Total Sign Ups"]),
+            unique_shippers: number(fields["Unique Shippers"]),
+            grants_awarded: number(fields["Grants Awarded"]),
+            weighted_total: scalar(fields["Weighted–Total"])
           }
         end
       rescue StandardError => e

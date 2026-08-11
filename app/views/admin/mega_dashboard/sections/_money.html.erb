@@ -44,9 +44,9 @@
         <span>Budget/hour <%= @money[:program][:budget_per_hour] || "—" %></span>
         <span>Over budget <%= @money[:program][:over_budget] || "—" %></span>
         <span>Weighted total <%= @money[:program][:weighted_total] || "—" %></span>
-        <span>Unique shippers <%= number_with_delimiter(@money[:program][:unique_shippers].to_i) %></span>
-        <span>Sign ups <%= number_with_delimiter(@money[:program][:total_sign_ups].to_i) %></span>
-        <span>Grants awarded <%= number_with_delimiter(@money[:program][:grants_awarded].to_i) %></span>
+        <span>Unique shippers <%= number_with_delimiter(@money[:program][:unique_shippers]) %></span>
+        <span>Sign ups <%= number_with_delimiter(@money[:program][:total_sign_ups]) %></span>
+        <span>Grants awarded <%= number_with_delimiter(@money[:program][:grants_awarded]) %></span>
       </div>
     <% end %>
   </section>
