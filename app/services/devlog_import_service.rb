@@ -55,6 +55,7 @@ class DevlogImportService
       %w[project_id body hours image].each { |f| @errors << "#{label}: missing '#{f}'" if entry[f].blank? }
 
       @errors << "#{label}: hours must be >= 0.25" if entry["hours"].present? && entry["hours"].to_f < 0.25
+      @errors << "#{label}: phase must be 'design' or 'build'" if entry["phase"].present? && !Post::Devlog::PHASES.include?(entry["phase"])
 
       if entry["image"].present?
         uri = URI.parse(entry["image"]) rescue nil
@@ -100,7 +101,7 @@ class DevlogImportService
     devlog = Post::Devlog.new(
       body: entry["body"],
       duration_seconds: (entry["hours"].to_f * 3600).to_i,
-      phase: project.hardware_stage,
+      phase: entry["phase"].presence || project.hardware_stage,
       hackatime_projects_key_snapshot: "journal-import"
     )
     devlog.uploading_attachments = true
