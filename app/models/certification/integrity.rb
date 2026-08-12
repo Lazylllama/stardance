@@ -39,6 +39,14 @@ module Certification
 
     delegate :project, to: :ship_event
 
+    # The project, including soft-deleted ones: banning a user soft-deletes their
+    # projects, and Post::ShipEvent#project is a has_one :through that applies
+    # Project's not_deleted default scope — so the plain delegate goes nil exactly
+    # when a fraud verdict lands on a banned user's work.
+    def project_including_deleted
+      Project.with_deleted.find_by(id: ship_event&.post&.project_id)
+    end
+
     # The user who shipped — author of the ship event's post.
     def user = ship_event&.post&.user
 
@@ -161,14 +169,15 @@ module Certification
     # YswsAirtableSyncJob reads each review's own ship event's integrity row, so
     # every row has to carry the verdict before the rejections enqueue their syncs.
     def apply_decision_to_project
-      return if project.blank?
+      decided_project = project_including_deleted
+      return if decided_project.blank?
 
-      cascade_to_pending_siblings
-      Certification::YswsReviewRejector.reject_pending_for_project!(project) if banned?
+      cascade_to_pending_siblings(decided_project)
+      Certification::YswsReviewRejector.reject_pending_for_project!(decided_project) if banned?
     end
 
-    def cascade_to_pending_siblings
-      project.integrity_checks.pending.where.not(id: id).find_each do |sibling|
+    def cascade_to_pending_siblings(decided_project)
+      decided_project.integrity_checks.pending.where.not(id: id).find_each do |sibling|
         sibling.skip_decision_cascade = true
         sibling.paper_trail_event = "cascaded_decision"
         sibling.update!(
