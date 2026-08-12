@@ -18,6 +18,11 @@
 # Project.with_deleted is not optional here: banning a user soft-deletes their
 # projects, and a good share of the banned population is exactly that.
 #
+# Ship events that a reviewer already settled as something other than a ban are
+# left completely alone — see #settled_ship_event_ids. Every run reports how many
+# checks and reviews it walked past for that reason, so the exclusion is never
+# silent.
+#
 # Backfilled checks are credited to the account YswsReviewRejector already uses
 # for automated decisions rather than to whoever made the original call — these
 # are machine-written rows, and the justification names the check they came from.
@@ -35,6 +40,9 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
   LOG_PREFIX = "[BackfillBannedIntegrityCascade]"
 
   WHODUNNIT = "OneTime::BackfillBannedIntegrityCascadeJob"
+
+  # Verdicts that mean a ship event was looked at and not banned.
+  SETTLED_STATUSES = %w[auto_passed manually_passed deducted].freeze
 
   # Projects carrying at least one banned check, soft-deleted ones included.
   def scope(project_ids: nil)
@@ -59,14 +67,20 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
 
     summary = { projects: 0, checks_cascaded: 0, reviews: 0, devlog_reviews: 0, synced: 0, sync_skipped: 0 }
 
+    skipped = { checks: 0, reviews: 0 }
+
     projects.each do |project|
+      settled  = settled_ship_event_ids(project)
       cascaded = 0
       results  = []
 
       PaperTrail.request(whodunnit: WHODUNNIT) do
-        cascaded = cascade_checks(project, reviewer)
-        results  = ::Certification::YswsReviewRejector.reject_pending_for_project!(project)
+        cascaded = cascade_checks(project, reviewer, settled)
+        results  = reject_reviews(project, settled)
       end
+
+      skipped[:checks]  += skipped_checks(project, settled).count
+      skipped[:reviews] += skipped_reviews(project, settled).count
 
       rejected = results.select(&:rejected)
       next if cascaded.zero? && rejected.empty?
@@ -79,23 +93,41 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
       summary[:sync_skipped]    += rejected.count { |result| !result.synced }
     end
 
+    summary.merge!(checks_left_on_settled_ships: skipped[:checks], reviews_left_on_settled_ships: skipped[:reviews])
+
     Rails.logger.info "#{LOG_PREFIX} Cascaded #{summary[:checks_cascaded]} check(s) and rejected " \
                       "#{summary[:reviews]} review(s) / #{summary[:devlog_reviews]} devlog review(s) " \
                       "across #{summary[:projects]} project(s); " \
-                      "#{summary[:synced]} synced, #{summary[:sync_skipped]} skipped (no integrity check)"
+                      "#{summary[:synced]} synced, #{summary[:sync_skipped]} skipped (no integrity check); " \
+                      "left alone on already-settled ship events: #{skipped[:checks]} check(s), " \
+                      "#{skipped[:reviews]} review(s)"
     summary
   end
 
   private
 
+  # Ship events already settled as anything other than a ban — auto-passed,
+  # manually passed, deducted — and never banned in their own right.
+  #
+  # Production has several integrity rows per ship event (the unique index in
+  # schema.rb isn't enforced there), so banning a leftover pending row on one of
+  # these would leave the ship holding a passing verdict and a fraud verdict at
+  # once, with YswsAirtableSyncJob#integrity_check_for picking between them by
+  # an unordered find_by. The backfill leaves those ship events entirely alone —
+  # checks and reviews both — and reports how many it walked past.
+  def settled_ship_event_ids(project)
+    checks = project.integrity_checks
+    checks.where(status: SETTLED_STATUSES).pluck(:ship_event_id) - checks.banned.pluck(:ship_event_id)
+  end
+
   # Copies the project's fraud verdict onto its still-pending checks. Runs before
   # the YSWS rejections: YswsAirtableSyncJob reads each review's own ship event's
   # integrity row, so every row has to carry the verdict before a sync enqueues.
-  def cascade_checks(project, reviewer)
+  def cascade_checks(project, reviewer, settled)
     source = source_check(project)
     cascaded = 0
 
-    pending_checks(project).find_each do |check|
+    pending_checks(project, settled).find_each do |check|
       check.skip_decision_cascade = true
       check.paper_trail_event = "cascaded_decision"
       check.update!(
@@ -115,8 +147,29 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
     project.integrity_checks.banned.order(:reviewed_at, :id).first
   end
 
-  def pending_checks(project)
-    project.integrity_checks.pending
+  # Rejects the project's pending reviews one at a time rather than through
+  # YswsReviewRejector.reject_pending_for_project!, so reviews hanging off a
+  # settled ship event can be held back.
+  def reject_reviews(project, settled)
+    pending_reviews(project, settled).includes(:devlog_reviews).map do |review|
+      ::Certification::YswsReviewRejector.new(review, reason: :banned).call
+    end
+  end
+
+  def pending_checks(project, settled)
+    project.integrity_checks.pending.where.not(ship_event_id: settled)
+  end
+
+  def pending_reviews(project, settled)
+    ::Certification::Ysws.pending.where(project_id: project.id).where.not(post_ship_event_id: settled)
+  end
+
+  def skipped_checks(project, settled)
+    project.integrity_checks.pending.where(ship_event_id: settled)
+  end
+
+  def skipped_reviews(project, settled)
+    ::Certification::Ysws.pending.where(project_id: project.id, post_ship_event_id: settled)
   end
 
   def justification_for(source)
@@ -126,17 +179,20 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
 
   def log_plan(projects)
     plan = projects.filter_map do |project|
-      checks  = pending_checks(project).count
-      reviews = ::Certification::Ysws.pending.where(project_id: project.id)
-        .includes(:devlog_reviews, :integrity_check).to_a
-      next if checks.zero? && reviews.empty?
+      settled = settled_ship_event_ids(project)
+      checks  = pending_checks(project, settled).count
+      reviews = pending_reviews(project, settled).includes(:devlog_reviews, :integrity_check).to_a
+      left    = { checks: skipped_checks(project, settled).count, reviews: skipped_reviews(project, settled).count }
+      next if checks.zero? && reviews.empty? && left.values.sum.zero?
 
       {
         project_id: project.id,
         checks: checks,
         reviews: reviews.size,
         devlog_reviews: reviews.sum { |review| review.devlog_reviews.count },
-        sync_skipped: reviews.count { |review| review.integrity_check.blank? }
+        sync_skipped: reviews.count { |review| review.integrity_check.blank? },
+        checks_left_on_settled_ships: left[:checks],
+        reviews_left_on_settled_ships: left[:reviews]
       }
     end
 
@@ -147,7 +203,9 @@ class OneTime::BackfillBannedIntegrityCascadeJob < ApplicationJob
     Rails.logger.info "#{LOG_PREFIX} DRY RUN — #{plan.size} project(s): " \
                       "#{totals[:checks]} check(s) to cascade, #{totals[:reviews]} review(s) " \
                       "(#{totals[:devlog_reviews]} devlog review(s)) to reject, " \
-                      "#{totals[:sync_skipped]} without an integrity check to sync. " \
+                      "#{totals[:sync_skipped]} without an integrity check to sync; " \
+                      "leaving #{totals[:checks_left_on_settled_ships]} check(s) and " \
+                      "#{totals[:reviews_left_on_settled_ships]} review(s) on already-settled ship events. " \
                       "#{plan.inspect}"
     plan
   end
