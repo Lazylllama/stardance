@@ -39,6 +39,14 @@ module Certification
 
     delegate :project, to: :ship_event
 
+    # The project, including soft-deleted ones: banning a user soft-deletes their
+    # projects, and Post::ShipEvent#project is a has_one :through that applies
+    # Project's not_deleted default scope — so the plain delegate goes nil exactly
+    # when a fraud verdict lands on a banned user's work.
+    def project_including_deleted
+      Project.with_deleted.find_by(id: ship_event&.post&.project_id)
+    end
+
     # The user who shipped — author of the ship event's post.
     def user = ship_event&.post&.user
 
@@ -53,6 +61,11 @@ module Certification
     }, default: :auto_passed
 
     DECIDED_STATUSES = %w[banned deducted manually_passed].freeze
+
+    # Verdicts that describe the project as a whole rather than one ship's
+    # heartbeats, so they settle every still-pending check on the project.
+    # :deducted is deliberately absent — a deduction is specific to its ship event.
+    CASCADING_STATUSES = %w[banned manually_passed].freeze
 
     # Display order for mixed-status listings (e.g. a user's integrity
     # history): auto-passed, passed, rejected, deducted, then pending last.
@@ -116,6 +129,14 @@ module Certification
       will_save_change_to_status? && status.in?(DECIDED_STATUSES) && reviewed_at.nil?
     }
 
+    # Set on the rows a cascade writes: the originating decision already covered
+    # the whole project, so their own callbacks would only re-walk the same set.
+    attr_accessor :skip_decision_cascade
+
+    after_commit :apply_decision_to_project, if: -> {
+      !skip_decision_cascade && saved_change_to_status? && status.in?(CASCADING_STATUSES)
+    }
+
     def claim_active?
       claimed_by_id.present? && claimed_at.present? && claimed_at > CLAIM_TTL.ago
     end
@@ -141,6 +162,30 @@ module Certification
 
     def stamp_reviewed_at
       self.reviewed_at = Time.current
+    end
+
+    # Copies this verdict onto the project's other pending checks, then — for a
+    # fraud verdict — clears the project's YSWS queue. Order matters:
+    # YswsAirtableSyncJob reads each review's own ship event's integrity row, so
+    # every row has to carry the verdict before the rejections enqueue their syncs.
+    def apply_decision_to_project
+      decided_project = project_including_deleted
+      return if decided_project.blank?
+
+      cascade_to_pending_siblings(decided_project)
+      Certification::YswsReviewRejector.reject_pending_for_project!(decided_project) if banned?
+    end
+
+    def cascade_to_pending_siblings(decided_project)
+      decided_project.integrity_checks.pending.where.not(id: id).find_each do |sibling|
+        sibling.skip_decision_cascade = true
+        sibling.paper_trail_event = "cascaded_decision"
+        sibling.update!(
+          status: status,
+          reviewer_id: reviewer_id,
+          decision_justification: decision_justification
+        )
+      end
     end
   end
 end
