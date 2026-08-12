@@ -6,8 +6,15 @@ class BracketCalculator
     { percent_min: 0.45, percent_max: 0.59, payout_multiplier: 0.55, label: "45-59%" },
     { percent_min: 0.30, percent_max: 0.44, payout_multiplier: 0.40, label: "30-44%" },
     { percent_min: 0.15, percent_max: 0.29, payout_multiplier: 0.25, label: "15-29%" },
-    { percent_min: 0.00, percent_max: 0.14, payout_multiplier: 0.10, label: "0-14%" }
+    { percent_min: 0.06, percent_max: 0.14, payout_multiplier: 0.10, label: "6-14%" },
+    { percent_min: 0.00, percent_max: 0.05, payout_multiplier: 0.025, label: "0-5%" }
   ].freeze
+
+  # Below this share of the leader's total, someone's contribution is too
+  # small to bracket meaningfully — pay a flat token amount instead of a
+  # multiplier of max_payout.
+  MINIMUM_BRACKET_PERCENT = 0.01
+  MINIMUM_PARTICIPATION_PAYOUT = 1
 
   def initialize(leaderboard, max_payout = 1000)
     @leaderboard = leaderboard
@@ -50,6 +57,15 @@ class BracketCalculator
 
   def assign_bracket(total, max_count)
     percent = total.to_f / max_count
+
+    if percent < MINIMUM_BRACKET_PERCENT
+      return {
+        label: "<1%",
+        payout: MINIMUM_PARTICIPATION_PAYOUT,
+        percent_range: "<1%"
+      }
+    end
+
     bracket = BRACKET_FORMULA.find { |b| percent >= b[:percent_min] && percent <= b[:percent_max] }
     bracket ||= BRACKET_FORMULA.last
     {
