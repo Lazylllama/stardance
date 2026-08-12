@@ -48,6 +48,17 @@ module Certification
           new(review, reason: :banned, reviewer: who).call
         end
       end
+
+      # Clears every pending review on `project`. The integrity flow's entry
+      # point, called once a fraud verdict is committed on one of the project's
+      # ship events.
+      def reject_pending_for_project!(project)
+        who = reviewer
+
+        Certification::Ysws.pending.where(project_id: project.id).includes(:devlog_reviews).map do |review|
+          new(review, reason: :banned, reviewer: who).call
+        end
+      end
     end
 
     attr_reader :review, :reason, :reviewer
