@@ -188,7 +188,7 @@
               <div class="project-show__field project-show__field--inline"
                    data-project-type-target="stageSection"
                    <%= "hidden" unless @project.hardware? %>>
-                <span>Project stage <%= render "shared/help_tooltip", text: "\"I need Funding\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"I don't need Funding\" means you already have your parts and are building." %></span>
+                <span>Project stage <%= render "shared/help_tooltip", text: "\"Design\" means you're still designing and need a grant to buy parts. Submit your design for funding to move to building. \"Build\" means you already have your parts and are building." %></span>
                 <% if @project.hardware_stage_locked? %>
                   <% fr = @project.latest_funding_request %>
                   <div class="project-show__stage-toggle project-show__stage-toggle--locked" aria-label="Project stage (locked)">
@@ -215,11 +215,11 @@
                   <div class="project-show__stage-toggle" role="radiogroup" aria-label="Project stage">
                     <label class="project-show__stage-choice">
                       <%= form.radio_button :hardware_stage, "design", class: "project-show__stage-radio", disabled: !@project.hardware?, data: { "project-type-target": "stageRadio" } %>
-                      <span class="project-show__stage-choice-label">I need Funding</span>
+                      <span class="project-show__stage-choice-label">Design</span>
                     </label>
                     <label class="project-show__stage-choice">
                       <%= form.radio_button :hardware_stage, "build", class: "project-show__stage-radio", disabled: !@project.hardware?, data: { "project-type-target": "stageRadio" } %>
-                      <span class="project-show__stage-choice-label">I don't need Funding</span>
+                      <span class="project-show__stage-choice-label">Build</span>
                     </label>
                   </div>
                 <% end %>
