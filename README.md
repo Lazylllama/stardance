@@ -1,7 +1,7 @@
 # stardance
 
-<a href="https://hackclub.com">
-  <img src="https://hackclub.comassets/landing/header/stardance-logo-df399a7f.png" alt="Stardance Logo Banner" width="100%">
+<a href="https://stardance.hackclub.com/">
+  <img src="stardance-logo-df399a7f.png" alt="Stardance Logo Banner" width="100%">
 </a>
 
 what's launching on the hack club spaceport :fire:
