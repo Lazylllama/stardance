@@ -17,6 +17,10 @@
             value: mega_dash_signed(@payload[:metrics][:net_per_day]),
             note: @payload[:metrics][:days_to_clear] ? "clears in #{@payload[:metrics][:days_to_clear]}d" : "not clearing" %>
       <%= render "admin/mega_dashboard/tile",
+            label: "Over 3 days old",
+            value: number_with_delimiter(@payload[:metrics][:over_three_days]),
+            note: "of #{number_with_delimiter(@payload[:tiles][:depth])} outstanding" %>
+      <%= render "admin/mega_dashboard/tile",
             label: "Median time to review",
             value: mega_dash_duration(@payload[:tiles][:median_decision_hours]),
             note: "from #{pluralize(@payload[:tiles][:decided_sample], "decision")}" %>

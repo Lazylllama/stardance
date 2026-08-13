@@ -37,6 +37,9 @@ module Admin
           median_wait_hours: percentile_hours(open_pairs.map { |entered, _| @now - entered }, 50),
           oldest_wait_hours: open_pairs.map { |entered, _| (@now - entered) / 3600.0 }.max&.round(1),
           overdue: open_pairs.count { |entered, _| @now - entered > queue.sla_hours.hours },
+          # A fixed cross-queue ageing line, independent of each queue's own SLA,
+          # so the panels can be compared against one another.
+          over_three_days: open_pairs.count { |entered, _| @now - entered > 3.days },
           sla_hours: queue.sla_hours,
           net: decided_in_period.size - arrivals_in_period.size,
           decisions_per_day: (decided_in_period.size / @period_days.to_f).round(1),
