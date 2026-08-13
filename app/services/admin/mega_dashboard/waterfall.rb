@@ -193,51 +193,57 @@ module Admin
         end
       end
 
-      # Segments are MEANS, not medians, and that is deliberate: medians are not
-      # additive, so a bar built from per-stage medians can never add up to the
-      # median end-to-end time. Means are additive, so stage means plus the
-      # unattributed remainder sum exactly to the mean journey. The true median
-      # and p90 are reported alongside for context.
+      # Each segment is the MEDIAN time a ship spends in that step. Medians are
+      # not additive, so the segments deliberately do not add up to an
+      # end-to-end figure and none is shown: a step's median is the honest
+      # answer to "how long does this usually take", and a journey total built
+      # from them would be a number no ship ever experienced.
       def summarise(journeys, path: nil)
-        return { count: 0, stages: [], total_mean_hours: nil, total_median_hours: nil, total_p90_hours: nil, rework_rate: nil } if journeys.empty?
+        return { count: 0, stages: [], rework_rate: nil } if journeys.empty?
 
         labels = STAGE_LABELS_BY_PATH.fetch(path, {})
         rows = journeys.map { |journey| durations_for(journey) }
 
         stages = (STAGES + [ UNATTRIBUTED ]).filter_map do |stage|
-          values = rows.map { |row| row.fetch(stage[:key], 0.0) }
-          mean = values.sum / values.size
-          next if mean <= 0
+          # Only journeys that actually pass through the step count toward its
+          # median; a path that skips a stage would otherwise drag it to zero.
+          values = rows.filter_map { |row| row[stage[:key]] }
+          median = median_of(values)
+          next if median.nil?
 
           {
             key: stage[:key],
             label: labels.fetch(stage[:key], stage[:label]),
-            count: values.count(&:positive?),
-            mean_hours: (mean / 3600.0).round(1),
-            p90_hours: percentile_hours(values.reject(&:zero?), 90)
+            count: values.size,
+            median_hours: (median / 3600.0).round(1)
           }
         end
 
-        total_mean = rows.sum { |row| row.values.sum } / rows.size
+        # Widths are each step's share of the summed medians, so the bar stays
+        # full and the steps stay visually comparable.
+        total = stages.sum { |stage| stage[:median_hours] }
         stages.each do |stage|
-          stage[:share] = total_mean.positive? ? ((stage[:mean_hours] * 3600.0 / total_mean) * 100).round(1) : nil
+          stage[:share] = total.positive? ? ((stage[:median_hours] / total) * 100).round(1) : nil
         end
 
         {
           count: journeys.size,
           stages: stages,
-          total_mean_hours: (total_mean / 3600.0).round(1),
-          total_median_hours: percentile_hours(journeys.map(&:total), 50),
-          total_p90_hours: percentile_hours(journeys.map(&:total), 90),
           rework_rate: ((journeys.count(&:reworked) * 100.0) / journeys.size).round(1)
         }
       end
 
-      # Every stage plus whatever the stages don't account for, so one journey's
-      # parts always add to its own end-to-end duration.
+      def median_of(values)
+        return if values.empty?
+
+        values.sort[(values.size - 1) / 2]
+      end
+
+      # Each stage the journey actually has, plus whatever none of them covers.
+      # Stages the journey skipped stay nil so they don't count as zero.
       def durations_for(journey)
-        parts = STAGES.to_h { |stage| [ stage[:key], segment_total(journey, stage[:key]) || 0.0 ] }
-        parts[UNATTRIBUTED[:key]] = [ journey.total - parts.values.sum, 0.0 ].max
+        parts = STAGES.to_h { |stage| [ stage[:key], segment_total(journey, stage[:key]) ] }
+        parts[UNATTRIBUTED[:key]] = [ journey.total - parts.values.compact.sum, 0.0 ].max
         parts
       end
 
@@ -248,15 +254,6 @@ module Admin
 
       # Voting journeys dropped for unusable backfill timestamps.
       def excluded_counts = { estimated_or_unknown: @excluded.to_i }
-
-      def percentile_hours(seconds, percentile)
-        values = seconds.compact
-        return if values.empty?
-
-        sorted = values.sort
-        index = ((percentile / 100.0) * (sorted.size - 1)).round
-        (sorted[index] / 3600.0).round(1)
-      end
     end
   end
 end
