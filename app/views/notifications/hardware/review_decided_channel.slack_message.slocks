@@ -1,0 +1,6 @@
+emoji = approved ? ":white_check_mark:" : ":pencil:"
+verdict = approved ? "approved" : "returned"
+
+section "#{emoji} *#{review_type} review #{verdict}:* *<#{project_url}|#{project_title}>* by _#{reviewer_name}_", markdown: true
+
+section "*Feedback:* #{feedback}", markdown: true if feedback.present?

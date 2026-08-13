@@ -3,6 +3,7 @@ module Certification
     extend ActiveSupport::Concern
 
     CLAIM_TTL = 30.minutes
+    HARDWARE_REVIEW_CHANNEL = "C0BPN8XPSPN"
 
     class_methods do
       def available_for(user)
@@ -56,6 +57,19 @@ module Certification
 
     def claim_expired?
       claim_expires_at.nil? || claim_expires_at < Time.current
+    end
+
+    def post_verdict_to_hardware_review_channel!
+      locals = notification_locals.slice(:project_title, :project_url, :approved, :reviewer_name, :feedback)
+      locals[:review_type] = is_a?(Certification::FundingRequest) ? "Design" : "Build"
+      SendSlackDmJob.perform_later(
+        HARDWARE_REVIEW_CHANNEL,
+        nil,
+        blocks_path: "notifications/hardware/review_decided_channel",
+        locals: locals
+      )
+    rescue StandardError => e
+      Rails.logger.error("#{self.class.name} ##{id} post_verdict_to_hardware_review_channel! failed: #{e.message}")
     end
   end
 end
