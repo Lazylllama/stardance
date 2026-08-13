@@ -62,6 +62,8 @@ module Certification
     def post_verdict_to_hardware_review_channel!
       locals = notification_locals.slice(:project_title, :project_url, :approved, :reviewer_name, :feedback)
       locals[:review_type] = is_a?(Certification::FundingRequest) ? "Design" : "Build"
+      locals[:owner_slack_id] = owner&.slack_id
+      locals[:reviewer_slack_id] = reviewer&.slack_id
       SendSlackDmJob.perform_later(
         HARDWARE_REVIEW_CHANNEL,
         nil,
