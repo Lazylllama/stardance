@@ -1,3 +1,6 @@
+require "resolv"
+require "ipaddr"
+
 class DevlogImportService
   ALLOWED_HOSTS = %w[
     raw.githubusercontent.com
@@ -159,7 +162,7 @@ class DevlogImportService
   def follow_redirects(uri, limit = MAX_REDIRECTS)
     raise "too many redirects" if limit == 0
     raise "redirect to non-HTTPS URL" unless uri.is_a?(URI::HTTPS)
-    raise "redirect to disallowed host '#{uri.host}'" unless ALLOWED_HOSTS.include?(uri.host)
+    assert_public_host!(uri.host)
 
     response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) do |http|
       http.request(Net::HTTP::Get.new(uri))
@@ -169,6 +172,18 @@ class DevlogImportService
       follow_redirects(URI.parse(response["location"]), limit - 1)
     else
       response
+    end
+  end
+
+  def assert_public_host!(hostname)
+    addrs = Resolv.getaddresses(hostname)
+    raise "could not resolve host '#{hostname}'" if addrs.empty?
+
+    addrs.each do |addr_str|
+      ip = IPAddr.new(addr_str)
+      if ip.private? || ip.loopback? || ip.link_local?
+        raise "redirect to private/internal address blocked (#{hostname} -> #{addr_str})"
+      end
     end
   end
 end
