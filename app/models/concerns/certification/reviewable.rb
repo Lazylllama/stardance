@@ -59,6 +59,29 @@ module Certification
       claim_expires_at.nil? || claim_expires_at < Time.current
     end
 
+    def post_submission_to_hardware_review_channel!
+      routes = Rails.application.routes.url_helpers
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      locals = {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        repo_url: project.repo_url,
+        owner_slack_id: owner&.slack_id,
+        owner_name: owner&.display_name,
+        submission_type: is_a?(Certification::FundingRequest) ? "design" : "build"
+      }
+      SendSlackDmJob.perform_later(
+        HARDWARE_REVIEW_CHANNEL,
+        nil,
+        blocks_path: "notifications/hardware/review_submitted_channel",
+        locals: locals
+      )
+    rescue StandardError => e
+      Rails.logger.error("#{self.class.name} ##{id} post_submission_to_hardware_review_channel! failed: #{e.message}")
+    end
+
     def post_verdict_to_hardware_review_channel!
       locals = notification_locals.slice(:project_title, :project_url, :approved, :reviewer_name, :feedback)
       locals[:review_type] = is_a?(Certification::FundingRequest) ? "design" : "build"

@@ -307,6 +307,7 @@ module Certification
     after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
     after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && !pending? }
     after_save_commit :issue_hcb_grant!, if: -> { issues_grant? && hcb_grant_hashid.blank? && latest_for_project? }
+    after_create_commit :post_submission_to_hardware_review_channel!
 
     private
 
