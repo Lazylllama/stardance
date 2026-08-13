@@ -606,7 +606,7 @@ GEM
     request_store (1.7.0)
       rack (>= 1.4)
     rexml (3.4.4)
-    rouge (5.0.0)
+    rouge (5.1.0)
       strscan (~> 3.1)
     rqrcode_core (2.1.0)
     rspec-core (3.13.6)
