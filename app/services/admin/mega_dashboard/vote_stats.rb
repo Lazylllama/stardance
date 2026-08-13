@@ -49,9 +49,9 @@ module Admin
           outstanding_assignments: ::Vote::Assignment.where(status: "assigned").count,
           votes_needed_to_clear: votes_needed_to_clear,
           cast_per_day: (cast / period_days.to_f).round(1),
-          # How fast the deficit is actually shrinking, which is not the same as
-          # the casting rate: new ships entering voting add demand as we go.
-          net_per_day: deficits.size < 2 ? nil : ((deficits.first - deficits.last) / period_days.to_f).round(1),
+          # Change in votes owed, matching the queues' convention: positive when
+          # the pool grows, negative when voters are burning it down.
+          net_per_day: deficits.size < 2 ? nil : ((deficits.last - deficits.first) / period_days.to_f).round(1),
           median_rating_hours: median_rating_hours
         }
       end
@@ -120,19 +120,17 @@ module Admin
       def chart_data
         votes_by_date = votes_in_period.group(Arel.sql("DATE(votes.created_at)")).count
         assigned_by_date = assignments_in_period.group(Arel.sql("DATE(vote_assignments.created_at)")).count
-        durations_by_date = votes_in_period.where.not(time_taken_to_vote_in_seconds: nil)
-                                           .pluck(Arel.sql("DATE(votes.created_at)"), :time_taken_to_vote_in_seconds)
-                                           .group_by(&:first)
+        rating_by_date = rating_spans_by_completion_date
         deficits = deficit_by_date
 
         (window_start.to_date..@now.to_date).map do |date|
-          durations = durations_by_date.fetch(date, []).map(&:last)
+          spans = rating_by_date.fetch(date, [])
 
           {
             date: date.strftime("%-d %b"),
             arrived: assigned_by_date.fetch(date, 0),
             decided: votes_by_date.fetch(date, 0),
-            latency_hours: percentile_minutes(durations, 50),
+            latency_hours: spans.empty? ? nil : (spans.sort[(spans.size - 1) / 2] / 3600.0).round(1),
             backlog: deficits.fetch(date, 0)
           }
         end
@@ -143,8 +141,11 @@ module Admin
       # the payout threshold it was. That is the same shape as the other
       # queues' backlog series, just measured in votes rather than rows.
       def deficit_by_date
-        ships = ::Post::ShipEvent.where.not(voting_started_at: nil)
-                                 .pluck(:id, :voting_started_at, :voting_completed_at)
+        # Approved and unpaid only: a ship that was paid or rejected has left
+        # the pool, and counting it forever made the deficit look like it only
+        # ever climbed.
+        ships = ::Post::ShipEvent.approved.where.not(voting_started_at: nil)
+                                 .pluck(:id, :voting_started_at, :voting_completed_at, :paid_at)
         return {} if ships.empty?
 
         votes_by_ship = ::Vote.payout_countable
@@ -158,9 +159,10 @@ module Admin
         (window_start.to_date..@now.to_date).index_with do |date|
           day_end = date.in_time_zone.end_of_day
 
-          ships.sum do |id, started_at, completed_at|
+          ships.sum do |id, started_at, completed_at, paid_at|
             next 0 if started_at > day_end
             next 0 if completed_at && completed_at <= day_end
+            next 0 if paid_at && paid_at <= day_end
 
             # bsearch_index finds the first vote after the cutoff, which is the
             # count of votes cast on or before it.
@@ -179,6 +181,18 @@ module Admin
 
       # Voting takes minutes, not hours, so this panel's latency series is in
       # minutes. The shared chart labels it accordingly.
+      # Rating spans keyed by the day the ship reached the vote threshold.
+      def rating_spans_by_completion_date
+        ::Post::ShipEvent
+          .where(voting_completed_at: window_start..)
+          .where.not(voting_started_at: nil)
+          .where(lifecycle_data_quality: %w[live backfilled_exact])
+          .pluck(:voting_started_at, :voting_completed_at)
+          .each_with_object(Hash.new { |h, k| h[k] = [] }) do |(started, completed), acc|
+            acc[completed.to_date] << (completed - started) if completed > started
+          end
+      end
+
       def percentile_minutes(seconds, percentile)
         return if seconds.blank?
 

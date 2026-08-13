@@ -2,7 +2,7 @@
   <section class="mega-dash__section mega-dash__panel" aria-labelledby="mega-dash-votes-title"
            data-controller="mega-dash-chart"
            data-mega-dash-chart-data-value="<%= @votes[:chart_data].to_json %>"
-           data-mega-dash-chart-latency-unit-value="m"
+           data-mega-dash-chart-latency-unit-value="h"
            data-mega-dash-chart-backlog-label-value="Votes owed">
     <div class="mega-dash__section-heading">
       <h2 id="mega-dash-votes-title">Vote queue</h2>
@@ -30,8 +30,8 @@
     </div>
 
     <div class="mega-dash__meta">
-      <span>Median vote <%= @votes[:tiles][:median_time_to_vote_minutes] ? "#{@votes[:tiles][:median_time_to_vote_minutes]}m" : "—" %></span>
-      <span>P95 vote <%= @votes[:tiles][:p95_time_to_vote_minutes] ? "#{@votes[:tiles][:p95_time_to_vote_minutes]}m" : "—" %></span>
+      <span>Median to cast one vote <%= @votes[:tiles][:median_time_to_vote_minutes] ? "#{@votes[:tiles][:median_time_to_vote_minutes]}m" : "—" %></span>
+      <span>P95 to cast one vote <%= @votes[:tiles][:p95_time_to_vote_minutes] ? "#{@votes[:tiles][:p95_time_to_vote_minutes]}m" : "—" %></span>
       <% @votes[:category_averages].each do |category, average| %>
         <span><%= category.to_s.titleize %> <%= average || "—" %></span>
       <% end %>
@@ -43,7 +43,7 @@
         <canvas data-mega-dash-chart-target="volume"></canvas>
       </figure>
       <figure class="mega-dash__chart">
-        <figcaption>Median time to vote</figcaption>
+        <figcaption>Time from voting open to 12 votes</figcaption>
         <canvas data-mega-dash-chart-target="latency"></canvas>
       </figure>
       <figure class="mega-dash__chart">

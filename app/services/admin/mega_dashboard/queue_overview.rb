@@ -25,7 +25,7 @@ module Admin
           return "error" if error
           return "empty" if depth.zero?
           return "behind" if overdue.positive?
-          return "growing" if net.negative?
+          return "growing" if net.positive?
 
           "ok"
         end

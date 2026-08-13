@@ -55,9 +55,14 @@ module Admin
         {
           key: "mission_reviews_software",
           label: "Mission reviews (software)",
-          scope: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, missions: { hardware: false }) },
-          pending: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", missions: { hardware: false }) },
-          unclaimed: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", claimed_at: nil, missions: { hardware: false }) },
+          # Split on the project's own hardware_stage, not the mission's flag:
+          # the flag is null on some production rows, which put those
+          # submissions in neither queue, and a hardware project can sit under
+          # a mission that isn't flagged. Outer-joined so a submission whose
+          # ship has no project still lands here rather than vanishing.
+          scope: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, projects: { hardware_stage: nil }) },
+          pending: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", projects: { hardware_stage: nil }) },
+          unclaimed: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", claimed_at: nil, projects: { hardware_stage: nil }) },
           entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
           decided_at: "mission_submissions.reviewed_at",
           sla_hours: 72,
@@ -66,12 +71,11 @@ module Admin
         {
           key: "mission_reviews_hardware",
           label: "Mission reviews (hardware)",
-          # Hardware missions are really reviewed through the funding and build
-          # queues; the build-review collapse auto-approves their submissions,
-          # so anything sitting here is unusual and worth seeing on its own.
-          scope: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, missions: { hardware: true }) },
-          pending: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", missions: { hardware: true }) },
-          unclaimed: -> { ::Mission::Submission.joins(:mission).where(deleted_at: nil, status: "pending", claimed_at: nil, missions: { hardware: true }) },
+          # Hardware projects are really reviewed through the funding and build
+          # queues, so anything sitting here is unusual and worth seeing alone.
+          scope: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil).where.not(projects: { hardware_stage: nil }) },
+          pending: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending").where.not(projects: { hardware_stage: nil }) },
+          unclaimed: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", claimed_at: nil).where.not(projects: { hardware_stage: nil }) },
           entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
           decided_at: "mission_submissions.reviewed_at",
           sla_hours: 72,
@@ -86,21 +90,6 @@ module Admin
           entered_at: "shop_orders.created_at",
           decided_at: ::ShopOrder::DECIDED_AT_SQL,
           sla_hours: ::ShopOrder::LONG_WAIT_DAYS * 24,
-          path: ->(h) { h.admin_fraud_path }
-        },
-        {
-          key: "fraud_reports",
-          label: "Fraud reports",
-          # Every internally-raised reason, not just the literal "fraud" one.
-          # Reviewers flag through report_fraud on the ship and YSWS queues,
-          # which writes "Shipwrights project flag" / "YSWS project flag", so
-          # filtering on "fraud" alone misses every reviewer-raised report.
-          scope: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS) },
-          pending: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS).pending },
-          unclaimed: nil,
-          entered_at: "project_reports.created_at",
-          decided_at: "CASE WHEN project_reports.status = 0 THEN NULL ELSE project_reports.updated_at END",
-          sla_hours: 72,
           path: ->(h) { h.admin_fraud_path }
         },
         {
@@ -179,6 +168,21 @@ module Admin
           decided_at: "CASE WHEN certificates.status = 'pending' THEN NULL ELSE certificates.updated_at END",
           sla_hours: 72,
           path: ->(h) { h.admin_certificates_path }
+        },
+        {
+          key: "fraud_reports",
+          label: "Fraud reports",
+          # Every internally-raised reason, not just the literal "fraud" one.
+          # Reviewers flag through report_fraud on the ship and YSWS queues,
+          # which writes "Shipwrights project flag" / "YSWS project flag", so
+          # filtering on "fraud" alone misses every reviewer-raised report.
+          scope: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS) },
+          pending: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS).pending },
+          unclaimed: nil,
+          entered_at: "project_reports.created_at",
+          decided_at: "CASE WHEN project_reports.status = 0 THEN NULL ELSE project_reports.updated_at END",
+          sla_hours: 72,
+          path: ->(h) { h.admin_fraud_path }
         }
       ].freeze
 

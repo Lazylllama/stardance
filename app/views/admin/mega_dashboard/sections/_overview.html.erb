@@ -33,7 +33,7 @@
               <td><%= mega_dash_duration(row[:oldest_wait_hours]) %></td>
               <td><%= number_with_delimiter(row[:arrivals]) %></td>
               <td><%= number_with_delimiter(row[:decisions]) %></td>
-              <td class="mega-dash__net mega-dash__net--<%= row[:net].negative? ? "down" : "up" %>">
+              <td class="mega-dash__net mega-dash__net--<%= row[:net].positive? ? "growing" : "draining" %>">
                 <%= row[:net].positive? ? "+#{row[:net]}" : row[:net] %>
               </td>
               <td><%= row[:days_to_clear] ? "#{row[:days_to_clear]}d" : "—" %></td>

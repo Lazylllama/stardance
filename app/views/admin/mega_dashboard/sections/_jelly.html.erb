@@ -9,7 +9,7 @@
         <% if !@jelly[:configured] %>
           not configured
         <% elsif @jelly[:last_synced_at].blank? %>
-          never synced
+          configured, but the sync job has never written anything
         <% else %>
           synced <%= time_ago_in_words(@jelly[:last_synced_at]) %> ago<%= " · stale" if @jelly[:stale] %>
         <% end %>
@@ -17,7 +17,7 @@
     </div>
 
     <% if !@jelly[:configured] %>
-      <p class="mega-dash__empty">Set JELLY_API_TOKEN to enable this panel.</p>
+      <p class="mega-dash__empty">JELLY_API_TOKEN is not set in this environment, so the sync job exits without doing anything.</p>
     <% else %>
       <div class="mega-dash__tiles">
         <%= render "admin/mega_dashboard/tile", label: "New conversations", value: number_with_delimiter(@jelly[:tiles][:arrivals]) %>
