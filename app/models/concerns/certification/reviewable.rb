@@ -78,8 +78,16 @@ module Certification
         blocks_path: "notifications/hardware/review_submitted_channel",
         locals: locals
       )
+      invite_owner_to_hardware_review_channel!
     rescue StandardError => e
       Rails.logger.error("#{self.class.name} ##{id} post_submission_to_hardware_review_channel! failed: #{e.message}")
+    end
+
+    def invite_owner_to_hardware_review_channel!
+      return unless owner&.slack_id.present?
+      return if owner.hardware_channel_invited_at.present?
+
+      InviteToSlackChannelJob.perform_later(owner.id, HARDWARE_REVIEW_CHANNEL)
     end
 
     def post_verdict_to_hardware_review_channel!
