@@ -41,10 +41,12 @@ module Admin
           # so the panels can be compared against one another.
           over_three_days: open_pairs.count { |entered, _| @now - entered > 3.days },
           sla_hours: queue.sla_hours,
-          net: decided_in_period.size - arrivals_in_period.size,
+          # Net is the change in the pool, so it reads the way the queue feels:
+          # positive when more arrives than leaves, negative when it drains.
+          net: arrivals_in_period.size - decided_in_period.size,
           decisions_per_day: (decided_in_period.size / @period_days.to_f).round(1),
           arrivals_per_day: (arrivals_in_period.size / @period_days.to_f).round(1),
-          net_per_day: ((decided_in_period.size - arrivals_in_period.size) / @period_days.to_f).round(1),
+          net_per_day: ((arrivals_in_period.size - decided_in_period.size) / @period_days.to_f).round(1),
           days_to_clear: days_to_clear
         }
       end
@@ -94,13 +96,13 @@ module Admin
         end
       end
 
+      # Separate from `net`: this needs the drain rate, which is the opposite
+      # sign, and only exists when the queue is actually shrinking.
       def days_to_clear
-        cleared_per_day = decided_in_period.size / @period_days.to_f
-        arrived_per_day = arrivals_in_period.size / @period_days.to_f
-        net_per_day = cleared_per_day - arrived_per_day
-        return if net_per_day <= 0 || open_pairs.empty?
+        drain_per_day = (decided_in_period.size - arrivals_in_period.size) / @period_days.to_f
+        return if drain_per_day <= 0 || open_pairs.empty?
 
-        (open_pairs.size / net_per_day).round(1)
+        (open_pairs.size / drain_per_day).round(1)
       end
 
       def percentile_hours(seconds, percentile)

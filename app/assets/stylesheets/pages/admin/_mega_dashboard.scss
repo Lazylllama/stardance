@@ -109,11 +109,11 @@
     font-size: var(--font-size-s);
   }
 
-  &__meta-net--down {
+  &__meta-net--growing {
     color: var(--color-brand-salmon);
   }
 
-  &__meta-net--up {
+  &__meta-net--draining {
     color: var(--color-brand-mint);
   }
 
@@ -189,11 +189,11 @@
     margin-left: var(--space-xxs);
   }
 
-  &__net--down {
+  &__net--growing {
     color: var(--color-brand-salmon);
   }
 
-  &__net--up {
+  &__net--draining {
     color: var(--color-brand-mint);
   }
 

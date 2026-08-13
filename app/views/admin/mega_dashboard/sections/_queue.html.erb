@@ -30,7 +30,7 @@
       <span>P90 <%= mega_dash_duration(@payload[:metrics][:p90_decision_hours]) %></span>
       <span>Oldest waiting <%= mega_dash_duration(@payload[:metrics][:oldest_wait_hours]) %></span>
       <span>SLA <%= @payload[:metrics][:sla_hours] %>h</span>
-      <span class="mega-dash__meta-net mega-dash__meta-net--<%= @payload[:metrics][:net].negative? ? "down" : "up" %>">
+      <span class="mega-dash__meta-net mega-dash__meta-net--<%= @payload[:metrics][:net].positive? ? "growing" : "draining" %>">
         Net <%= @payload[:metrics][:net].positive? ? "+#{@payload[:metrics][:net]}" : @payload[:metrics][:net] %>
       </span>
       <% if @payload[:metrics][:days_to_clear] %>
