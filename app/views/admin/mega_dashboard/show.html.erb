@@ -30,11 +30,6 @@
     <p class="mega-dash__loading">Loading user-facing time…</p>
   <% end %>
 
-  <%= turbo_frame_tag "mega-dash-money",
-        src: admin_mega_dashboard_section_path(section: "money", period: @period), loading: "lazy", target: "_top" do %>
-    <p class="mega-dash__loading">Loading payouts and spend…</p>
-  <% end %>
-
   <%= turbo_frame_tag "mega-dash-nps",
         src: admin_mega_dashboard_section_path(section: "nps", period: @period), loading: "lazy", target: "_top" do %>
     <p class="mega-dash__loading">Loading NPS…</p>
@@ -60,5 +55,10 @@
           src: admin_mega_dashboard_section_path(section: "queue:#{queue.key}", period: @period), loading: "lazy", target: "_top" do %>
       <p class="mega-dash__loading">Loading <%= queue.label.downcase %>…</p>
     <% end %>
+  <% end %>
+
+  <%= turbo_frame_tag "mega-dash-money",
+        src: admin_mega_dashboard_section_path(section: "money", period: @period), loading: "lazy", target: "_top" do %>
+    <p class="mega-dash__loading">Loading payouts and spend…</p>
   <% end %>
 </div>
