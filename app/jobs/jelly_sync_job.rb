@@ -10,7 +10,12 @@ class JellySyncJob < ApplicationJob
   MAX_MESSAGE_FETCHES = 150
 
   def perform(full: false)
-    return unless Jelly::Client.configured?
+    # A silent return here is indistinguishable from a sync that ran and found
+    # nothing, which is exactly how this went unnoticed in production.
+    unless Jelly::Client.configured?
+      Rails.logger.warn("[JellySync] skipped: JELLY_API_TOKEN is not set")
+      return
+    end
 
     @client = Jelly::Client.new
     @started_at = Time.current
