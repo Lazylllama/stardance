@@ -140,7 +140,10 @@
         </dl>
 
         <div class="integrity-review__tools">
-          <%= link_to "Joe ↗", "https://joe.fraud.hackclub.com/profile/#{shipper.slack_id}", target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
+          <% hackatime_uid = shipper.identities.find { |i| i.provider == "hackatime" }&.uid %>
+          <% if hackatime_uid.present? %>
+            <%= link_to "Telescreen ↗", "https://telescreen.hackclub.com/workbench/hackatime/overview?u=#{hackatime_uid}", target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
+          <% end %>
         </div>
       <% else %>
         <p class="integrity-review__placeholder">User record is unavailable.</p>
