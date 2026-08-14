@@ -132,7 +132,7 @@ class UsersController < ApplicationController
   end
 
   def hide_rejected_ships(scope)
-    rejected_ids = Post::ShipEvent.where(certification_status: "rejected").pluck(:id)
+    rejected_ids = Post::ShipEvent.where(certification_status: Post::ShipEvent::HIDDEN_STATUSES).pluck(:id)
     scope.where.not(postable_type: "Post::ShipEvent", postable_id: rejected_ids)
   end
 

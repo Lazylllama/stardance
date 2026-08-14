@@ -643,6 +643,21 @@
                       tooltip_position_value: "top"
                     }
                   ) %>
+            <% elsif !owner&.identity_verified? || !owner.ysws_eligible? %>
+              <%= render ActionButtonComponent.new(
+                    text: @project.awards_design_kit? ? "Submit your design" : "Submit for funding",
+                    variant: :primary,
+                    type: :button,
+                    icon: "icons/rocket.png",
+                    disabled: :soft,
+                    data: {
+                      controller: "tooltip",
+                      tooltip_message_value: owner&.identity_verified? ?
+                        "You're not eligible for YSWS prizes yet, check the Hack Club portal!" :
+                        "Verify your identity before requesting funding!",
+                      tooltip_position_value: "top"
+                    }
+                  ) %>
             <% else %>
               <%= render ActionButtonComponent.new(
                     text: @project.awards_design_kit? ? "Submit your design" : "Submit for funding",
@@ -895,6 +910,14 @@
             Read on how to start your hardware project!<%= inline_svg_tag "icons/right-arrow.svg", class: "action-btn__icon action-btn__icon--trailing", aria: { hidden: true } %>
           <% end %>
         <% end %>
+      </section>
+    <% end %>
+
+    <%# Pinned above the feed rather than sorted into it: nothing else on the
+        project can move until the builder answers it. %>
+    <% if @queue_mismatch_review %>
+      <section class="project-show__feed" aria-label="Question from a reviewer">
+        <%= render "projects/queue_mismatch_card", review: @queue_mismatch_review, project: @project %>
       </section>
     <% end %>
 

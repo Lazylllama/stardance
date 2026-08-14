@@ -60,6 +60,79 @@
         <%= render "admin/certification/funding_requests/recordings",
               timelapses: @lapse_timelapses, recordings: @lookout_recordings %>
 
+        <div class="ship-review__panel hardware-review__history-panel">
+          <h2 class="ship-review__panel-title">Review history</h2>
+          <%# A disputed flag rewinds the review to pending in place, so it never
+              lands in @past_reviews. Surface it here or the next reviewer picks
+              the project up with no idea it has already been round this loop. %>
+          <% bounced = @active_review&.previously_misfiled? %>
+          <% if bounced %>
+            <div class="hardware-review__history-item hardware-review__history-item--bounced">
+              <div class="hardware-review__history-head">
+                <span class="hardware-review__timeline-label">This review</span>
+                <span class="status-pill status-pill--misfiled">Sent back once</span>
+                <span class="hardware-review__timeline-meta">
+                  A reviewer flagged this as the wrong queue and the builder disagreed.
+                </span>
+              </div>
+              <% if @active_review.internal_reason.present? %>
+                <p class="hardware-review__history-feedback hardware-review__history-feedback--internal">
+                  Reviewer note: <%= @active_review.internal_reason %>
+                </p>
+              <% end %>
+            </div>
+          <% end %>
+
+          <% if @past_reviews.any? %>
+            <ul class="hardware-review__history">
+              <% @past_reviews.each do |review| %>
+                <% is_funding = review.is_a?(::Certification::FundingRequest) %>
+                <li class="hardware-review__history-item">
+                  <div class="hardware-review__history-head">
+                    <span class="hardware-review__timeline-label"><%= is_funding ? "Design funding" : "Build certification" %></span>
+                    <span class="status-pill status-pill--<%= review.status %>"><%= review.status.capitalize %></span>
+                    <span class="hardware-review__timeline-meta">
+                      <%# A routing correction has no verdict to report, so it says
+                          what happened to it instead of an amount or a kit. %>
+                      <% if review.misfiled? %>
+                        Wrong queue, waiting on the builder
+                      <% elsif review.withdrawn? %>
+                        Withdrawn, wrong queue
+                      <% elsif is_funding %>
+                        <% if review.awards_design_kit? %>
+                          <%= review.design_kit_shop_item&.name || "Kit" %>
+                        <% elsif review.kit_mission? %>
+                          No kit
+                        <% elsif review.approved_without_grant? %>
+                          No grant
+                        <% else %>
+                          $<%= review.final_amount_dollars %> · <%= review.tier_label %>
+                        <% end %>
+                      <% end %>
+                    </span>
+                    <% if review.decided_at %>
+                      <span class="hardware-review__timeline-meta"><%= l(review.decided_at.to_date, format: :short) %></span>
+                    <% end %>
+                    <% if review.reviewer %>
+                      <span class="hardware-review__timeline-meta">by <%= review.reviewer.display_name %></span>
+                    <% end %>
+                  </div>
+                  <% if review.feedback.present? %>
+                    <p class="hardware-review__history-feedback"><%= review.feedback %></p>
+                  <% end %>
+                  <% if review.internal_reason.present? %>
+                    <p class="hardware-review__history-feedback hardware-review__history-feedback--internal">
+                      Reviewer note: <%= review.internal_reason %>
+                    </p>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          <% elsif !bounced %>
+            <p class="ship-review__description">This is the first review on this project.</p>
+          <% end %>
+        </div>
+
         <%# Secondary context: useful when a verdict is borderline, not needed to
             start reviewing, so it sits below the evidence and the form. %>
         <details class="hardware-review__more">
@@ -75,6 +148,8 @@
                   <span class="hardware-review__timeline-meta">
                     <% if @funding_request.awards_design_kit? %>
                       <%= @funding_request.design_kit_shop_item&.name || "Kit" %>
+                    <% elsif @funding_request.kit_mission? %>
+                      Approved, no kit
                     <% elsif @funding_request.approved_without_grant? %>
                       Approved, no grant
                     <% else %>
@@ -101,43 +176,6 @@
               </div>
             </div>
           </div>
-
-          <% if @past_reviews.any? %>
-            <div class="ship-review__panel">
-              <h2 class="ship-review__panel-title">Previous reviews</h2>
-              <ul class="hardware-review__history">
-                <% @past_reviews.each do |review| %>
-                  <% is_funding = review.is_a?(::Certification::FundingRequest) %>
-                  <li class="hardware-review__history-item">
-                    <div class="hardware-review__history-head">
-                      <span class="hardware-review__timeline-label"><%= is_funding ? "Design funding" : "Build certification" %></span>
-                      <span class="status-pill status-pill--<%= review.status %>"><%= review.status.capitalize %></span>
-                      <% if is_funding %>
-                        <span class="hardware-review__timeline-meta">
-                          <% if review.awards_design_kit? %>
-                            <%= review.design_kit_shop_item&.name || "Kit" %>
-                          <% elsif review.approved_without_grant? %>
-                            No grant
-                          <% else %>
-                            $<%= review.final_amount_dollars %> · <%= review.tier_label %>
-                          <% end %>
-                        </span>
-                      <% end %>
-                      <% if review.decided_at %>
-                        <span class="hardware-review__timeline-meta"><%= l(review.decided_at.to_date, format: :short) %></span>
-                      <% end %>
-                      <% if review.reviewer %>
-                        <span class="hardware-review__timeline-meta">by <%= review.reviewer.display_name %></span>
-                      <% end %>
-                    </div>
-                    <% if review.feedback.present? %>
-                      <p class="hardware-review__history-feedback"><%= review.feedback %></p>
-                    <% end %>
-                  </li>
-                <% end %>
-              </ul>
-            </div>
-          <% end %>
 
           <% if @active_review_type == :ship && @project.update_description.present? %>
             <div class="ship-review__panel">
@@ -205,6 +243,37 @@
                       class: "ship-queue__select" %>
               <% end %>
             <% end %>
+            <%# Routing, not a verdict: hands the submission back to the builder
+                to confirm it belongs in the other queue. %>
+            <% mismatch_path = @active_review_type == :ship ?
+                 flag_queue_mismatch_admin_certification_ship_path(@ship) :
+                 flag_queue_mismatch_admin_certification_funding_request_path(@funding_request) %>
+            <%# Sending a funded project back to design lets it be funded again:
+                prize redemption is unique per request, not per project. Warn
+                rather than block - a genuinely mis-issued kit is a real case. %>
+            <% funded = @active_review_type == :ship ? @project.delivered_funding_request : nil %>
+            <%= form_with url: mismatch_path, method: :post, class: "hardware-review__mismatch" do |form| %>
+              <%= label_tag :reason, "This shouldn't be in this queue", class: "ship-review__panel-title" %>
+              <% if funded %>
+                <p class="hardware-review__mismatch-warning">
+                  This project already received
+                  <% if funded.awards_design_kit? %>
+                    the <%= funded.design_kit_shop_item&.name || "mission kit" %>.
+                  <% else %>
+                    a $<%= funded.final_amount_dollars %> grant.
+                  <% end %>
+                  Sending it back to design lets it be funded a second time.
+                </p>
+              <% end %>
+              <%= text_area_tag :reason, nil, rows: 2, class: "hardware-review__mismatch-reason",
+                    placeholder: @active_review_type == :ship ?
+                      "Why does this need funding first? (shown to the builder)" :
+                      "Why does this look already built? (shown to the builder)" %>
+              <%= form.submit @active_review_type == :ship ? "Send back: needs funding first" : "Send back: build looks done",
+                    class: "action-btn action-btn--small action-btn--secondary",
+                    data: { disable_with: "Sending…" } %>
+            <% end %>
+
             <button type="submit" form="unclaim-form-<%= @active_review.id %>"
                     class="action-btn action-btn--small action-btn--destructive">
               Unclaim review

@@ -5,7 +5,8 @@ class HardwareKitRedemptionTest < ActionDispatch::IntegrationTest
 
   setup do
     @owner = User.create!(email: "owner-#{SecureRandom.hex(6)}@example.com",
-                          display_name: "Owner#{SecureRandom.hex(3)}", slack_id: "U#{SecureRandom.hex(8)}")
+                          display_name: "Owner#{SecureRandom.hex(3)}", slack_id: "U#{SecureRandom.hex(8)}",
+                          verification_status: :verified, ysws_eligible: true)
     @stranger = User.create!(email: "str-#{SecureRandom.hex(6)}@example.com",
                              display_name: "Str#{SecureRandom.hex(3)}", slack_id: "U#{SecureRandom.hex(8)}")
     @project = Project.create!(title: "HW #{SecureRandom.hex(4)}", hardware_stage: "design")

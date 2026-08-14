@@ -13,6 +13,9 @@ class Admin::Certification::ShipPolicy < ApplicationPolicy
 
   def set_project_type? = show?
 
+  # Same bar as a verdict: only the reviewer holding the claim may re-route it.
+  def flag_queue_mismatch? = update?
+
   def set_bonus_stardust? = user&.admin?
 
   def report_fraud? = user&.can_review?

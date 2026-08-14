@@ -18,6 +18,7 @@ module HardwareReviewQueue
 
   included do
     before_action :set_body_class
+    before_action :release_other_claims, only: [ :next ]
     helper_method :hardware_review_path, :hardware_queue_path, :hardware_next_path,
                   :hardware_queue_title, :hardware_back_link
   end
@@ -62,6 +63,18 @@ module HardwareReviewQueue
 
   private
 
+  # Asking for the next review hands the current one back. Without this a
+  # skipped submission stays claimed for the full CLAIM_TTL and no other
+  # reviewer can pick it up, since `available_for` only offers unclaimed rows.
+  # Both models, because one dash spans both queues. Mirrors the software ship
+  # queue (Admin::Certification::ShipsController#release_other_claims).
+  def release_other_claims
+    return if current_user.blank?
+
+    ::Certification::FundingRequest.release_all_for(current_user)
+    ::Certification::Ship.release_all_for(current_user)
+  end
+
   def load_queue(stage)
     @stage = stage.to_s
     @status = params[:status].presence_in(%w[pending approved returned all]) || "pending"
@@ -88,8 +101,8 @@ module HardwareReviewQueue
 
   # The reviewer's own numbers, scoped to the projects this dash covers.
   def my_hardware_stats
-    design = ::Certification::FundingRequest.where(reviewer: current_user, project: reviewable_projects).where.not(status: :pending)
-    build = ::Certification::Ship.where(reviewer: current_user, project: reviewable_projects).where.not(status: :pending)
+    design = ::Certification::FundingRequest.where(reviewer: current_user, project: reviewable_projects).decided
+    build = ::Certification::Ship.where(reviewer: current_user, project: reviewable_projects).decided
     today = Time.current.beginning_of_day
 
     {
@@ -226,7 +239,7 @@ module HardwareReviewQueue
       ),
       overdue_pending: scope.pending.where("#{model.table_name}.created_at < ?", Time.current - sla_days.days).count,
       sla_days: sla_days,
-      decisions_today: scope.where.not(status: :pending).where(decided_at: today..).count,
+      decisions_today: scope.decided.where(decided_at: today..).count,
       new_today: scope.where(created_at: today..).count
     }
   end
@@ -254,7 +267,7 @@ module HardwareReviewQueue
     [ ::Certification::FundingRequest, ::Certification::Ship ].each do |model|
       scope = model.joins(:reviewer)
         .where.not(reviewer_id: nil)
-        .where.not(status: :pending)
+        .decided
         .where(project: reviewable_projects)
       case period.to_sym
       when :daily then scope = scope.where(decided_at: now.beginning_of_day..)

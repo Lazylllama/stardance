@@ -13,6 +13,7 @@
 #  hcb_grant_hashid          :string
 #  internal_reason           :text
 #  lock_version              :integer          default(0), not null
+#  prizes_waived             :boolean          default(FALSE), not null
 #  requested_amount_cents    :integer          not null
 #  stardust_earned           :integer
 #  status                    :integer          default(0), not null
@@ -47,7 +48,8 @@ class Certification::FundingRequestTest < ActiveSupport::TestCase
     @owner = User.create!(
       email: "owner-#{SecureRandom.hex(6)}@example.com",
       display_name: "Owner#{SecureRandom.hex(3)}",
-      slack_id: "U#{SecureRandom.hex(8)}"
+      slack_id: "U#{SecureRandom.hex(8)}",
+      verification_status: :verified, ysws_eligible: true
     )
     @reviewer = User.create!(
       email: "rev-#{SecureRandom.hex(6)}@example.com",

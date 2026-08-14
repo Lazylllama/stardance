@@ -78,7 +78,7 @@ class Vote::Assignment < ApplicationRecord
       replace_with(matchmaker.next_ship_event)
     elsif !ship_event.voting_links_present?
       replace_with(matchmaker.next_ship_event)
-    elsif ship_event.certification_status == "rejected"
+    elsif ship_event.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
       replace_with(matchmaker.next_ship_event)
     elsif ship_event.payout.present? || ship_event.votes.payout_countable.count >= Post::ShipEvent::VOTES_TO_LEAVE_POOL
       if replacement = matchmaker.next_unpaid_ship_event

@@ -64,6 +64,12 @@ class Post::ShipEvent < ApplicationRecord
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
   LIFECYCLE_DATA_QUALITIES = %w[live backfilled_exact backfilled_estimated].freeze
+  # Certification statuses that take a ship out of every public surface: the
+  # feed, the profile, search, recommendations, and the voting pool. "rejected"
+  # is a verdict; "misfiled" is a reviewer saying the ship went to the wrong
+  # queue, which the owner still sees on their own project page so they can
+  # answer it (see Project::QueueMismatch).
+  HIDDEN_STATUSES = %w[rejected misfiled].freeze
 
   include HasPostAttachments
 

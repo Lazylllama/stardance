@@ -4,7 +4,7 @@ class Projects::FundingRequestsControllerTest < ActionDispatch::IntegrationTest
   setup do
     Flipper.enable(:hardware_flow)
 
-    @owner = create_user(slack_id: "U_FRC_OWNER", display_name: "frc-owner")
+    @owner = create_user(slack_id: "U_FRC_OWNER", display_name: "frc-owner", verified: true)
     @project = Project.create!(title: "Funding bot")
     @project.memberships.create!(user: @owner, role: :owner)
     @project.update!(hardware_stage: "design")
@@ -66,6 +66,34 @@ class Projects::FundingRequestsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_equal(-5, @owner.reload.vote_balance)
+  end
+
+  # --- identity verification -------------------------------------------------
+
+  # The grant is real money paid to a real person, so the same identity and YSWS
+  # bar that gates shipping gates asking for funding.
+  test "an unverified owner cannot request funding" do
+    @owner.update!(verification_status: :needs_submission)
+
+    assert_no_difference -> { @project.certification_funding_requests.count } do
+      post project_funding_request_path(@project),
+           params: { complexity_tier: 2, requested_amount: 40 }
+    end
+
+    assert_equal "Verify your identity before requesting funding.", flash[:alert]
+  end
+
+  # Verified but not cleared for YSWS prizes is still a no: the grant is a YSWS
+  # payout like any other.
+  test "a YSWS-ineligible owner cannot request funding" do
+    @owner.update!(ysws_eligible: false)
+
+    assert_no_difference -> { @project.certification_funding_requests.count } do
+      post project_funding_request_path(@project),
+           params: { complexity_tier: 2, requested_amount: 40 }
+    end
+
+    assert_match(/not eligible for YSWS prizes/, flash[:alert])
   end
 
   # --- timeline card ---------------------------------------------------------

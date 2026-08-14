@@ -3,7 +3,7 @@ require "test_helper"
 class Admin::Missions::HardwareReviewsControllerTest < ActionDispatch::IntegrationTest
   setup do
     Flipper.enable(:hardware_flow)
-    @owner = create_user(slack_id: "U_MHW_OWNER", display_name: "mhw-owner")
+    @owner = create_user(slack_id: "U_MHW_OWNER", display_name: "mhw-owner", verified: true)
     @reviewer = create_user(slack_id: "U_MHW_REV", display_name: "mhw-reviewer")
     @outsider = create_user(slack_id: "U_MHW_OUT", display_name: "mhw-outsider")
 

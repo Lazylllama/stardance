@@ -116,7 +116,17 @@ class ProjectsController < ApplicationController
       @posts = @posts.reject { |post| post.postable_type == "Post::GitCommit" }
     end
 
-    @posts = @posts.reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected" }
+    # A misfiled ship is withdrawn, so it comes off the timeline for everyone,
+    # its owner included: the queue-mismatch card explains what happened and
+    # asks the question, and leaving the ship card up alongside it just reads as
+    # a live ship. Disputing the flag puts the ship back to pending and it
+    # returns here.
+    @posts = @posts.reject do |post|
+      post.postable_type == "Post::ShipEvent" &&
+        post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
+    end
+
+    @queue_mismatch_review = visible_queue_mismatch
 
     # Shipwright verdicts are rendered straight from the review records —
     # they're private to project members, so they never become Post rows.
@@ -219,7 +229,7 @@ class ProjectsController < ApplicationController
     return [] unless Flipper.enabled?(:week_1_release, current_user)
 
     @project.ship_reviews
-            .where.not(status: :pending)
+            .decided
             .includes(:reviewer)
             .with_attached_verdict_video
             .to_a
@@ -238,6 +248,17 @@ class ProjectsController < ApplicationController
     @project.certification_funding_requests.includes(:reviewer).order(created_at: :desc).limit(1).to_a
   end
   private :visible_funding_requests
+
+  # The "your submission is in the wrong queue" question, if one is open. Same
+  # audience as the funding requests above: members and admins only.
+  def visible_queue_mismatch
+    return nil unless current_user
+    return nil unless @is_member || current_user.admin?
+    return nil unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.review_awaiting_queue_answer
+  end
+  private :visible_queue_mismatch
 
   def add_test_time
     authorize @project
