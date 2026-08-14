@@ -22,6 +22,7 @@
 #  geocoded_subdivision         :string
 #  granted_roles                :string           default([]), not null, is an Array
 #  guest_email                  :string
+#  hardware_channel_invited_at  :datetime
 #  has_gotten_free_stickers     :boolean          default(FALSE)
 #  has_pending_achievements     :boolean          default(FALSE), not null
 #  hcb_email                    :string
