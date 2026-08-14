@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_13_181607) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -190,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_13_181607) do
     t.string "hcb_grant_hashid"
     t.text "internal_reason"
     t.integer "lock_version", default: 0, null: false
+    t.boolean "prizes_waived", default: false, null: false
     t.bigint "project_id", null: false
     t.integer "requested_amount_cents", null: false
     t.bigint "reviewer_id"

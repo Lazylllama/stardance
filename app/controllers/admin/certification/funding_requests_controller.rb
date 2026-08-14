@@ -27,6 +27,10 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
       "Returned funding for “#{title}.”"
     elsif @funding_request.issues_grant?
       "Approved funding for “#{title}.”"
+    elsif @funding_request.awards_design_kit?
+      "Approved “#{title}” and sent the kit."
+    elsif @funding_request.kit_mission?
+      "Approved “#{title}” with no kit."
     else
       "Approved “#{title}” with no grant."
     end

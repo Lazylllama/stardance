@@ -35,21 +35,21 @@
     <legend>Verdict</legend>
     <label class="review-form__option">
       <%= f.radio_button :verdict, "approved", required: true %>
-      <span><%= funding_request.awards_design_kit? ? "Approve" : "Approve and issue a grant" %></span>
+      <span><%= funding_request.kit_mission? ? "Approve and send the kit" : "Approve and issue a grant" %></span>
     </label>
-    <% unless funding_request.awards_design_kit? %>
-      <label class="review-form__option">
-        <%= f.radio_button :verdict, "approved_without_grant", required: true %>
-        <span>Approve without a grant</span>
-      </label>
-    <% end %>
+    <%# Same verdict either way: approve the design, move to the build stage,
+        hand out nothing. On a kit mission it waives the kit. %>
+    <label class="review-form__option">
+      <%= f.radio_button :verdict, "approved_without_grant", required: true %>
+      <span><%= funding_request.kit_mission? ? "Approve without sending a kit" : "Approve without a grant" %></span>
+    </label>
     <label class="review-form__option">
       <%= f.radio_button :verdict, "returned", required: true %>
       <span>Return for changes</span>
     </label>
   </fieldset>
 
-  <% if funding_request.awards_design_kit? %>
+  <% if funding_request.kit_mission? %>
     <p class="review-form__hint">
       Approving ships the <%= funding_request.design_kit_shop_item&.name || "design kit" %> and moves the project to the build stage. No grant is issued.
     </p>

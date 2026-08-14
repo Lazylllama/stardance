@@ -13,6 +13,7 @@
 #  hcb_grant_hashid          :string
 #  internal_reason           :text
 #  lock_version              :integer          default(0), not null
+#  prizes_waived             :boolean          default(FALSE), not null
 #  requested_amount_cents    :integer          not null
 #  stardust_earned           :integer
 #  status                    :integer          default(0), not null
@@ -51,7 +52,9 @@ module Certification
   #
   # A reviewer can also approve without any funding at all (the builder already
   # has the parts, or is covered some other way). That is an ordinary approval
-  # recorded as an approved amount of $0, which issues no grant.
+  # recorded as an approved amount of $0, which issues no grant. On a kit
+  # mission the same verdict waives the kit (`prizes_waived`): the project still
+  # moves to the build stage, but nothing is owed and nothing is claimable.
   class FundingRequest < ApplicationRecord
     self.table_name = "certification_funding_requests"
 
@@ -97,14 +100,14 @@ module Certification
     # The three choices a reviewer picks from on the design review form.
     VERDICTS = %w[approved approved_without_grant returned].freeze
 
-    before_validation :default_kit_request_fields, on: :create, if: :awards_design_kit?
+    before_validation :default_kit_request_fields, on: :create, if: :kit_mission?
     # Zeroed here rather than in the writer so it wins regardless of the order
     # the verdict and the approved amount arrive in from the form.
     before_validation :zero_approved_amount, if: -> { @verdict == "approved_without_grant" }
 
     validates :complexity_tier, inclusion: { in: TIER_MAX_CENTS.keys }
     validates :requested_amount_cents,
-              numericality: { only_integer: true, greater_than: 0 }, unless: :awards_design_kit?
+              numericality: { only_integer: true, greater_than: 0 }, unless: :kit_mission?
     validates :approved_amount_cents,
               numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
     validates :feedback, length: { maximum: 10_000 }, allow_blank: true
@@ -201,10 +204,28 @@ module Certification
       @owner ||= project.memberships.owner.first&.user || user
     end
 
-    # True when the project's active mission delivers a physical kit at design
-    # approval (an after_design prize) rather than a cash grant.
-    def awards_design_kit?
+    # True when the project's active mission hands out a kit at design approval
+    # (an after_design prize) rather than a cash grant. Independent of the
+    # verdict: the create-time defaults and the requested-amount validation key
+    # off the mission, not off what a reviewer later decided.
+    def kit_mission?
       redeemable_prizes.exists?
+    end
+
+    # True when approving this request actually delivers that kit. A reviewer
+    # who approved the design without sending one (the builder already has the
+    # parts, or is redoing a mission they've claimed before) waives it.
+    def awards_design_kit?
+      !prizes_waived? && kit_mission?
+    end
+
+    # A waived approval owes no prizes, so nothing is left to claim: this closes
+    # the claim links on the project page and the shop's free-price gate, both
+    # of which ask the request what it still owes.
+    def unredeemed_prizes
+      return Mission::Prize.none if prizes_waived?
+
+      super
     end
 
     # True when approving this request pays out an HCB card grant, as opposed to
@@ -233,7 +254,12 @@ module Certification
       @verdict = value.presence
       return unless VERDICTS.include?(@verdict)
 
-      self.status = @verdict == "approved_without_grant" ? "approved" : @verdict
+      without_grant = @verdict == "approved_without_grant"
+      self.status = without_grant ? "approved" : @verdict
+      # On a kit mission this is what makes the verdict stick: the amount is
+      # already 0 either way, so the waiver is the only thing separating
+      # "approved, kit on the way" from "approved, no kit".
+      self.prizes_waived = without_grant
     end
 
     # True unless a newer funding request has superseded this one (a resubmit
@@ -269,6 +295,7 @@ module Certification
         project_url: routes.project_url(project, **url_opts),
         approved: approved?,
         awards_kit: awards_design_kit?,
+        kit_mission: kit_mission?,
         issues_grant: issues_grant?,
         amount_dollars: final_amount_dollars,
         tier_label: tier_label,
