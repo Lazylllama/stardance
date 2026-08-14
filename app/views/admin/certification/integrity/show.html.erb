@@ -142,7 +142,7 @@
         <div class="integrity-review__tools">
           <% hackatime_uid = shipper.identities.find { |i| i.provider == "hackatime" }&.uid %>
           <% if hackatime_uid.present? %>
-            <%= link_to "Telescreen ↗", "https://telescreen.hackclub.com/workbench/hackatime/overview?u=#{hackatime_uid}", target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
+            <%= link_to "Telescreen ↗", telescreen_hackatime_overview_url(hackatime_uid), target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
           <% end %>
         </div>
       <% else %>

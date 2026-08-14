@@ -117,8 +117,8 @@
                 <%= link_to "→ Slack", "https://hackclub.slack.com/team/#{identity.uid}", target: "_blank" %>
               <% end %>
               <% if identity.provider == "hackatime" %>
-                <%= link_to "→ Billy", "https://billy.3kh0.net/?u=#{identity.uid}", target: "_blank" %>
-                <%= link_to "→ Joe", "https://joe.fraud.hackclub.com/profile/#{identity.uid}", target: "_blank" %>
+                <%= link_to "→ Hackatime", telescreen_hackatime_overview_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
+                <%= link_to "→ Telescreen", telescreen_subject_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
               <% end %>
               <% if identity.provider == "hack_club" %>
                 <%= link_to "→ IDV", "#{HCAService.backend_url("/identities/#{identity.uid}")}", target: "_blank" %>
