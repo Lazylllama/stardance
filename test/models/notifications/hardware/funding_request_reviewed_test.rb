@@ -7,7 +7,7 @@ module Notifications
 
       setup do
         Flipper.enable(:hardware_flow)
-        @owner = create_user(slack_id: "U_FRR_OWNER", display_name: "frr_owner")
+        @owner = create_user(slack_id: "U_FRR_OWNER", display_name: "frr_owner", verified: true)
         @reviewer = create_user(slack_id: "U_FRR_REVIEWER", display_name: "frr_reviewer")
 
         @project = Project.create!(title: "Ferrofluid display", hardware_stage: "design")
@@ -63,7 +63,8 @@ module Notifications
       # The old implementation DM'd Slack directly and returned early without a
       # slack_id, so builders who never linked Slack heard nothing at all.
       test "notifies an owner who has no Slack account" do
-        slackless = User.create!(email: "slackless@example.test", display_name: "frr_slackless")
+        slackless = User.create!(email: "slackless@example.test", display_name: "frr_slackless",
+                                 verification_status: :verified, ysws_eligible: true)
         project = Project.create!(title: "Cassette synth", hardware_stage: "design")
         Project::Membership.create!(project: project, user: slackless, role: :owner)
         devlog = Post::Devlog.new(body: "log", duration_seconds: 3600, phase: "design")

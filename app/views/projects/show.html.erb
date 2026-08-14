@@ -643,6 +643,21 @@
                       tooltip_position_value: "top"
                     }
                   ) %>
+            <% elsif !owner&.identity_verified? || !owner.ysws_eligible? %>
+              <%= render ActionButtonComponent.new(
+                    text: @project.awards_design_kit? ? "Submit your design" : "Submit for funding",
+                    variant: :primary,
+                    type: :button,
+                    icon: "icons/rocket.png",
+                    disabled: :soft,
+                    data: {
+                      controller: "tooltip",
+                      tooltip_message_value: owner&.identity_verified? ?
+                        "You're not eligible for YSWS prizes yet, check the Hack Club portal!" :
+                        "Verify your identity before requesting funding!",
+                      tooltip_position_value: "top"
+                    }
+                  ) %>
             <% else %>
               <%= render ActionButtonComponent.new(
                     text: @project.awards_design_kit? ? "Submit your design" : "Submit for funding",

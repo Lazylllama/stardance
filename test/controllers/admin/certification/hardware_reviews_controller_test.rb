@@ -10,7 +10,7 @@ class Admin::Certification::HardwareReviewsControllerTest < ActionDispatch::Inte
     @reviewer = create_user(slack_id: "U_HWQ_REV", display_name: "hwq-reviewer")
     @reviewer.grant_role!(:admin)
 
-    @owner = create_user(slack_id: "U_HWQ_OWNER", display_name: "hwq-owner")
+    @owner = create_user(slack_id: "U_HWQ_OWNER", display_name: "hwq-owner", verified: true)
 
     @design_project = hardware_project("Design bot", "design")
     # A funding request requires the project to have at least one devlog.

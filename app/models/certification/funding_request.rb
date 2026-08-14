@@ -117,6 +117,7 @@ module Certification
     validate :project_in_design_stage, on: :create
     validate :project_has_devlogs, on: :create
     validate :no_pending_request_exists, on: :create
+    validate :owner_eligible_for_funding, on: :create
 
     scope :for_reviewer, ->(user) {
       joins(:project)
@@ -348,6 +349,19 @@ module Certification
 
     def no_pending_request_exists
       errors.add(:base, "You already have a funding request under review.") if project&.has_pending_funding_request?
+    end
+
+    # The grant (or kit) goes to the project owner, so they have to clear the
+    # same identity and YSWS bar shipping applies before the request can enter
+    # the queue (see Project#shipping_requirements).
+    def owner_eligible_for_funding
+      return if project.blank?
+
+      if !owner&.identity_verified?
+        errors.add(:base, "Verify your identity before requesting funding.")
+      elsif !owner.ysws_eligible?
+        errors.add(:base, "You're not eligible for YSWS prizes yet, so we can't fund this build. Check the Hack Club portal for details.")
+      end
     end
 
     def requested_within_tier_max

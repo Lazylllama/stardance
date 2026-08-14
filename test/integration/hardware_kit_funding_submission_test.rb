@@ -6,7 +6,8 @@ class HardwareKitFundingSubmissionTest < ActionDispatch::IntegrationTest
   setup do
     Flipper.enable(:hardware_flow)
     @owner = User.create!(email: "owner-#{SecureRandom.hex(6)}@example.com",
-                          display_name: "Owner#{SecureRandom.hex(3)}", slack_id: "U#{SecureRandom.hex(8)}")
+                          display_name: "Owner#{SecureRandom.hex(3)}", slack_id: "U#{SecureRandom.hex(8)}",
+                          verification_status: :verified, ysws_eligible: true)
     @project = Project.create!(title: "HW #{SecureRandom.hex(4)}", hardware_stage: "design")
     Project::Membership.create!(project: @project, user: @owner, role: :owner)
     @mission = create_mission

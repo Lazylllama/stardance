@@ -8,7 +8,8 @@ class Post::ShipEventHoursTest < ActiveSupport::TestCase
     @owner = User.create!(
       email: "owner-#{SecureRandom.hex(6)}@example.com",
       display_name: "Owner#{SecureRandom.hex(3)}",
-      slack_id: "U#{SecureRandom.hex(8)}"
+      slack_id: "U#{SecureRandom.hex(8)}",
+      verification_status: :verified, ysws_eligible: true
     )
   end
 
