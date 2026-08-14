@@ -177,6 +177,12 @@ module Certification
     # queue builds on those, so narrowing them there would empty it.
     scope :software_only, -> { joins(:project).where(projects: { hardware_stage: nil }) }
 
+    # The other half: what the global hardware build queue can actually hand a
+    # reviewer. A cert on a soft-deleted project is unreachable from every dash,
+    # and a hardware mission's certs are reviewed on that mission's own dash, so
+    # counting either against this queue reports a backlog nobody can work.
+    scope :in_global_hardware_queue, -> { joins(:project).merge(::Project.hardware.without_hardware_mission) }
+
     def self.available_for(user)
       super.merge(for_reviewer(user))
     end

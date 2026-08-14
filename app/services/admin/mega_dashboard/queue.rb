@@ -117,13 +117,30 @@ module Admin
         {
           key: "hardware_design",
           label: "Hardware design (funding)",
-          scope: -> { ::Certification::FundingRequest.all },
-          pending: -> { ::Certification::FundingRequest.where(status: :pending) },
-          unclaimed: -> { ::Certification::FundingRequest.where(status: :pending, claimed_at: nil) },
+          # Matches what the linked queue shows: counting the reviews it hides
+          # (soft-deleted projects, hardware missions' own) made the panel read
+          # a dozen or so higher than the page it points at.
+          scope: -> { ::Certification::FundingRequest.in_global_hardware_queue },
+          pending: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending },
+          unclaimed: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending.where(claimed_at: nil) },
           entered_at: "certification_funding_requests.created_at",
           decided_at: "certification_funding_requests.decided_at",
           sla_hours: ::Certification::FundingRequest::SLA_DAYS * 24,
           path: ->(h) { h.design_admin_certification_hardware_reviews_path }
+        },
+        {
+          key: "hardware_build",
+          label: "Hardware build (certification)",
+          # The build half of the same dash. Ship certifications on hardware
+          # projects are left out of the software queue above by `software_only`,
+          # so without this they were counted nowhere.
+          scope: -> { ::Certification::Ship.in_global_hardware_queue },
+          pending: -> { ::Certification::Ship.in_global_hardware_queue.pending },
+          unclaimed: -> { ::Certification::Ship.in_global_hardware_queue.pending.where(claimed_at: nil) },
+          entered_at: "certification_ship_reviews.created_at",
+          decided_at: "certification_ship_reviews.decided_at",
+          sla_hours: ::Certification::Ship::SLA_DAYS * 24,
+          path: ->(h) { h.build_admin_certification_hardware_reviews_path }
         },
         {
           key: "vote_flags",

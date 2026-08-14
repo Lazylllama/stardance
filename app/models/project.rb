@@ -85,6 +85,11 @@ class Project < ApplicationRecord
     user ? where.not(id: user.projects) : all
   }
   scope :hardware, -> { where.not(hardware_stage: nil) }
+  # A hardware mission reviews its own attached projects on the mission dash, so
+  # the global hardware queue leaves them out.
+  scope :without_hardware_mission, -> {
+    where.not(id: Project::MissionAttachment.active.joins(:mission).where(missions: { hardware: true }).select(:project_id))
+  }
   # Projects with no Hackatime project linked for this member yet. Scoped per
   # member rather than per project: on a shared project each member records
   # their own Lapse time, so one member's link doesn't cover anyone else.

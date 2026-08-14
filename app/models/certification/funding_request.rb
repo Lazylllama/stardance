@@ -131,6 +131,12 @@ module Certification
         .where.not(project_id: user.memberships.select(:project_id))
     }
 
+    # What the global hardware design queue can actually hand a reviewer. A
+    # request on a soft-deleted project is unreachable from every dash, and a
+    # hardware mission's requests are reviewed on that mission's own dash, so
+    # counting either against this queue reports a backlog nobody can work.
+    scope :in_global_hardware_queue, -> { joins(:project).merge(::Project.hardware.without_hardware_mission) }
+
     def self.available_for(user)
       super.merge(for_reviewer(user))
     end
