@@ -1,6 +1,7 @@
 class Admin::Certification::ShipsController < Admin::Certification::ApplicationController
   before_action :release_other_claims, only: [ :next ]
-  before_action :set_ship, only: [ :show, :update, :set_project_type, :set_bonus_stardust, :report_fraud ]
+  before_action :set_ship, only: [ :show, :update, :set_project_type, :set_bonus_stardust, :report_fraud,
+                                   :flag_queue_mismatch ]
   before_action :set_submitter_context, only: [ :show, :update ]
   before_action :set_body_class, only: [ :index, :show, :update, :logs ]
 
@@ -56,7 +57,7 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
     @to = parse_date(params[:to])
 
     scope = policy_scope(::Certification::Ship)
-              .where.not(status: :pending)
+              .decided
               .includes(:reviewer, project: { memberships: :user })
 
     scope = scope.where(status: @status) unless @status == "all"
@@ -114,6 +115,19 @@ class Admin::Certification::ShipsController < Admin::Certification::ApplicationC
       redirect_to ship_redirect_path, notice: "Project type updated."
     else
       redirect_to ship_redirect_path, alert: "Invalid project type."
+    end
+  end
+
+  # "This shouldn't be in this queue": hands the ship back to the builder to
+  # confirm it belongs in the design queue instead. No verdict is recorded and
+  # no bounty is earned - the reviewer is routing, not deciding.
+  def flag_queue_mismatch
+    authorize @ship
+    if @ship.flag_queue_mismatch!(reviewer: current_user, reason: params[:reason])
+      redirect_to hardware_review_next_path_for(@ship.project, "build"),
+                  notice: "Sent back to the builder to confirm it needs funding first."
+    else
+      redirect_to ship_redirect_path, alert: "This review isn't pending, so it can't be re-routed."
     end
   end
 

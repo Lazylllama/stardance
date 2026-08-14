@@ -117,11 +117,11 @@ class ReviewerPayoutRequest < ApplicationRecord
     return 0 unless user
     ship = Certification::Ship
              .where(reviewer: user)
-             .where.not(status: :pending)
+             .decided
              .sum(:stardust_earned)
     funding = Certification::FundingRequest
                 .where(reviewer: user)
-                .where.not(status: :pending)
+                .decided
                 .sum(:stardust_earned)
     ship + funding
   end

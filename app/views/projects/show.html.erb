@@ -913,6 +913,14 @@
       </section>
     <% end %>
 
+    <%# Pinned above the feed rather than sorted into it: nothing else on the
+        project can move until the builder answers it. %>
+    <% if @queue_mismatch_review %>
+      <section class="project-show__feed" aria-label="Question from a reviewer">
+        <%= render "projects/queue_mismatch_card", review: @queue_mismatch_review, project: @project %>
+      </section>
+    <% end %>
+
     <% if @timeline_entries.any? %>
       <section class="project-show__feed" aria-label="Project feed">
         <% ship_count = @posts.count { |p| p.postable_type == "Post::ShipEvent" } %>

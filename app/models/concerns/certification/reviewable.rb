@@ -5,7 +5,16 @@ module Certification
     CLAIM_TTL = 30.minutes
     HARDWARE_REVIEW_CHANNEL = "C0BPN8XPSPN"
 
+    # A reviewer's actual verdicts. The queue-routing corrections (misfiled,
+    # withdrawn) are not decisions: they earn no bounty, stamp no decided_at,
+    # and stay out of every queue statistic.
+    DECIDED_STATUSES = %w[approved returned].freeze
+
     class_methods do
+      def decided
+        where(status: DECIDED_STATUSES)
+      end
+
       def available_for(user)
         where(status: statuses[:pending]).where(
           "(reviewer_id IS NULL OR claim_expires_at IS NULL OR claim_expires_at < ?) OR reviewer_id = ?",
@@ -103,6 +112,116 @@ module Certification
       )
     rescue StandardError => e
       Rails.logger.error("#{self.class.name} ##{id} post_verdict_to_hardware_review_channel! failed: #{e.message}")
+    end
+
+    def decided?
+      status.to_s.in?(DECIDED_STATUSES)
+    end
+
+    # --- wrong-queue corrections ---------------------------------------------
+    #
+    # A reviewer who opens a submission that belongs in the other hardware queue
+    # flags it instead of deciding it. That pulls it out of their queue and puts
+    # the question to the builder, who either confirms the correction (the
+    # submission is withdrawn and the project switches stage) or disputes it
+    # (the submission goes straight back into the queue it came from).
+
+    def flag_queue_mismatch!(reviewer:, reason: nil)
+      return false unless pending?
+
+      transaction do
+        update!(status: :misfiled, reviewer: reviewer, internal_reason: reason.presence)
+        hide_from_public_surfaces!
+      end
+      notify_queue_mismatch!(reviewer)
+      true
+    end
+
+    # The builder disagrees: put it back exactly where it was, unclaimed so the
+    # next reviewer through the queue picks it up rather than the one who
+    # flagged it.
+    def dispute_queue_mismatch!
+      return false unless misfiled?
+
+      transaction do
+        update!(status: :pending, reviewer: nil, claim_expires_at: nil, claimed_at: nil)
+        restore_to_public_surfaces!
+      end
+      true
+    end
+
+    # The builder agrees: this submission is rolled back and the project moves to
+    # the stage it should have been in. Each model supplies the stage move (and,
+    # for a design request, the devlog re-filing) via `apply_queue_conversion!`.
+    def confirm_queue_conversion!
+      return false unless misfiled?
+
+      transaction do
+        update!(status: :withdrawn)
+        apply_queue_conversion!
+      end
+      true
+    end
+
+    # True while the builder still owes an answer on a wrong-queue flag.
+    def awaiting_queue_answer? = misfiled?
+
+    # True when this review was flagged as wrong-queue at some point, even if it
+    # has since been rewound to pending by the builder disputing it. Read from
+    # PaperTrail because disputing restores the status in place, so the record
+    # itself keeps no trace - and the next reviewer to pick it up needs to know
+    # it has already been round this loop once. `internal_reason` holds why.
+    def previously_misfiled?
+      # PaperTrail records enum changes by name ("pending" -> "misfiled"), except
+      # the create version, which carries the raw integer. Accept either.
+      misfiled_value = self.class.statuses["misfiled"]
+      versions.any? do |version|
+        change = version.changeset["status"]
+        next false unless change.is_a?(Array)
+
+        change.last.to_s == "misfiled" || change.last == misfiled_value
+      end
+    rescue StandardError
+      false
+    end
+
+    # Read by Notifications::Hardware::ReviewQueueMismatch to render the Slack
+    # blocks, so this has to stay public.
+    def queue_mismatch_notification_locals
+      routes = Rails.application.routes.url_helpers
+      # default_url_options is only configured in production, so a bare
+      # reverse_merge on it raises NoMethodError in development and test.
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        flagged_queue: queue_mismatch_flagged_label,
+        suggested_queue: queue_mismatch_suggested_label,
+        reviewer_name: reviewer&.display_name,
+        reason: internal_reason.to_s
+      }
+    end
+
+    private
+
+    # Overridden where a submission has a public artifact to hide (a ship has a
+    # Post::ShipEvent on the timeline; a funding request is members-only already).
+    def hide_from_public_surfaces! = nil
+    def restore_to_public_surfaces! = nil
+
+    # Routed through the notification pipeline rather than a direct Slack DM so
+    # the question also lands in the in-app inbox and by email - the builder has
+    # to act on it before anything else can happen.
+    def notify_queue_mismatch!(reviewer)
+      Notifications::Hardware::ReviewQueueMismatch.notify(
+        recipient: owner,
+        actor: reviewer,
+        record: self
+      )
+    rescue StandardError => e
+      Rails.logger.error("#{self.class.name} ##{id} notify_queue_mismatch! failed: #{e.message}")
     end
   end
 end

@@ -12,6 +12,9 @@ class Admin::Certification::FundingRequestPolicy < ApplicationPolicy
 
   def next? = user&.can_review?
 
+  # Same bar as a verdict: only the reviewer holding the claim may re-route it.
+  def flag_queue_mismatch? = update?
+
   class Scope < ApplicationPolicy::Scope
     def resolve
       return scope.none unless user&.can_review?

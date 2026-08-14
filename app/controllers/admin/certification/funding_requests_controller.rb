@@ -17,6 +17,20 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
     end
   end
 
+  # "This shouldn't be in this queue": hands the request back to the builder to
+  # confirm they've already finished building. No verdict is recorded and no
+  # bounty is earned - the reviewer is routing, not deciding.
+  def flag_queue_mismatch
+    authorize @funding_request
+    if @funding_request.flag_queue_mismatch!(reviewer: current_user, reason: params[:reason])
+      redirect_to hardware_review_next_path_for(@funding_request.project, "design"),
+                  notice: "Sent back to the builder to confirm the build is already done."
+    else
+      redirect_to hardware_review_path_for(@funding_request.project),
+                  alert: "This review isn't pending, so it can't be re-routed."
+    end
+  end
+
   private
 
   # Names the verdict back to the reviewer, since "approved" now covers a grant,

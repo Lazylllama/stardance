@@ -312,13 +312,18 @@ class Project < ApplicationRecord
   # approval flow advance the stage; the lock below stays closed for everyone else.
   attr_accessor :advancing_via_funding_approval
 
+  # Set when a builder confirms a reviewer's "wrong queue" flag. The submission
+  # that locked the stage is being rolled back, so the lock has to open for the
+  # correction - see Certification::Reviewable#confirm_queue_conversion!.
+  attr_accessor :converting_review_queue
+
   # Once a project has asked for funding or shipped, its stage decides real
   # money: hardware pays a flat rate and skips the payout review window, so an
   # owner must not be able to flip an already-shipped software project to
   # hardware and change how it gets paid.
   def hardware_stage_locked_once_committed
     return unless hardware_stage_changed?
-    return if advancing_via_funding_approval
+    return if advancing_via_funding_approval || converting_review_queue
 
     if has_any_funding_request?
       errors.add(:hardware_stage, "cannot be changed after a funding request has been submitted")
@@ -452,6 +457,27 @@ class Project < ApplicationRecord
     hardware_stage == "build"
   end
 
+  # Rolls the review state back when a ship is withdrawn. Without this the
+  # project keeps `ship_status: submitted` and a `shipped_at`, so `shipped?`
+  # stays true forever: no mission can be attached, deletion needs force, and
+  # the page keeps treating it as already shipped. Skipped when an earlier real
+  # ship still stands, since that ship's outcome is the state to keep.
+  def roll_back_withdrawn_ship!
+    return if last_ship_event
+    return unless may_withdraw_ship?
+
+    withdraw_ship!
+  end
+
+  # The submission a reviewer flagged as being in the wrong hardware queue and
+  # the builder hasn't answered yet. Only one can exist at a time: flagging
+  # takes the submission out of its queue, and nothing new can be submitted
+  # until the question is answered.
+  def review_awaiting_queue_answer
+    certification_funding_requests.misfiled.order(created_at: :desc).first ||
+      ship_reviews.misfiled.order(created_at: :desc).first
+  end
+
   # True while a funding request for this project is awaiting reviewer decision.
   def has_pending_funding_request?
     certification_funding_requests.pending.exists?
@@ -551,6 +577,14 @@ class Project < ApplicationRecord
 
     event :resubmit_for_review do
       transitions from: :needs_changes, to: :submitted
+    end
+
+    # A ship that was withdrawn rather than judged (see
+    # Certification::Reviewable#confirm_queue_conversion!). Clears shipped_at
+    # too, since `shipped?` reads either one.
+    event :withdraw_ship do
+      transitions from: [ :submitted, :under_review ], to: :draft,
+                  after: -> { self.shipped_at = nil }
     end
   end
 
@@ -738,8 +772,12 @@ class Project < ApplicationRecord
     FIELD_REQUIREMENT_MAP.select { |_field, keys| (keys & unmet).any? }.keys
   end
 
+  # A misfiled ship is being rolled back, not judged, so it must not count as
+  # "the last ship" for the post-ship prerequisites - otherwise the builder
+  # would have to post a fresh devlog before they could resubmit to the queue
+  # the reviewer sent them to.
   def last_ship_event
-    ship_events.first
+    ship_events.where.not(certification_status: "misfiled").first
   end
 
   def total_ship_hours
@@ -778,6 +816,30 @@ class Project < ApplicationRecord
   # Funding" path). Such projects must show real build progress before shipping.
   def received_grant?
     certification_funding_requests.approved.exists?
+  end
+
+  # The approved funding request that actually handed something over: a grant
+  # card or a mission kit. An approval that waived both costs nothing to undo,
+  # so it doesn't count. Warns a reviewer before they send a funded project back
+  # to design, where it could be funded a second time.
+  def delivered_funding_request
+    certification_funding_requests.approved.find { |r| r.issues_grant? || r.awards_design_kit? }
+  end
+
+  # Re-files this project's design-phase devlogs as build time. Only ever used
+  # when a builder confirms they never needed funding: they were logging build
+  # work under a design-stage project, and an unfunded hardware builder is paid
+  # for exactly that work from day one. Payout-affecting, so it is recorded in
+  # PaperTrail like any other admin-side correction.
+  def refile_design_devlogs_as_build!
+    # validate: false because this only moves an existing devlog between phases:
+    # re-running the composer's content validations (attachments in particular)
+    # would let an old post block the correction. Callbacks and PaperTrail still
+    # run, so the change stays auditable.
+    devlogs.design_phase.find_each do |devlog|
+      devlog.phase = "build"
+      devlog.save!(validate: false)
+    end
   end
 
   # Funded projects must post at least one BUILD-phase devlog since their last

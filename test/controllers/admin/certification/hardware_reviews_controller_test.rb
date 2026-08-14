@@ -87,6 +87,30 @@ class Admin::Certification::HardwareReviewsControllerTest < ActionDispatch::Inte
     assert_redirected_to admin_certification_hardware_review_path(@build_project)
   end
 
+  # Skipping goes through `next`. Without releasing first, the skipped review
+  # stayed claimed by the skipper for the full TTL and no one else could pick
+  # it up, so the queue slowly filled with invisible work.
+  test "asking for the next review releases the one that was skipped" do
+    ::Certification::FundingRequest.atomic_claim!(@funding.id, @reviewer)
+    assert_equal @reviewer.id, @funding.reload.reviewer_id
+
+    get next_admin_certification_hardware_reviews_path(stage: "design", skip: "funding:#{@funding.id}")
+
+    assert_nil @funding.reload.reviewer_id, "the skipped request must go back to the queue"
+    assert_nil @funding.claim_expires_at
+    assert ::Certification::FundingRequest.available_for(other_reviewer).exists?(id: @funding.id)
+  end
+
+  # One dash, two queues: moving to a build review has to let go of a design
+  # claim as well, or the other queue keeps the row hidden.
+  test "asking for the next build review releases a held design claim" do
+    ::Certification::FundingRequest.atomic_claim!(@funding.id, @reviewer)
+
+    get next_admin_certification_hardware_reviews_path(stage: "build")
+
+    assert_nil @funding.reload.reviewer_id
+  end
+
   test "the design review page leads with the ask and the verdict form" do
     get admin_certification_hardware_review_path(@design_project)
 
@@ -235,6 +259,15 @@ class Admin::Certification::HardwareReviewsControllerTest < ActionDispatch::Inte
   end
 
   private
+
+  # A second reviewer, to prove a released claim is actually offered onward.
+  def other_reviewer
+    @other_reviewer ||= begin
+      user = create_user(slack_id: "U_HWQ_REV2", display_name: "hwq-reviewer-2")
+      user.grant_role!(:admin)
+      user
+    end
+  end
 
   def add_devlog(project)
     devlog = Post::Devlog.new(body: "initial log", duration_seconds: 3600, phase: project.hardware_stage)

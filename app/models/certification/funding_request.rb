@@ -40,7 +40,7 @@
 #
 module Certification
   # A hardware project owner's request for a build grant, submitted from the
-  # design ("I need Funding") stage. Routes through the same reviewer queue as
+  # design stage. Routes through the same reviewer queue as
   # ship certifications (Certification::Reviewable). On approval the project
   # switches to the build stage and an HCB card grant is issued for the approved
   # amount, capped by the tier's max.
@@ -67,10 +67,16 @@ module Certification
 
     has_paper_trail
 
+    # misfiled: a reviewer says this belongs in the build queue and the builder
+    # hasn't answered yet. withdrawn: the builder agreed, so the request is done
+    # with and the project moves on to the build stage. Neither is a verdict, so
+    # both stay out of the approval-rate and decision tallies.
     enum :status, {
       pending: 0,
       approved: 1,
-      returned: 2
+      returned: 2,
+      misfiled: 3,
+      withdrawn: 4
     }, default: :pending
 
     # HCB org the hardware grants are issued from. Spend controls (approved and
@@ -144,7 +150,7 @@ module Certification
       returned_count = where(status: :returned).count
       decided_count = approved_count + returned_count
 
-      decided = where.not(status: :pending)
+      decided_scope = decided
 
       {
         pending: where(status: :pending).count,
@@ -152,9 +158,9 @@ module Certification
         returned: returned_count,
         decided: decided_count,
         approval_rate: decided_count.zero? ? nil : (approved_count * 100.0 / decided_count).round,
-        decisions_today: decided.where(decided_at: today..).count,
+        decisions_today: decided_scope.where(decided_at: today..).count,
         new_today: where(created_at: today..).count,
-        decisions_this_week: decided.where(decided_at: week..).count,
+        decisions_this_week: decided_scope.where(decided_at: week..).count,
         new_this_week: where(created_at: week..).count,
         oldest_pending: where(status: :pending).order(created_at: :asc).first,
         queue_target: QUEUE_TARGET,
@@ -165,7 +171,7 @@ module Certification
 
     # Reviewers ranked by completed decisions over a window.
     def self.leaderboard(period, now: Time.current, limit: 10)
-      scope = where.not(reviewer_id: nil).where.not(status: :pending)
+      scope = where.not(reviewer_id: nil).decided
       case period.to_sym
       when :daily  then scope = scope.where(decided_at: now.beginning_of_day..)
       when :weekly then scope = scope.where(decided_at: now.beginning_of_week..)
@@ -182,7 +188,7 @@ module Certification
     # How many requests this reviewer has decided today.
     def self.reviewed_today(user, now: Time.current)
       where(reviewer_id: user.id)
-        .where.not(status: :pending)
+        .decided
         .where(decided_at: now.beginning_of_day..)
         .count
     end
@@ -242,11 +248,13 @@ module Certification
     end
 
     # The review form's verdict radio. Collapses the status and the "no grant"
-    # approval into one choice; the amount is zeroed before validation.
+    # approval into one choice; the amount is zeroed before validation. Only a
+    # real verdict maps here: the queue-routing statuses aren't choices on the
+    # form, and reflecting them would fail the inclusion validation below.
     def verdict
       @verdict ||= if approved_without_grant?
         "approved_without_grant"
-      elsif status.present? && !pending?
+      elsif decided?
         status
       end
     end
@@ -319,9 +327,9 @@ module Certification
     before_save :stamp_claimed_at,
       if: -> { will_save_change_to_reviewer_id? && reviewer_id.present? && claimed_at.nil? }
     before_save :stamp_decided_at,
-      if: -> { will_save_change_to_status? && status_change&.last != "pending" && decided_at.nil? }
+      if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && decided_at.nil? }
     before_save :assign_stardust_earned,
-      if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
+      if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
     # Notify first. The verdict message only states what already happened (the
     # request was approved, the project moved to build) and never claims a card
@@ -332,15 +340,27 @@ module Certification
     # so a grant that failed (an expired HCB token is a live failure mode here)
     # retries the next time the request is saved instead of being stranded.
     # issue_hcb_grant! already returns early when a grant exists.
-    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && !pending? }
+    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? }
+    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? }
     after_save_commit :issue_hcb_grant!, if: -> { issues_grant? && hcb_grant_hashid.blank? && latest_for_project? }
     after_create_commit :post_submission_to_hardware_review_channel!
 
+    def queue_mismatch_flagged_label = "design funding"
+    def queue_mismatch_suggested_label = "build certification"
+
     private
 
+    # The builder confirmed they never needed funding and the build is done, so
+    # the project moves to the build stage and the design devlogs they logged
+    # while actually building are re-filed as build time.
+    def apply_queue_conversion!
+      project.converting_review_queue = true
+      project.update!(hardware_stage: "build")
+      project.refile_design_devlogs_as_build!
+    end
+
     def project_in_design_stage
-      errors.add(:base, "Only projects in the funding stage can request funding.") unless project&.design_stage?
+      errors.add(:base, "Only projects in the design stage can request funding.") unless project&.design_stage?
     end
 
     def project_has_devlogs
@@ -414,7 +434,7 @@ module Certification
     # On a decision, advance the project. approved_amount_cents is defaulted in a
     # before_save so it's set by the time this runs.
     def apply_verdict_to_project!
-      return if pending?
+      return unless decided?
       return unless latest_for_project?
       project.with_lock do
         case status.to_sym

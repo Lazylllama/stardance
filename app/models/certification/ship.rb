@@ -72,10 +72,16 @@ module Certification
       post_ship_event || project&.last_ship_event
     end
 
+    # misfiled: a reviewer says this belongs in the design queue and the builder
+    # hasn't answered yet. withdrawn: the builder agreed, so the ship is rolled
+    # back and the project returns to the design stage. Neither is a verdict, so
+    # both stay out of the approval-rate and decision tallies.
     enum :status, {
       pending: 0,
       approved: 1,
-      returned: 2
+      returned: 2,
+      misfiled: 3,
+      withdrawn: 4
     }, default: :pending
 
     EXTERNAL_DECISION_MAP = { "APPROVED" => :approved, "REJECTED" => :returned }.freeze
@@ -199,7 +205,7 @@ module Certification
       returned_count = base.where(status: :returned).count
       decided_count = approved_count + returned_count
 
-      decided = base.where.not(status: :pending)
+      decided = base.decided
 
       pending_ages = base.where(status: :pending).pluck(:created_at)
       median_pending_wait = if pending_ages.any?
@@ -238,7 +244,7 @@ module Certification
       returned_int = statuses[:returned]
 
       rows = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .joins(:reviewer)
         .group(Arel.sql("DATE(decided_at)"), "users.id", "users.display_name")
         .select(
@@ -275,7 +281,7 @@ module Certification
       returned_int = statuses[:returned]
 
       decisions = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .group(Arel.sql("DATE(decided_at)"))
         .select(
           Arel.sql("DATE(decided_at) AS day"),
@@ -290,7 +296,7 @@ module Certification
         .transform_keys { |k| k.is_a?(Date) ? k : Date.parse(k.to_s) }
 
       unique_reviewers = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .where.not(reviewer_id: nil)
         .group(Arel.sql("DATE(decided_at)"))
         .select(
@@ -304,7 +310,7 @@ module Certification
         .pluck(:created_at, :decided_at)
 
       median_wait_by_day = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .where.not(decided_at: nil)
         .pluck(:created_at, :decided_at)
         .group_by { |_, da| da.to_date }
@@ -334,7 +340,7 @@ module Certification
     # Reviewers ranked by completed decisions over a window. Returns rows of
     # { name:, count: } for :daily, :weekly, or :alltime.
     def self.leaderboard(period, now: Time.current, limit: 10)
-      scope = where.not(reviewer_id: nil).where.not(status: :pending)
+      scope = where.not(reviewer_id: nil).decided
       case period.to_sym
       when :daily  then scope = scope.where(decided_at: now.beginning_of_day..)
       when :weekly then scope = scope.where(decided_at: now.beginning_of_week..)
@@ -369,7 +375,7 @@ module Certification
 
     def self.decided_today_count(reviewer_id, now: Time.current)
       where(reviewer_id: reviewer_id)
-        .where.not(status: :pending)
+        .decided
         .where(decided_at: now.beginning_of_day..)
         .count
     end
@@ -407,11 +413,11 @@ module Certification
     REVIEW_BOUNTY = 1.25 # This will be updated once we add the project types.
 
     before_save :stamp_claimed_at, if: -> { will_save_change_to_reviewer_id? && reviewer_id.present? && claimed_at.nil? }
-    before_save :stamp_decided_at, if: -> { will_save_change_to_status? && status_change&.last != "pending" && decided_at.nil? }
-    before_save :assign_stardust_earned, if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
+    before_save :stamp_decided_at, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && decided_at.nil? }
+    before_save :assign_stardust_earned, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
-    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && !pending? && project&.hardware? }
+    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? }
+    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? && project&.hardware? }
     after_create_commit :post_submission_to_hardware_review_channel!, if: -> { project&.hardware? }
 
     # Timeline cards for decided reviews sort by when the verdict landed.
@@ -438,7 +444,35 @@ module Certification
     end
 
 
+    def queue_mismatch_flagged_label = "build certification"
+    def queue_mismatch_suggested_label = "design funding"
+
     private
+
+    # Read straight off the association rather than through
+    # Project#last_ship_event, which deliberately skips misfiled ships - the
+    # restore path has to be able to find the one it just hid.
+    def queue_mismatch_ship_event
+      post_ship_event || project&.ship_events&.first
+    end
+
+    def hide_from_public_surfaces!
+      queue_mismatch_ship_event&.update!(certification_status: "misfiled")
+    end
+
+    def restore_to_public_surfaces!
+      queue_mismatch_ship_event&.update!(certification_status: "pending")
+    end
+
+    # The builder confirmed they need funding after all: the project goes back
+    # to the design stage so it can ask for a grant. Build devlogs keep their
+    # phase - the hours are real, and re-filing them as design would erase time
+    # the builder already logged.
+    def apply_queue_conversion!
+      project.converting_review_queue = true
+      project.update!(hardware_stage: "design")
+      project.roll_back_withdrawn_ship!
+    end
 
     def assign_stardust_earned
       total_count = Certification::Ship.decided_today_count(reviewer_id) + 1
@@ -455,7 +489,7 @@ module Certification
     end
 
     def apply_verdict_to_project!
-      return if pending?
+      return unless decided?
       project.with_lock do
         ship_event = verdict_ship_event
         latest = ship_event.nil? || ship_event == project.last_ship_event

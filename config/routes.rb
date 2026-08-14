@@ -863,12 +863,14 @@ Rails.application.routes.draw do
         patch :set_project_type, on: :member
         patch :set_bonus_stardust, on: :member
         post :report_fraud, on: :member
+        post :flag_queue_mismatch, on: :member
         scope module: :ships do
           resource :claim, only: [ :create, :destroy ]
         end
       end
 
       resources :funding_requests, path: "funding", only: [ :update ] do
+        post :flag_queue_mismatch, on: :member
         scope module: :funding_requests do
           resource :claim, only: [ :create, :destroy ]
         end
@@ -965,6 +967,9 @@ Rails.application.routes.draw do
     resource :recertification, only: [ :create ], module: :projects
     resource :mission_resubmission, only: [ :create ], module: :projects
     resource :funding_request, only: [ :create ], module: :projects
+    # The builder's answer to a reviewer's "wrong queue" flag. Singular: a
+    # project can only have one submission awaiting an answer at a time.
+    resource :queue_mismatch, only: [ :update, :destroy ], module: :projects
     resource :mission, only: [ :create, :destroy ], module: :projects, controller: "missions"
     resource :magic, only: [ :create, :destroy ], module: :projects, controller: "magic"
     resource :fire_nomination, only: [ :create, :destroy ], module: :projects
