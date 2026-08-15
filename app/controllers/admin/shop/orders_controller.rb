@@ -190,7 +190,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     when "created_at_asc" then orders.order(created_at: :asc)
     when "shells_asc" then orders.order(frozen_item_price: :asc)
     when "shells_desc" then orders.order(frozen_item_price: :desc)
-    else orders.order(created_at: :desc)
+    else orders.order(created_at: :asc)
     end
 
     # Grouping. Paginate the *users* rather than the orders so every page holds
