@@ -24,7 +24,7 @@
         <%= number_with_delimiter(@estimated_amount) %> <%= stardust_icon %>
       </div>
       <div style="font-size: var(--font-size-s); color: var(--color-space-text-muted); font-family: var(--font-family-text); margin-top: var(--space-xxs);">
-        <%= @estimated_orders %> unpaid <%= 'order'.pluralize(@estimated_orders) %> reviewed this period &middot; bracket payout based on the standings below
+        <%= @estimated_orders %> unpaid <%= 'order'.pluralize(@estimated_orders) %> reviewed <%= @scope == "all_time" ? "all time" : "this month" %> &middot; bracket payout based on the standings below
       </div>
     </div>
   </div>
@@ -35,6 +35,12 @@
       <% if @bracket %>
         <span class="aorder__card-subtitle">Top reviewer sets the curve &mdash; <%= @bracket[:max_count] %> reviews = <%= number_with_delimiter(@bracket[:max_payout]) %> <%= stardust_icon %></span>
       <% end %>
+    </div>
+    <div class="fraud-scope-toggle">
+      <%= link_to "This Month", admin_fraud_payouts_path(scope: "month"),
+          class: "fraud-scope-toggle__btn#{" fraud-scope-toggle__btn--active" if @scope == "month"}" %>
+      <%= link_to "All Time", admin_fraud_payouts_path(scope: "all_time"),
+          class: "fraud-scope-toggle__btn#{" fraud-scope-toggle__btn--active" if @scope == "all_time"}" %>
     </div>
     <div class="aorder__card-body" style="padding: 0;">
       <% if @leaderboard.any? %>

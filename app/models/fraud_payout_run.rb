@@ -26,11 +26,14 @@ class FraudPayoutRun < ApplicationRecord
   REVIEW_STATES = %w[awaiting_periodical_fulfillment rejected on_hold].freeze
 
   # Base scope for PaperTrail versions that could represent a fraud review.
-  def self.reviewer_versions
-    ::PaperTrail::Version
+  # Pass `since:` to restrict to reviews recorded on or after that time.
+  def self.reviewer_versions(since: nil)
+    scope = ::PaperTrail::Version
       .where(item_type: "ShopOrder")
       .where.not(whodunnit: nil)
       .where("object_changes ? 'aasm_state'")
+    scope = scope.where("versions.created_at >= ?", since) if since
+    scope
   end
 
   # Returns the reviewer user ID if the version represents a fraud-review

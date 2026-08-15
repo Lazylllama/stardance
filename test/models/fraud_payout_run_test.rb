@@ -1,0 +1,41 @@
+require "test_helper"
+
+class FraudPayoutRunTest < ActiveSupport::TestCase
+  def create_review_version(whodunnit:, to_state:, created_at: Time.current)
+    ::PaperTrail::Version.create!(
+      item_type: "ShopOrder",
+      item_id: SecureRandom.random_number(1_000_000).to_s,
+      event: "update",
+      whodunnit: whodunnit,
+      object_changes: { aasm_state: [ "awaiting_verification", to_state ] },
+      created_at: created_at
+    )
+  end
+
+  test "reviewer_versions only includes ShopOrder aasm_state changes with a whodunnit" do
+    review = create_review_version(whodunnit: "1", to_state: "rejected")
+    create_review_version(whodunnit: nil, to_state: "rejected")
+    ::PaperTrail::Version.create!(item_type: "ShopOrder", item_id: "999", event: "update", whodunnit: "1", object_changes: { tracking_number: [ nil, "abc" ] }.to_json)
+
+    assert_equal [ review.id ], FraudPayoutRun.reviewer_versions.pluck(:id)
+  end
+
+  test "reviewer_versions since: excludes versions recorded before the cutoff" do
+    old = create_review_version(whodunnit: "1", to_state: "rejected", created_at: 2.months.ago)
+    recent = create_review_version(whodunnit: "1", to_state: "rejected", created_at: 1.day.ago)
+
+    ids = FraudPayoutRun.reviewer_versions(since: 1.week.ago).pluck(:id)
+    assert_includes ids, recent.id
+    refute_includes ids, old.id
+  end
+
+  test "reviewer_from_version returns the whodunnit as an integer for review-state transitions" do
+    version = create_review_version(whodunnit: "42", to_state: "on_hold")
+    assert_equal 42, FraudPayoutRun.reviewer_from_version(version)
+  end
+
+  test "reviewer_from_version returns nil for non-review-state transitions" do
+    version = create_review_version(whodunnit: "42", to_state: "fulfilled")
+    assert_nil FraudPayoutRun.reviewer_from_version(version)
+  end
+end

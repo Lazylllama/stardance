@@ -5,7 +5,8 @@ module Admin
     def index
       authorize FraudPayoutRun
       @runs = FraudPayoutRun.order(created_at: :desc).includes(:approved_by_user)
-      @bracket = current_bracket
+      @scope = params[:scope] == "all_time" ? "all_time" : "month"
+      @bracket = current_bracket(@scope)
       @leaderboard = decorated_leaderboard(@bracket)
       @estimated_orders, @estimated_amount = estimated_payout_for(current_user, @bracket)
     end
@@ -69,11 +70,12 @@ module Admin
 
     private
 
-    # Builds the live bracket standings from all reviewer activity recorded in
-    # PaperTrail. Returns the BracketCalculator result hash (or nil when nobody
-    # has reviewed anything yet).
-    def current_bracket
-      counts = reviewer_order_counts
+    # Builds the live bracket standings from reviewer activity recorded in
+    # PaperTrail, scoped to the current calendar month by default. Returns the
+    # BracketCalculator result hash (or nil when nobody has reviewed anything
+    # yet in scope).
+    def current_bracket(scope)
+      counts = reviewer_order_counts(scope)
       return nil if counts.empty?
 
       leaderboard = counts.map { |uid, count| { user: uid, total: count } }
@@ -98,9 +100,11 @@ module Admin
       [ my_result[:total], my_result[:payout].to_i ]
     end
 
-    def reviewer_order_counts
+    def reviewer_order_counts(scope)
+      since = scope == "month" ? Time.current.beginning_of_month : nil
+
       counts = Hash.new(0)
-      FraudPayoutRun.reviewer_versions.each do |v|
+      FraudPayoutRun.reviewer_versions(since: since).each do |v|
         uid = FraudPayoutRun.reviewer_from_version(v)
         counts[uid] += 1 if uid
       end
