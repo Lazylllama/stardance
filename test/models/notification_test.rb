@@ -7,7 +7,7 @@
 #  group_count        :integer          default(1), not null
 #  group_key          :string
 #  params             :jsonb            not null
-#  priority           :integer          default(NULL), not null
+#  priority           :integer          default(0), not null
 #  read_at            :datetime
 #  record_type        :string
 #  seen_at            :datetime
@@ -56,14 +56,6 @@ class NotificationTest < ActiveSupport::TestCase
     assert_equal "Notifications::NewFollower", notification.type
     assert_equal @alice, notification.actor
     assert_equal "low", notification.priority
-  end
-
-  test "notify is a no-op when the week_2_release flag is off for the recipient" do
-    Flipper.disable(:week_2_release)
-
-    assert_no_difference "Notification.count" do
-      assert_nil Notifications::NewFollower.notify(recipient: @bob, actor: @alice)
-    end
   end
 
   test "notify skips self-notify by default" do

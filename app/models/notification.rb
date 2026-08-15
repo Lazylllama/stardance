@@ -7,7 +7,7 @@
 #  group_count        :integer          default(1), not null
 #  group_key          :string
 #  params             :jsonb            not null
-#  priority           :integer          default(NULL), not null
+#  priority           :integer          default(0), not null
 #  read_at            :datetime
 #  record_type        :string
 #  seen_at            :datetime
@@ -81,10 +81,8 @@ class Notification < ApplicationRecord
   scope :unseen, -> { where(seen_at: nil) }
   scope :unread, -> { where(read_at: nil) }
 
-  # The whole notifications feature (in-app, Slack, email) is behind the
-  # week_2_release flag, gated per recipient.
   def self.enabled_for?(user)
-    user.present? && Flipper.enabled?(:week_2_release, user)
+    user.present?
   end
 
   # Whether this notification type is relevant enough to a user to be worth

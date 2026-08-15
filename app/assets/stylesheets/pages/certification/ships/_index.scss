@@ -710,6 +710,19 @@
     }
   }
 
+  &__bonus-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    background: rgba(255, 229, 100, 0.15);
+    color: var(--color-brand-yellow);
+  }
+
   // --- Empty state -------------------------------------------------------
   &__empty {
     padding: var(--space-xl);

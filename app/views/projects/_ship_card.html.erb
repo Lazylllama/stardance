@@ -66,12 +66,17 @@
         <% else %>
           <span class="project-show__latest-ship-status project-show__latest-ship-status--returned">Mission returned</span>
         <% end %>
-      <% elsif mission_sub&.approved? && mission_sub.shop_order_id.nil? && mission_sub.mission.prizes_count > 0 %>
+      <% elsif mission_sub&.approved? && (unclaimed_prizes = mission_sub.unredeemed_prizes.count) > 0 %>
         <%= link_to redeem_mission_submission_path(mission_sub),
                     class: "project-show__latest-ship-status project-show__latest-ship-status--approved project-show__latest-ship-status--clickable" do %>
-          Claim prize ↗
+          <%= "Claim #{"prize".pluralize(unclaimed_prizes)} ↗" %>
         <% end %>
       <% end %>
+    <% end %>
+    <% if ship.payout_blessing == "blessed" %>
+      <span class="project-show__latest-ship-status project-show__latest-ship-status--approved" title="Blessed (+20% bonus)">✨ Blessed</span>
+    <% elsif ship.payout_blessing == "cursed" %>
+      <span class="project-show__latest-ship-status project-show__latest-ship-status--returned" title="Cursed (-50% reduction)">💀 Cursed</span>
     <% end %>
   </div>
 
@@ -89,10 +94,8 @@
     <div class="feed-post-card__meta">
       <p class="feed-post-card__byline">
         <% if author %>
-          <%= link_to "@#{author.display_name}",
-                      profile_path(author.display_name),
-                      class: "feed-post-card__author",
-                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= render StreakBadgeComponent.new(user: author) %><%= " ⚡" if author.admin? %>
+          <%= render "shared/username_link", user: author, link_class: "feed-post-card__author",
+                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %>
         <% end %>
         <span class="feed-post-card__context">on</span>
         <%= link_to project.title, project_path(project), class: "feed-post-card__project", data: { turbo_frame: "_top" } %>
@@ -103,7 +106,7 @@
 
       <% if ship_text.present? %>
         <div class="feed-post-card__body feed-post-card__body--inline project-show__latest-ship-text">
-          <%= simple_format(ship_text, {}, sanitize: true) %>
+          <%= md(ship_text, allow_images: false) %>
         </div>
       <% end %>
     </div>
@@ -123,6 +126,17 @@
       <%= inline_svg_tag "icons/time.svg", class: "profile-project-card__meta-icon profile-project-card__meta-icon--time" %>
       <span><%= ship_hours %>h<%= " build" if project.hardware? %></span>
     </li>
+    <% if ship.multiplier.present? %>
+      <li class="profile-project-card__meta-item profile-project-card__meta-item--multiplier" title="Quality multiplier">
+        <%= inline_svg_tag "icons/star_fill.svg", class: "profile-project-card__meta-icon" %>
+        <span><%= number_with_precision(ship.multiplier, precision: 2) %>x multiplier</span>
+      </li>
+    <% end %>
+    <% if ship.payout.present? %>
+      <li class="profile-project-card__meta-item profile-project-card__meta-item--payout" title="Stardust payout">
+        <span><%= ship.payout.to_i %> Stardust</span>
+      </li>
+    <% end %>
     <% mission = ship.mission_submission&.mission %>
     <% if mission %>
       <li class="profile-project-card__meta-item profile-project-card__meta-item--mission">
@@ -153,7 +167,7 @@
                     rel: "noopener",
                     class: "project-show__latest-ship-btn" %>
       <% end %>
-      <% if payout_review.present? %>
+      <% if payout_review.present? && payout_review[:review_deadline].present? %>
         <button type="button"
                 class="project-show__latest-ship-btn"
                 onclick="document.getElementById('payout-review-modal').showModal()"

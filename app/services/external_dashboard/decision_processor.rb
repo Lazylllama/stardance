@@ -2,7 +2,6 @@ module ExternalDashboard
   class DecisionProcessor
     DECISION_EVENT = "certification.decision".freeze
     TEST_EVENT = "test".freeze
-    EXTERNAL_ID_PATTERN = /\A\d{1,32}\z/
     COMMENT_MAX_LENGTH = 10_000
     REPLAY_CLOCK_SKEW = 5.minutes
 
@@ -84,7 +83,7 @@ module ExternalDashboard
 
     def parse_cert_id
       raw = certification[:externalId].to_s
-      raw.match?(EXTERNAL_ID_PATTERN) ? raw.to_i : nil
+      raw.match?(Client::EXTERNAL_ID_PATTERN) ? raw.to_i : nil
     end
 
     def reviewer

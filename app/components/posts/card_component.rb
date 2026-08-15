@@ -34,6 +34,13 @@ module Posts
       display_post&.postable_type == "Post::Devlog"
     end
 
+    # True when this card is only visible because the viewer has permission
+    # to see deleted devlogs (admin/fraud_dept, see ApplicationPolicy#view_deleted_devlogs?)
+    # — the devlog itself has been soft-deleted.
+    def deleted_devlog?
+      devlog? && display_postable.respond_to?(:deleted?) && display_postable.deleted?
+    end
+
     def repost?
       post.postable_type == "Post::Repost"
     end
@@ -72,7 +79,9 @@ module Posts
       data.merge(
         controller: controllers,
         card_link_url_value: url,
-        action: actions
+        action: actions,
+        media_variant: media_variant,
+        post_id: post.id
       )
     end
 
@@ -126,6 +135,12 @@ module Posts
       display_postable.respond_to?(:body) ? display_postable.body : nil
     end
 
+    # Clamp long bodies everywhere except on the post's own page, where the
+    # full text should always be visible.
+    def clamp_body?
+      card_link_url.present? && request.path != card_link_url
+    end
+
     def original_post
       postable.original_post if repost? && postable.respond_to?(:original_post)
     end
@@ -138,9 +153,6 @@ module Posts
       end
     end
 
-    def attachment_count
-      attachments.respond_to?(:size) ? attachments.size : 0
-    end
 
     def show_footer?
       show_comments || show_reposts || show_likes || show_actions
@@ -243,6 +255,12 @@ module Posts
     def delete_url
       if devlog? && project.present?
         helpers.project_devlog_path(project, postable)
+      end
+    end
+
+    def hackatime_breakdown_url
+      if devlog? && project.present?
+        helpers.hackatime_breakdown_project_devlog_path(project, postable)
       end
     end
 

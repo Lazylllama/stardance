@@ -1,3 +1,7 @@
+<% if grouped_orders.empty? %>
+  <p class="admin-users__empty">No orders found matching the filters.</p>
+<% end %>
+
 <% grouped_orders.each do |group| %>
   <div class="shop-orders__group">
     <div class="shop-orders__group-header">
@@ -31,7 +35,13 @@
         <% group[:orders].each do |order| %>
           <tr>
             <td>#<%= order.id %></td>
-            <td><%= order.shop_item.name %></td>
+            <td>
+              <%= order.shop_item.name %><br>
+              <small><%= order.shop_item.type&.demodulize %></small>
+              <% if order.mission_submission.present? %>
+                <br><span class="shop-orders__mission-badge" title="Redeemed for free via the &quot;<%= order.mission_submission.mission.name %>&quot; mission">🎖️ Free via mission</span>
+              <% end %>
+            </td>
             <td><%= order.quantity %></td>
             <td><%= order.total_cost %></td>
             <td>

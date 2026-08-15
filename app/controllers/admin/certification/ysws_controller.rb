@@ -1,11 +1,50 @@
 class Admin::Certification::YswsController < Admin::Certification::ApplicationController
+  FILTER_SESSION_KEY = :admin_ysws_review_filters
+
   def index
     authorize ::Certification::Ysws
-    @project_type = params[:project_type].presence
-    @sort         = params[:sort].presence_in(%w[length todo])
-    @dir          = params[:dir] == "asc" ? "asc" : "desc"
+    if params[:reset_filters].present?
+      session.delete(FILTER_SESSION_KEY)
+      redirect_to admin_certification_ysws_reviews_path
+      return
+    end
+
+    filters = ysws_review_filter_params? ? {} : ysws_review_filters
+    if params.key?(:project_type)
+      if params[:project_type].present?
+        filters["project_type"] = params[:project_type]
+      else
+        filters.delete("project_type")
+      end
+    end
+    # Only the opt-out is worth persisting — an absent key means the default
+    # "integrity checks only" view.
+    if params.key?(:with_integrity)
+      if params[:with_integrity] == "0"
+        filters["with_integrity"] = "0"
+      else
+        filters.delete("with_integrity")
+      end
+    end
+    if params.key?(:sort)
+      sort = params[:sort].presence_in(%w[length todo])
+      if sort
+        filters["sort"] = sort
+        filters["dir"] = params[:dir] == "asc" ? "asc" : "desc"
+      else
+        filters.delete("sort")
+        filters.delete("dir")
+      end
+    end
+    session[FILTER_SESSION_KEY] = filters
+
+    @project_type   = filters["project_type"].presence
+    @sort           = filters["sort"].presence_in(%w[length todo])
+    @dir            = filters["dir"] == "asc" ? "asc" : "desc"
+    @with_integrity = filters["with_integrity"] != "0"
 
     scope = ::Certification::Ysws.pending.unclaimed_or_claimed_by(current_user)
+    scope = scope.with_integrity_check if @with_integrity
 
     # Type filter options are whatever project types are actually present in the
     # pending queue (plus an "unclassified" bucket) — never hardcoded.
@@ -13,7 +52,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
     scope = scope.by_project_type(@project_type) if @project_type
 
-    scope = scope.with_todo_devlog_count.includes(:project, :user)
+    scope = scope.with_todo_devlog_count.includes(:project, :user, :integrity_check)
 
     scope =
       case @sort
@@ -26,15 +65,18 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     # custom-select query as a COUNT(*), which the aliased column would break.
     @reviews = scope.to_a
 
-    # Per-reviewer progress toward the devlog-review goal.
-    @devlog_goal      = ::Certification::Ysws::DEFAULT_DEVLOG_REVIEW_GOAL
-    @devlog_reviewed  = ::Certification::Ysws.reviewer_devlog_count(current_user.id)
-    @devlog_remaining = [ @devlog_goal - @devlog_reviewed, 0 ].max
+    # Per-reviewer pace against the daily devlog-review goal, averaged across the
+    # current review week (Wednesday 4pm to the following Wednesday 4pm). Left nil
+    # when the flag is off so the queue skips both the query and the widget — and
+    # when the progress panel is on, since that panel leads with the same figure.
+    @devlog_pace = ::Certification::Ysws.reviewer_devlog_pace(current_user.id) if
+      Flipper.enabled?(:devlog_review_pace, current_user) &&
+      !Flipper.enabled?(:reviewer_progress_panel, current_user)
   end
 
   def show
     @review = ::Certification::Ysws
-      .includes(:project, :user, :reviewer, devlog_reviews: { post_devlog: :attachments_attachments })
+      .includes(:project, :user, :reviewer, :mac_analysis, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .find(params[:id])
     authorize @review
 
@@ -65,7 +107,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     @prior_reviews = ::Certification::Ysws
       .where(project_id: @review.project_id)
       .where("id < ?", @review.id)
-      .includes(devlog_reviews: { post_devlog: :attachments_attachments })
+      .includes(devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .order(:id)
 
     # Prior (frozen) + current devlogs, in display order, counted together in
@@ -88,6 +130,10 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       @contribution_data = ::Certification::YswsService.fetch_contributions(platform, username)
     end
 
+    # The MAC pre-screen is flagged per reviewer: left nil when it's off so the
+    # banner and the per-devlog notes both disappear from a single check.
+    @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
+
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
       load_commits_with_stats(
@@ -100,6 +146,22 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       Rails.logger.error("CommitGraph load failed: #{e.message}")
       {}
     end
+  end
+
+  # Whether this repo is already in the unified DB under another YSWS program.
+  # Fetched from the sidebar after page load rather than during #show — the
+  # Airtable round trip is far too slow to hold the review page on.
+  def double_dip
+    @review = ::Certification::Ysws.includes(:project).find(params[:id])
+    authorize @review, :show?
+
+    submissions = ::Certification::UnifiedYswsService.double_dip_submissions(@review.project&.repo_url)
+    programs = submissions.filter_map(&:program_name).uniq
+
+    render json: {
+      double_dipped: submissions.any?,
+      programs_label: programs.any? ? programs.to_sentence : "another YSWS"
+    }
   end
 
   def commits
@@ -130,6 +192,15 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   private
+
+  def ysws_review_filters
+    session[FILTER_SESSION_KEY].to_h.slice("project_type", "sort", "dir", "with_integrity")
+  end
+
+  def ysws_review_filter_params?
+    params.key?(:project_type) || params.key?(:sort) || params.key?(:dir) ||
+      params.key?(:with_integrity)
+  end
 
 
   # Fetches all commits in the review period and buckets them by devlog ID.
@@ -222,6 +293,20 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     end
   end
 
+  def unclaim
+    @review = ::Certification::Ysws.includes(:project).find(params[:id])
+    authorize @review, :unclaim?
+
+    if @review.release_claim!
+      Rails.logger.info "[YSWS#unclaim] user=#{current_user.id} review=#{@review.id} Released claim"
+      redirect_to admin_certification_ysws_reviews_path,
+                  notice: "Unclaimed review for “#{@review.project&.title || "Review ##{@review.id}"}.”"
+    else
+      redirect_to admin_certification_ysws_reviews_path,
+                  alert: "That review can no longer be unclaimed."
+    end
+  end
+
   def complete
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Starting complete action"
 
@@ -255,6 +340,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     end
 
     @review.update_columns(reviewer_id: current_user.id, reviewed_at: Time.current)
+    @review.touch
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Marked reviewed_at=#{@review.reviewed_at}; enqueuing AirtableSyncJob"
 
     ::Certification::YswsAirtableSyncJob.perform_later(@review.id)

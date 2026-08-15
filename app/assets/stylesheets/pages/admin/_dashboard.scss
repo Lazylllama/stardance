@@ -1,0 +1,52 @@
+.admin-dashboard {
+  display: grid;
+  gap: var(--space-l);
+  max-width: 1200px;
+  margin: 0 auto;
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-s);
+  }
+
+  &__button {
+    text-align: center;
+  }
+
+  // Filled rather than outlined, so the one page that aggregates every other
+  // dashboard reads as the entry point without needing a bigger tile.
+  &__button--featured {
+    background: var(--color-brand-lilac);
+    border-color: var(--color-brand-lilac);
+    color: var(--color-space-bg) !important;
+    font-weight: 700;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--color-brand-cream);
+      border-color: var(--color-brand-cream);
+      color: var(--color-space-bg) !important;
+    }
+  }
+
+  &__count-pill {
+    background: var(--color-brand-lilac);
+    color: var(--color-space-bg);
+    border-radius: 999px;
+    padding: 0 0.5em;
+    font-size: 0.75em;
+    font-weight: 700;
+  }
+
+  &__count-pill--muted {
+    background: var(--color-space-surface-strong);
+    color: var(--color-space-text-muted);
+  }
+
+  &__count-note {
+    color: var(--color-space-text-muted);
+    font-size: 0.75em;
+    font-weight: 400;
+  }
+}
