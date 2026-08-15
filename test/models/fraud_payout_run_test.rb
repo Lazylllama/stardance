@@ -1,5 +1,20 @@
 require "test_helper"
 
+# == Schema Information
+#
+# Table name: fraud_payout_runs
+#
+#  id                  :bigint           not null, primary key
+#  aasm_state          :string
+#  approved_at         :datetime
+#  period_end          :datetime
+#  period_start        :datetime
+#  total_amount        :integer
+#  total_orders        :integer
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  approved_by_user_id :bigint
+#
 class FraudPayoutRunTest < ActiveSupport::TestCase
   def create_review_version(whodunnit:, to_state:, created_at: Time.current)
     ::PaperTrail::Version.create!(
