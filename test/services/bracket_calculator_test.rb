@@ -65,6 +65,14 @@ class BracketCalculatorTest < ActiveSupport::TestCase
     assert other_after[:payout] < other_before[:payout], "other's total didn't change, but their payout dropped because the leader pulled ahead"
   end
 
+  test "percentages that fall between two bracket boundaries still get a bracket, not the bottom fallback" do
+    # 184 / 246 = 0.747967..., strictly between the old 0.74/0.75 boundary gap.
+    result = BracketCalculator.new([ { user: :leader, total: 246 }, { user: :mid, total: 184 } ], 1000).calculate
+    mid = result[:results].find { |r| r[:user] == :mid }
+
+    assert_equal [ "60-74%", 700 ], [ mid[:bracket], mid[:payout] ]
+  end
+
   test "ties at the leader's total both get the top bracket" do
     result = BracketCalculator.new([ { user: :a, total: 20 }, { user: :b, total: 20 } ], 1000).calculate
 

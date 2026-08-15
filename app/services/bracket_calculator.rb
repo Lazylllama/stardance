@@ -66,8 +66,14 @@ class BracketCalculator
       }
     end
 
-    bracket = BRACKET_FORMULA.find { |b| percent >= b[:percent_min] && percent <= b[:percent_max] }
-    bracket ||= BRACKET_FORMULA.last
+    # BRACKET_FORMULA is sorted highest percent_min first, so the first match
+    # is the correct (highest) bracket the percent qualifies for. Matching on
+    # percent_min alone (rather than also requiring percent <= percent_max)
+    # keeps brackets contiguous — a percent_max-based gap between adjacent
+    # tiers (e.g. 0.74 vs 0.75) previously let percentages in that gap fall
+    # through to the `.last` fallback and get silently paid the bottom rate.
+    bracket = BRACKET_FORMULA.find { |b| percent >= b[:percent_min] }
+    raise "no bracket matched percent=#{percent}" unless bracket
     {
       label: bracket[:label],
       payout: (@max_payout * bracket[:payout_multiplier]).round(2),
