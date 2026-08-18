@@ -12,6 +12,7 @@ export default class extends Controller {
     "textarea",
     "submit",
     "attachWrap",
+    "recordBtn",
   ];
   static values = {
     maxFiles: { type: Number, default: 4 },
@@ -192,7 +193,8 @@ export default class extends Controller {
 
   selectProject(event) {
     event.preventDefault();
-    const { postUrl, previewUrl, editUrl, hackatimeLinked } = event.params;
+    const { postUrl, previewUrl, editUrl, hackatimeLinked, recordable } =
+      event.params;
     const linked = !!hackatimeLinked;
     const chip = event.currentTarget;
 
@@ -228,6 +230,13 @@ export default class extends Controller {
     if (this.hasWarnTarget) {
       this.warnTarget.hidden = linked;
       if (editUrl) this.warnTarget.href = editUrl;
+    }
+
+    // The Record button (home composer only) shows for hardware projects. It
+    // links straight to Lapse, which takes no per-project parameters, so there
+    // is nothing to re-point on chip switch.
+    if (this.hasRecordBtnTarget) {
+      this.recordBtnTarget.hidden = !recordable;
     }
 
     if (this.#composerOpen) this.#loadPreviewTime();

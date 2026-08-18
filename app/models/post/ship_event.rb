@@ -3,23 +3,24 @@
 # Table name: post_ship_events
 #
 #  id                         :bigint           not null, primary key
-#  base_hours                 :float
 #  body                       :string
-#  bridge                     :boolean          default(FALSE), not null
 #  certification_status       :string           default("pending")
 #  feedback_reason            :text
 #  feedback_video_url         :string
-#  hours                      :float
-#  legacy_payout_deduction    :float
+#  hours_at_payout            :float
+#  hours_at_ship              :float
+#  lifecycle_data_quality     :string
 #  multiplier                 :float
 #  originality_median         :decimal(5, 2)
 #  originality_percentile     :decimal(5, 2)
 #  overall_percentile         :decimal(5, 2)
 #  overall_score              :decimal(5, 2)
+#  paid_at                    :datetime
 #  payout                     :float
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
 #  payout_basis_percentile    :decimal(5, 2)
+#  payout_basis_vote_ids      :bigint           default([]), not null, is an Array
 #  payout_blessing            :string
 #  payout_curve_version       :string
 #  review_instructions        :text
@@ -31,25 +32,44 @@
 #  usability_median           :decimal(5, 2)
 #  usability_percentile       :decimal(5, 2)
 #  votes_count                :integer          default(0), not null
-#  voting_scale_version       :integer          default(2), not null
+#  voting_completed_at        :datetime
+#  voting_started_at          :datetime
 #  created_at                 :datetime         not null
 #  updated_at                 :datetime         not null
+#
+# Indexes
+#
+#  index_post_ship_events_on_paid_at              (paid_at)
+#  index_post_ship_events_on_voting_completed_at  (voting_completed_at)
+#  index_post_ship_events_on_voting_started_at    (voting_started_at)
 #
 class Post::ShipEvent < ApplicationRecord
   include Postable
   include Ledgerable
+  include Post::ShipEvent::Payouts
   include SemanticSearchIndexable
   semantic_search_indexable type: "ship"
 
-  LEGACY_VOTING_SCALE_VERSION = 1
-  CURRENT_VOTING_SCALE_VERSION = 2
   VOTES_REQUIRED_FOR_PAYOUT = 12
   VOTES_TO_LEAVE_POOL = VOTES_REQUIRED_FOR_PAYOUT
   VOTE_COST_PER_SHIP = 15
+  MAX_PAYOUT_HOURS_PER_DEVLOG = 10
+  MAX_PAYOUT_SECONDS_PER_DEVLOG = MAX_PAYOUT_HOURS_PER_DEVLOG.hours.to_i
+  # Un-devlogged time at which the UI and DevlogCapWarningJob start nudging
+  # users to post before they hit the per-devlog payout cap.
+  DEVLOG_CAP_WARNING_SECONDS = 8.hours.to_i
   BODY_MAX_LENGTH = Post::Devlog::BODY_MAX_LENGTH
   REVIEW_INSTRUCTIONS_MAX_LENGTH = 2_000
+  RETURN_REASON_MAX_LENGTH = 1_000
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
+  LIFECYCLE_DATA_QUALITIES = %w[live backfilled_exact backfilled_estimated].freeze
+  # Certification statuses that take a ship out of every public surface: the
+  # feed, the profile, search, recommendations, and the voting pool. "rejected"
+  # is a verdict; "misfiled" is a reviewer saying the ship went to the wrong
+  # queue, which the owner still sees on their own project page so they can
+  # answer it (see Project::QueueMismatch).
+  HIDDEN_STATUSES = %w[rejected misfiled].freeze
 
   include HasPostAttachments
 
@@ -62,75 +82,127 @@ class Post::ShipEvent < ApplicationRecord
                               foreign_key: :ship_event_id,
                               dependent: :destroy,
                               inverse_of: :ship_event
+  has_many :vote_events, class_name: "Vote::Event",
+                         foreign_key: :ship_event_id,
+                         dependent: :nullify,
+                         inverse_of: :ship_event
 
   has_one :mission_submission, class_name: "Mission::Submission",
                                foreign_key: :ship_event_id,
                                inverse_of: :ship_event,
                                dependent: :destroy
 
+  has_one :integrity_check, class_name: "Certification::Integrity",
+                            foreign_key: :ship_event_id,
+                            inverse_of: :ship_event,
+                            dependent: :destroy
+
+  before_save :stamp_rating_lifecycle
   after_update :sync_mission_submission_status, if: :saved_change_to_certification_status?
 
-  scope :current_voting_scale, -> { where(voting_scale_version: CURRENT_VOTING_SCALE_VERSION) }
-  scope :legacy_voting_scale, -> { where(voting_scale_version: LEGACY_VOTING_SCALE_VERSION) }
+  scope :voteable, -> {
+    where(certification_status: "approved", payout: nil)
+      .where(Vote.countable_count_lt(VOTES_TO_LEAVE_POOL))
+      .where("post_ship_events.hours_at_ship > 0")
+      .joins(:project)
+      .where.not(projects: { demo_url: [ nil, "" ] })
+      .where.not(projects: { repo_url: [ nil, "" ] })
+      .where.not(id: Mission::Submission.with_deleted.where(payout_path: "static_prize").select(:ship_event_id))
+  }
+
+  def voting_links_present?
+    project&.demo_url.present? && project&.repo_url.present?
+  end
+
+  scope :paid_out, -> { where(certification_status: "approved").where.not(payout: nil) }
 
   after_commit :decrement_user_vote_balance, on: :create
+  after_commit :schedule_type_check, on: :create
 
   validates :body, presence: { message: "Update message can't be blank" }
   validates :body, length: { maximum: BODY_MAX_LENGTH }, on: :create
   validates :review_instructions, length: { maximum: REVIEW_INSTRUCTIONS_MAX_LENGTH }, allow_blank: true
+  validates :lifecycle_data_quality, inclusion: { in: LIFECYCLE_DATA_QUALITIES }, allow_nil: true
   validate :project_can_be_shipped, on: :create
   has_paper_trail ignore: [ :votes_count, :synced_at ]
 
-  def majority_judgment
-    MajorityJudgmentService.call(self)
+  def self.recalculate_hours_for_devlog_post(post)
+    return unless post&.project
+
+    post.project.posts.of_ship_events
+        .where("posts.created_at >= ?", post.created_at)
+        .order(:created_at)
+        .first
+        &.postable
+        &.recalculate_hours_at_ship
   end
 
-  def hours
-    project = post&.project
-    return 0 unless project && created_at
-
-    ship_event_post = post
-    previous_ship_event_post = project.posts.of_ship_events
-                                      .where("posts.created_at < ?", ship_event_post.created_at)
-                                      .order("posts.created_at DESC")
-                                      .first
-
-    # created_at if first otherwise use the last ship_event
-    start_time = previous_ship_event_post ? previous_ship_event_post.created_at : project.created_at
-
-    seconds = project.posts.of_devlogs(join: true)
-                     .where("posts.created_at >= ? AND posts.created_at <= ?", start_time, ship_event_post.created_at)
-                     .where(post_devlogs: { deleted_at: nil })
-                     .sum("post_devlogs.duration_seconds")
-    seconds.to_f / 3600
+  def capture_hours_at_ship
+    association(:post).reset
+    association(:project).reset
+    recalculate_hours_at_ship
   end
 
-  def payout_eligible?
-    return false unless certification_status == "approved"
-    return false unless current_voting_scale?
-    return false unless payout.blank?
-    return false unless votes.payout_countable.count >= VOTES_REQUIRED_FOR_PAYOUT
-
-    payout_user = payout_recipient
-    return false unless payout_user
-    return false if payout_user.vote_balance < 0
-
-    true
+  def recalculate_hours_at_ship
+    update!(hours_at_ship: hours_logged_in_ship_window)
   end
 
-  def payout_recipient
-    post&.user
-  end
+  # All non-deleted devlogs in this ship's window, regardless of phase or
+  # funding — unlike hours_at_ship, which on hardware drops explicit design
+  # work and anything logged before the funding request.
+  def window_devlogs_count
+    return 0 unless post&.project && post.created_at
 
-  def current_voting_scale?
-    voting_scale_version == CURRENT_VOTING_SCALE_VERSION
-  end
-
-  def legacy_voting_scale?
-    voting_scale_version == LEGACY_VOTING_SCALE_VERSION
+    window_devlogs.count
   end
 
   private
+
+  def stamp_rating_lifecycle
+    if will_save_change_to_certification_status? && certification_status == "approved" && voting_started_at.nil?
+      self.voting_started_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+
+    if will_save_change_to_payout? && payout.present? && paid_at.nil?
+      self.paid_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+  end
+
+  def hours_logged_in_ship_window
+    return 0 unless post&.project && post.created_at
+
+    devlogs_in_ship_window.sum("post_devlogs.duration_seconds").to_f / 3600
+  end
+
+  # Hardware pays for build time, not the design work the grant was awarded
+  # against. Explicit design-phase time is dropped; build time counts, and so
+  # does software time (phase nil) carried over from a project that started as
+  # software and converted to hardware later. On top of that the funding
+  # request, when there is one, is the real build boundary: anything logged
+  # before it is pre-funding and doesn't count, whatever its phase. A project
+  # that skipped funding has no cutoff, so all of its non-design time counts
+  # back to the project's start.
+  def devlogs_in_ship_window
+    return window_devlogs unless project.hardware?
+
+    scope = window_devlogs.where("post_devlogs.phase IS DISTINCT FROM 'design'")
+    cutoff = hardware_payout_cutoff
+    cutoff ? scope.where("posts.created_at >= ?", cutoff) : scope
+  end
+
+  def window_devlogs
+    project.posts.of_devlogs(join: true)
+           .where("posts.created_at >= ? AND posts.created_at <= ?", ship_window_start_time, post.created_at)
+           .where(post_devlogs: { deleted_at: nil })
+  end
+
+  def ship_window_start_time
+    project.posts.of_ship_events
+           .where("posts.created_at < ?", post.created_at)
+           .maximum(:created_at) || project.created_at
+  end
 
   def project_can_be_shipped
     return unless project
@@ -139,8 +211,17 @@ class Post::ShipEvent < ApplicationRecord
 
   def decrement_user_vote_balance
     return unless post&.user
+    return if mission_submission&.payout_path == "static_prize"
+    # Vote debt buys a place in the rating pool. Hardware never enters it, so
+    # charging for a ship the builder can't work off would strand them.
+    return if project&.hardware?
 
     post.user.increment!(:vote_balance, -VOTE_COST_PER_SHIP)
+  end
+
+  def schedule_type_check
+    project = post&.project
+    Project::TypeCheckJob.perform_later(project) if project && project.project_type.nil?
   end
 
   # Drives the Mission::Submission state machine off ship cert transitions.

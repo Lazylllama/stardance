@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
 class Gorse::PostPayload
+  RECOMMENDATION_MAX_AGE = 6.hours
+
   def initialize(post)
     @post = post
+  end
+
+  def self.recommendable_feed_scope(viewer)
+    feed_scope(viewer).where("posts.created_at >= ?", RECOMMENDATION_MAX_AGE.ago)
   end
 
   def self.feed_scope(viewer)
@@ -13,7 +19,7 @@ class Gorse::PostPayload
             .where(project_id: Project.not_deleted)
             .select("posts.*"),
         Post.of_ship_events(join: true)
-            .where.not(post_ship_events: { certification_status: "rejected" })
+            .where.not(post_ship_events: { certification_status: Post::ShipEvent::HIDDEN_STATUSES })
             .where(project_id: Project.not_deleted)
             .select("posts.*"),
         # Collapse a viral post's reposts: keep only the most recent repost per
@@ -45,14 +51,15 @@ class Gorse::PostPayload
       hidden_devlog? ||
       hidden_ship_event? ||
       post.project&.deleted_at.present? ||
-      post.user&.identity_verified? == false
+      post.user&.identity_verified? == false ||
+      post.user&.banned?
   end
 
   private
     attr_reader :post
 
     def categories
-      [ "feed", post_type, project_categories ].flatten.compact_blank.uniq
+      [ "feed", post_type, post.project&.project_type ].compact_blank.uniq
     end
 
     def labels
@@ -60,7 +67,6 @@ class Gorse::PostPayload
         type: post_type,
         project_id: post.project_id,
         author_id: post.user_id,
-        project_categories: project_categories,
         project_type: post.project&.project_type,
         has_media: has_media?,
         certification_status: ship_certification_status
@@ -69,10 +75,6 @@ class Gorse::PostPayload
 
     def post_type
       post.postable_type.to_s.demodulize.underscore
-    end
-
-    def project_categories
-      Array(post.project&.project_categories)
     end
 
     def comment
@@ -88,7 +90,7 @@ class Gorse::PostPayload
     end
 
     def hidden_ship_event?
-      post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected"
+      post.postable_type == "Post::ShipEvent" && post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
     end
 
     def has_media?

@@ -1,14 +1,15 @@
-Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minutes, :related, :markdown) do
+Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minutes, :related, :markdown, :hidden) do
   include ActiveModel::Conversion
   extend ActiveModel::Naming
 
-  self::CATEGORY_ORDER = %i[shipping craft program outpost].freeze
+  self::CATEGORY_ORDER = %i[stardance_101 hardware shipping craft program].freeze
 
   self::CATEGORY_LABELS = {
+    stardance_101: "Stardance 101",
     shipping: "Shipping",
     craft: "Craft",
     program: "Program",
-    outpost: "Hardware | Outpost"
+    hardware: "Hardware"
   }.freeze
 
   # Root directory that `markdown:` paths are resolved against.
@@ -19,6 +20,7 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
     params[:icon] ||= "info"
     params[:reading_minutes] ||= 5
     params[:markdown] ||= nil
+    params[:hidden] ||= false
     super(**params)
   end
 
@@ -56,7 +58,7 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       description: "Set up a public GitHub repository for your project's code and link it back to Stardance.",
       category: :craft,
       icon: "code",
-      reading_minutes: 4,
+      reading_minutes: 10,
       related: %i[good_git_commits great_readme]
     ),
     new(
@@ -69,13 +71,22 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       related: %i[github_repository great_readme]
     ),
     new(
+      slug: :hackatime,
+      title: "Hackatime isn't working?",
+      description: "Troubleshooting Hackatime: linking your account, time not showing up, and common fixes.",
+      category: :craft,
+      icon: "info",
+      reading_minutes: 4,
+      related: %i[devlogs how_to_ship]
+    ),
+    new(
       slug: :devlogs,
       title: "Devlogs that get noticed",
       description: "What to put in a devlog, how often to post, and why this affects voting.",
       category: :craft,
       icon: "edit",
       reading_minutes: 4,
-      related: %i[what_is_shipping]
+      related: %i[what_is_shipping hackatime]
     ),
     new(
       slug: :why_we_ask,
@@ -87,74 +98,87 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
       related: []
     ),
     new(
-      slug: :outpost,
-      title: "Outpost",
-      description: "Stardance's hardware track — a 6-day hardware hackathon and expo with Open Sauce in San Francisco.",
-      category: :outpost,
+      slug: :now_what,
+      title: "I've set up my account. Now what?",
+      description: "Just signed up? Here's the whole Stardance loop — from your first project to spending Stardust — in one place.",
+      category: :stardance_101,
+      icon: "compass_fill",
+      reading_minutes: 3,
+      related: %i[software hardware what_is_shipping],
+      markdown: "now_what.md",
+      hidden: true
+    ),
+    new(
+      slug: :hardware,
+      title: "Hardware in Stardance 101",
+      description: "Step-by-step on how to make hardware projects in Stardance!",
+      category: :stardance_101,
       icon: "rocket",
-      reading_minutes: 5,
-      related: %i[starting-hardware shipping-hardware outpost-tiers outpost-faq],
-      markdown: "outpost/outpost.md"
+      reading_minutes: 2,
+      related: %i[starting-hardware shipping-hardware tiers],
+      markdown: "hardware/hardware.md"
     ),
     new(
       slug: :"starting-hardware",
       title: "Starting your hardware project",
-      description: "How to get started with your hardware project — coming up with an idea and advice for working on it.",
-      category: :outpost,
+      description: "A quick crash course on how to start a hardware project from scratch, great for beginners!",
+      category: :hardware,
       icon: "compass_fill",
       reading_minutes: 5,
-      related: %i[outpost shipping-hardware outpost-tiers],
-      markdown: "outpost/starting-hardware.md"
+      related: %i[hardware shipping-hardware tiers],
+      markdown: "hardware/starting-hardware.md"
     ),
     new(
       slug: :"shipping-hardware",
       title: "Shipping your hardware project",
-      description: "Get your project ready to ship — required files, repository structure, and the step-by-step.",
-      category: :outpost,
+      description: "Learn how to get your hardware project ready to submit, step-by-step!",
+      category: :hardware,
       icon: "ship",
       reading_minutes: 5,
-      related: %i[starting-hardware outpost outpost-tiers],
-      markdown: "outpost/shipping-hardware.md"
+      related: %i[hardware starting-hardware tiers],
+      markdown: "hardware/shipping-hardware.md"
     ),
     new(
-      slug: :"outpost-tiers",
-      title: "Project tier examples",
-      description: "What the different Outpost project tiers look like, with budgets, points, and examples for each.",
-      category: :outpost,
-      icon: "code",
-      reading_minutes: 4,
-      related: %i[outpost starting-hardware],
-      markdown: "outpost/tiers.md"
-    ),
-    new(
-      slug: :"outpost-faq",
-      title: "Outpost FAQ",
-      description: "Frequently asked questions about Outpost — channels, logistics, and more.",
-      category: :outpost,
+      slug: :tiers,
+      title: "Hardware funding tiers",
+      description: "What the different funding tiers are for hardware projects, including funding amounts!",
+      category: :hardware,
       icon: "info",
-      reading_minutes: 4,
-      related: %i[outpost starting-hardware shipping-hardware],
-      markdown: "outpost/faq.md"
+      reading_minutes: 3,
+      related: %i[hardware starting-hardware shipping-hardware],
+      markdown: "hardware/tiers.md"
     ),
     new(
-      slug: :"super-hardware-builder",
-      title: "Becoming a Super Hardware Builder",
-      description: "How to earn Super Hardware Builder status — the requirement to qualify for Outpost.",
-      category: :outpost,
+      slug: :software,
+      title: "Software in Stardance 101",
+      description: "Step-by-step on how to make software projects in Stardance!",
+      category: :stardance_101,
       icon: "rocket",
-      reading_minutes: 4,
-      related: %i[outpost starting-hardware],
-      markdown: "outpost/super-hardware-builder.md"
+      reading_minutes: 2,
+      related: %i[github_repository hackatime good_git_commits devlogs what_is_shipping how_to_ship],
+      markdown: "software.md"
     )
   ].freeze
 
   self::SLUGGED = self::ALL.index_by(&:slug).freeze
 
   class << self
-    def all = self::ALL
-    def find(s) = self::SLUGGED[s.to_sym] or raise ActiveRecord::RecordNotFound, "Unknown guide: #{s}"
-    def find_by_slug(s) = self::SLUGGED[s&.to_sym]
-    def by_category = self::ALL.group_by(&:category)
+    def all
+      self::ALL
+    end
+    def find(s)
+      guide = self::SLUGGED[s.to_sym] or raise ActiveRecord::RecordNotFound, "Unknown guide: #{s}"
+      raise ActiveRecord::RecordNotFound, "Unknown guide: #{s}" unless all.include?(guide)
+      guide
+    end
+    def find_by_slug(s)
+      guide = self::SLUGGED[s&.to_sym]
+      guide if guide && all.include?(guide)
+    end
+    # Guides shown in the resources index. Hidden guides stay reachable by
+    # direct URL (e.g. linked from the funding modal) but aren't listed.
+    def listed = all.reject(&:hidden)
+    def by_category = listed.group_by(&:category)
     def category_label(c) = self::CATEGORY_LABELS[c.to_sym]
     def category_order = self::CATEGORY_ORDER
   end
@@ -164,9 +188,11 @@ Guide = Data.define(:slug, :title, :description, :category, :icon, :reading_minu
 
   def category_label = self.class::CATEGORY_LABELS[category]
 
-  def related_guides = related.map { |s| Guide.find_by_slug(s) }.compact
+  def related_guides = related.map { |s| Guide.find_by_slug(s) }.compact.reject(&:hidden)
 
-  def partial_path = "guides/topics/#{slug}"
+  # Hardware partials live under topics/hardware/; everything else sits
+  # directly in topics/.
+  def partial_path = "guides/topics/#{"hardware/" if category == :hardware}#{slug}"
 
   # A guide renders from a markdown file when `markdown:` points at one;
   # otherwise it falls back to its `_<slug>.html.erb` partial (see show.html.erb).

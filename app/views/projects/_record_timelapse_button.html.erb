@@ -1,0 +1,31 @@
+<%# Sends the builder to Lapse to record a timelapse. Recording happens on
+    lapse.hackclub.com, which files the time against a Hackatime project, so the
+    link is locked until the user has linked their Hackatime account.
+    Locals: project (required, kept for callers' symmetry); disabled_message
+    (optional - when present the button is shown disabled with that tooltip
+    instead of being actionable); button_text / variant (optional - override the
+    default label and variant). %>
+<% button_text = local_assigns.fetch(:button_text, "Record a timelapse") %>
+<% variant = local_assigns.fetch(:variant, :secondary) %>
+<% if local_assigns[:disabled_message].present? %>
+  <%= render ActionButtonComponent.new(
+        text: button_text,
+        variant: variant,
+        type: :button,
+        disabled: :soft,
+        data: {
+          controller: "tooltip",
+          tooltip_message_value: disabled_message,
+          tooltip_position_value: "top"
+        }
+      ) %>
+<% else %>
+  <%= render ActionButtonComponent.new(
+        text: button_text,
+        variant: variant,
+        href: LapseService::APP_URL,
+        target: "_blank",
+        rel: "noopener",
+        data: { turbo: false }
+      ) %>
+<% end %>

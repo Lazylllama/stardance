@@ -1,7 +1,9 @@
 class ProjectsController < ApplicationController
+  include TimelinePostPreloading
+
   # Mission + payout-votes render as discover-rail modules on the project page.
   # The expanded mission module also previews the next guide step.
-  discover_rail_widgets :project_mission_expanded, :mission_browse, :ship_intro, :payout_votes,
+  discover_rail_widgets :project_mission_expanded, :mission_browse, :ship_intro, :payout_votes, :upcoming_events,
                         context: -> { { project: @project, votes_for_payout: @votes_for_payout } }
 
   before_action :set_project_minimal, only: [ :edit, :update, :destroy ]
@@ -26,19 +28,24 @@ class ProjectsController < ApplicationController
 
     prepare_project_show_context
 
-    render :show_hackpad if @project_onboarding_mission&.slug == "hackpad"
+    if params[:embed].present?
+      @hide_sidebar = true
+      render layout: "embed"
+    end
   end
 
   def prepare_project_show_context
-    @members = @project.users.to_a
+    @members = @project.users.where(banned: false).to_a
     @is_member = current_user && @members.include?(current_user)
     @active_nav_slug = @is_member ? "projects" : "home"
-    @can_edit_project = @is_member && policy(@project).update?
+    @can_edit_project = policy(@project).update?
+    @admin_editing_project = !@is_member && current_user&.admin?
     @follower_count = @project.project_follows.size
     @viewer_follow = current_user && @project.project_follows.find_by(user_id: current_user.id)
     @total_hours = (@project.duration_seconds / 3600.0).round
     @test_time_granted = session[test_time_session_key].present?
     @hackatime_times = {}
+    @project_has_devlogs = @project.posts.where(postable_type: "Post::Devlog").exists?
 
     if @is_member && current_user
       @composer_devlog = Post::Devlog.new
@@ -47,10 +54,13 @@ class ProjectsController < ApplicationController
       @hackatime_linked = current_user.hackatime_identity.present?
 
       if @hackatime_linked
-        @linked_hackatime_projects = @project.hackatime_projects
+        @linked_hackatime_projects = @project.hackatime_projects.where(user: current_user)
         @all_hackatime_projects = current_user.hackatime_projects
         result = current_user.try_sync_hackatime_data!
         @hackatime_times = result&.dig(:projects) || {}
+        @hackatime_token_stale = current_user.hackatime_token_stale?
+        identity = current_user.hackatime_identity
+        @unposted_seconds = @project.seconds_coded_in_devlog_window(identity.uid, access_token: identity.access_token).to_i
 
         linked_ids = @linked_hackatime_projects.map(&:id).to_set
         taken_project_ids = @all_hackatime_projects.map(&:project_id).compact.uniq - [ @project.id ]
@@ -75,13 +85,25 @@ class ProjectsController < ApplicationController
     load_posts = ->(include_deleted_devlogs: false) {
       scope = @project.posts
                        .visible_to(current_user)
-                       .includes(postable: [ :attachments_attachments ])
+                       .preload(:postable)
                        .order(created_at: :desc)
       unless include_deleted_devlogs
         scope = scope.joins("LEFT JOIN post_devlogs ON posts.postable_type = 'Post::Devlog' AND posts.postable_id = post_devlogs.id")
                      .where("posts.postable_type != 'Post::Devlog' OR post_devlogs.deleted_at IS NULL")
       end
-      scope.select { |post| post.postable.present? }
+
+      build_posts = -> {
+        posts = scope.select { |post| post.postable.present? }
+        preload_timeline_postables(posts, project_context: true)
+        posts
+      }
+
+      # Post::Devlog has its own default_scope (SoftDeletable), which the
+      # preloader above respects regardless of the SQL filter toggled just
+      # above — without unscoping, a deleted devlog's postable silently
+      # comes back nil and gets dropped, even when the viewer is authorized
+      # to see it.
+      include_deleted_devlogs ? Post::Devlog.unscoped(&build_posts) : build_posts.call
     }
 
     @posts = if policy(@project).view_deleted_devlogs?
@@ -94,9 +116,29 @@ class ProjectsController < ApplicationController
       @posts = @posts.reject { |post| post.postable_type == "Post::GitCommit" }
     end
 
-    @posts = @posts.reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected" }
+    # A misfiled ship is withdrawn, so it comes off the timeline for everyone,
+    # its owner included: the queue-mismatch card explains what happened and
+    # asks the question, and leaving the ship card up alongside it just reads as
+    # a live ship. Disputing the flag puts the ship back to pending and it
+    # returns here.
+    @posts = @posts.reject do |post|
+      post.postable_type == "Post::ShipEvent" &&
+        post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
+    end
 
-    @show_project_onboarding = @is_member && @posts.empty?
+    @queue_mismatch_review = visible_queue_mismatch
+
+    # Shipwright verdicts are rendered straight from the review records —
+    # they're private to project members, so they never become Post rows.
+    @timeline_entries = (@posts + visible_ship_decisions + visible_funding_requests).sort_by do |entry|
+      case entry
+      when Certification::Ship then entry.decided_on
+      when Certification::FundingRequest then entry.decided_at || entry.created_at
+      else entry.created_at
+      end
+    end.reverse
+
+    @show_project_onboarding = @is_member && @timeline_entries.empty?
     @project_onboarding_mission = @project.current_mission
 
     @available_missions = if @is_member && @project.current_mission.nil? && !@project.shipped?
@@ -108,28 +150,14 @@ class ProjectsController < ApplicationController
                                       .uniq
       Mission.available
              .where.not(id: taken_mission_ids)
-             .with_attached_icon
+             .includes(:icon_attachment, :prerequisites)
              .order(featured_at: :desc)
-             .limit(12)
              .to_a
+             .select { |m| m.prerequisites_met_by?(current_user) }
+             .first(12)
     else
       []
     end
-
-    @show_project_tour = params[:welcome] == "1" && current_user.present? && @is_member &&
-                         current_user.projects.count == 1 && !session[:project_tour_seen]
-
-    session[:project_tour_seen] = true if @show_project_tour
-
-    # Drives the post-Hackatime-link onboarding overlay: the user linked
-    # Hackatime at the account level, this is their first/only project, but
-    # they haven't attached a Hackatime project to it yet. Stateful (no
-    # session flag) so it keeps prompting until the user links a project.
-    @show_first_hackatime_tour = current_user.present? && @is_member &&
-                                 @hackatime_linked &&
-                                 current_user.projects.count == 1 &&
-                                 @project.hackatime_keys.blank? &&
-                                 !@show_project_tour
 
     if current_user
       devlog_ids = @posts.select { |p| p.postable_type == "Post::Devlog" }.map(&:postable_id)
@@ -144,30 +172,93 @@ class ProjectsController < ApplicationController
     end
 
     @latest_ship_post = @posts.find { |post| post.postable_type == "Post::ShipEvent" }
-    latest_ship_event = @latest_ship_post&.postable
+    latest_ship_event = @project.ship_events.where(certification_status: "approved").first
+
+    @rejected_mission_sub = @posts
+      .select { |p| p.postable_type == "Post::ShipEvent" }
+      .lazy.map { |p| p.postable&.mission_submission }
+      .find { |sub| sub&.rejected? }
 
     @votes_for_payout = nil
     if current_user.present?
-      is_owner = @project.memberships.where(role: :owner, user_id: current_user.id).exists?
+      can_review_payout = @is_member || current_user.admin?
 
-      if is_owner &&
+      if Post::ShipEvent.payout_feature_enabled?(current_user) &&
+          can_review_payout &&
           latest_ship_event.present? &&
           latest_ship_event.certification_status == "approved" &&
-          latest_ship_event.payout.blank?
+          !latest_ship_event.mission_submission&.rejected?
+
+        is_static = latest_ship_event.mission_submission&.payout_path == "static_prize"
 
         required = Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT
         current = latest_ship_event.votes.payout_countable.count
         remaining = [ required - current, 0 ].max
 
+        ratings_total = Post::ShipEvent::VOTE_COST_PER_SHIP
+        ratings_remaining = [ -latest_ship_event.payout_recipient.vote_balance, 0 ].max
+        ratings_given = ratings_total - ratings_remaining
+
         @votes_for_payout = {
+          ship_event: latest_ship_event,
           current: current,
           required: required,
-          remaining: remaining
+          remaining: remaining,
+          ratings_given: ratings_given,
+          ratings_total: ratings_total,
+          static_prize: is_static,
+          # Suppresses the payout checklist entirely; see PayoutVotesWidget.
+          hardware: @project.hardware?,
+          paid_out: latest_ship_event.payout.present?,
+          estimated_payout: latest_ship_event.estimated_payout,
+          review_open: latest_ship_event.payout_review_open?,
+          review_deadline: latest_ship_event.payout_review_deadline,
+          reason_votes: latest_ship_event.payout_basis_locked_at? ? latest_ship_event.payout_counted_votes : [],
+          admin_view: current_user.admin? && !@is_member
         }
       end
     end
   end
   private :prepare_project_show_context
+
+  # Decided Shipwright reviews, shown only to project members (and admins)
+  # while the release flag is on.
+  def visible_ship_decisions
+    return [] unless current_user
+    return [] unless @is_member || current_user.admin?
+    return [] unless Flipper.enabled?(:week_1_release, current_user)
+
+    @project.ship_reviews
+            .decided
+            .includes(:reviewer)
+            .with_attached_verdict_video
+            .to_a
+  end
+  private :visible_ship_decisions
+
+  # Funding requests, shown only to project members (and admins): the amount
+  # asked for and the reviewer's feedback are the team's business, not public.
+  # Only the most recent request appears on the timeline - a resubmission
+  # supersedes the returned one it replaces.
+  def visible_funding_requests
+    return [] unless current_user
+    return [] unless @is_member || current_user.admin?
+    return [] unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.certification_funding_requests.includes(:reviewer).order(created_at: :desc).limit(1).to_a
+  end
+  private :visible_funding_requests
+
+  # The "your submission is in the wrong queue" question, if one is open. Same
+  # audience as the funding requests above: members and admins only.
+  def visible_queue_mismatch
+    return nil unless current_user
+    return nil unless @is_member || current_user.admin?
+    return nil unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.review_awaiting_queue_answer
+  end
+  private :visible_queue_mismatch
 
   def add_test_time
     authorize @project
@@ -194,6 +285,7 @@ class ProjectsController < ApplicationController
   end
 
   def new
+    # First-timers get bounced to the setup wizard.
     if current_user&.projects&.none?
       # /projects/new just bounces to setup for first-timers — pop it from the
       # back-stack so the idea step's back button skips over it.
@@ -207,9 +299,11 @@ class ProjectsController < ApplicationController
     authorize @project
     @missions = Mission.available
                        .where.not(id: missions_user_already_has_a_project_on)
-                       .includes(:icon_attachment, :banner_attachment)
+                       .includes(:icon_attachment, :banner_attachment, :prerequisites)
                        .order(featured_at: :desc)
-                       .limit(8)
+                       .to_a
+                       .select { |m| m.prerequisites_met_by?(current_user) }
+                       .first(8)
   end
 
   def missions_user_already_has_a_project_on
@@ -248,10 +342,15 @@ class ProjectsController < ApplicationController
 
       project_hours = @project.total_hackatime_hours
 
-      if (slug = params[:mission_slug].presence) && (mission = Mission.find_by(slug: slug))
+      if (slug = params[:mission_slug].presence) && (mission = Mission.find_by(slug: slug)) && mission.prerequisites_met_by?(current_user)
+        # A project created for a hardware mission is born hardware (design
+        # stage) so it satisfies the mission's hardware-only requirement.
+        @project.update!(hardware_stage: "design") if mission.hardware? && !@project.hardware?
         @project.missions << mission
         attrs = {}
-        if @project.title.blank? || @project.title == "Untitled"
+        # Only fill in a mission's default name when the builder didn't give one
+        # (older clients, or a create that skipped the name prompt).
+        if @project.placeholder_title?
           attrs[:title] = mission.default_project_title.presence || mission.name
         end
         if @project.description.blank? && mission.default_project_description.present?
@@ -280,11 +379,16 @@ class ProjectsController < ApplicationController
   def update
     authorize @project
 
-    @project.assign_attributes(project_params)
-    validate_urls
-    success = @project.errors.empty? && @project.save
+    whodunnit = impersonating? ? real_user&.id : current_user&.id
+    success = nil
 
-    link_hackatime_projects if success
+    PaperTrail.request(whodunnit: whodunnit) do
+      @project.assign_attributes(project_params)
+      validate_urls
+      success = @project.errors.empty? && @project.save
+
+      link_hackatime_projects if success
+    end
     # 2nd check w/ @project.errors.empty? is not redudant. this is ensures that hackatime is linked!
     if success && @project.errors.empty?
       respond_to do |format|
@@ -356,19 +460,8 @@ class ProjectsController < ApplicationController
 
     follow = current_user.project_follows.build(project: @project)
     if follow.save
-      @project.users.includes(:preference).each do |member|
-        if member.preference&.send_notifications_for_new_followers && current_user.slack_id && member.slack_id
-          SendSlackDmJob.perform_later(
-            member.slack_id,
-            "#{current_user.display_name} is now following your project #{@project.title}!",
-            blocks_path: "notifications/new_follower",
-            locals: {
-              project_title: @project.title,
-              project_url: project_url(@project, host: "stardance.hackclub.com", protocol: "https"),
-              follower_id: current_user.slack_id
-            }
-          )
-        end
+      @project.users.find_each do |member|
+        Notifications::ProjectFollowed.notify(recipient: member, actor: current_user, record: @project)
       end
       redirect_to project_path(@project), notice: "You are now following this project."
     else
@@ -391,7 +484,7 @@ class ProjectsController < ApplicationController
   def followers
     @project = Project.find(params[:id])
     authorize @project, :show?
-    @followers = @project.followers.order(:display_name)
+    @followers = @project.followers.where(banned: false).order(:display_name)
     render "users/followers", layout: false
   end
 
@@ -433,12 +526,16 @@ class ProjectsController < ApplicationController
     redirect_to projects_setup_link_account_path, alert: "Finish setting up your account to keep working on your project."
   end
 
+  # `project` is fetched rather than required so a create that arrives without it
+  # (a client where the name prompt never opened) re-renders :new with a title
+  # validation error instead of a bare 400.
   def project_params
-    params.require(:project).permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, hackatime_project_ids: [])
+    params.fetch(:project, ActionController::Parameters.new)
+          .permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
   end
 
   def hackatime_project_ids
-    @hackatime_project_ids ||= Array(params[:project][:hackatime_project_ids]).reject(&:blank?).map(&:to_i)
+    @hackatime_project_ids ||= Array(params.dig(:project, :hackatime_project_ids)).reject(&:blank?).map(&:to_i)
   end
 
   def validate_urls
@@ -522,7 +619,9 @@ class ProjectsController < ApplicationController
     # so we don't confirm whether an internal host exists.
     Rails.logger.warn("URL validation rejected #{attribute}: #{e.message}")
     @project.errors.add(attribute, "nice try ding dong — #{name} has to be a real, public URL")
-  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
+  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ECONNRESET,
+         Errno::ETIMEDOUT, Errno::ENETUNREACH, Errno::EPIPE,
+         Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
     Rails.logger.warn("URL validation failed for #{attribute}: #{e.class}: #{e.message}")
     @project.errors.add(attribute, "#{name} could not be reached. Please make sure the URL is valid and publicly accessible.")
   rescue StandardError => e
@@ -530,8 +629,10 @@ class ProjectsController < ApplicationController
     @project.errors.add(attribute, "#{name} could not be verified. Please try again or contact support if the issue persists.")
   end
   def link_hackatime_projects
-    # Unlink hackatime projects that were removed
-    @project.hackatime_projects.where.not(id: hackatime_project_ids).find_each do |hp|
+    # Unlink hackatime projects that were removed. Scoped to the current user:
+    # every member of a hardware project has their own row under the same name,
+    # and the form only ever submits this user's ids.
+    @project.hackatime_projects.where(user: current_user).where.not(id: hackatime_project_ids).find_each do |hp|
       unless hp.update(project: nil)
         hp.errors.full_messages.each do |message|
           @project.errors.add(:base, "Hackatime project #{hp.name}: #{message}")

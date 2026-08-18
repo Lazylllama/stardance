@@ -3,26 +3,36 @@
 class Admin::Certification::ShipPolicy < ApplicationPolicy
   def index? = user&.can_review?
 
-  def show? = user&.can_review? && not_own_project?
+  def logs? = user&.can_review?
 
-  def update?
-    return false unless user&.can_review? && not_own_project?
-    record.claim_held_by?(user) || (record.reviewer_id == user.id && record.claim_expired?)
-  end
+  def show? = can_review_hardware? && not_own_project?
+
+  def update? = show?
 
   def next? = user&.can_review?
 
+  def set_project_type? = show?
+
+  # Same bar as a verdict: only the reviewer holding the claim may re-route it.
+  def flag_queue_mismatch? = update?
+
+  def set_bonus_stardust? = user&.admin?
+
+  def report_fraud? = user&.can_review?
+
   class Scope < ApplicationPolicy::Scope
+    # Software only: hardware ships are listed by the hardware build queue.
+    # The hardware controller reads Certification::Ship directly rather than
+    # through this scope, so it keeps seeing them.
     def resolve
       return scope.none unless user&.can_review?
-      scope.for_reviewer(user)
+      scope.joins(:project).where(projects: { deleted_at: nil }).merge(::Certification::Ship.software_only)
     end
   end
 
   private
 
   def not_own_project?
-    return true unless record.respond_to?(:project_id)
-    !user.memberships.where(project_id: record.project_id).exists?
+    !user.memberships.exists?(project_id: record.project_id)
   end
 end

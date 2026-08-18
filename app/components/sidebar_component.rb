@@ -30,9 +30,12 @@ class SidebarComponent < ViewComponent::Base
     items = [
       { slug: "home",          label: "home",          path: helpers.home_path,
         icon: { idle: "rocket", active: "rocket_active" } }
-      # { slug: "notifications", label: "notifications", path: "#",
-      #   icon: { idle: "bell", active: "bell_active" } }
     ]
+
+    if signed_in? && Notification.enabled_for?(user)
+      items << { slug: "notifications", label: "notifications", path: helpers.my_notifications_path,
+        icon: { idle: "bell", active: "bell_active" }, badge: unread_notifications_count }
+    end
 
     items << { slug: "rate",    label: "rate",          path: helpers.new_rate_path,
       icon: { idle: "box", active: "box_active" } }
@@ -48,17 +51,21 @@ class SidebarComponent < ViewComponent::Base
     ])
 
     if signed_in?
-      items << { slug: "projects", label: "my projects",   path: helpers.profile_projects_path(user.display_name),
-        icon: :avatar, active_prefix: "/@" }
-    end
+      items << {
+        slug: "projects",
+        label: "my projects",
+        path: helpers.profile_projects_path(user.display_name),
+        icon: :avatar,
+        active_prefix: "/@"
+      }
 
-    # items << { slug: "support", label: "support", path: helpers.admin_support_path, icon: "help" } if helpers.admin_policy(:support_dashboard).show?
-    # items << { slug: "fraud",   label: "fraud",   path: helpers.admin_fraud_path, icon: "code" } if helpers.admin_policy(:fraud_dashboard).show? && !user.admin?
-    # items << { slug: "admin",   label: "admin",   path: helpers.admin_users_path, icon: "code" } if user.admin?
-    # items << { slug: "shop",    label: "shop",    path: helpers.admin_shop_path, icon: "shopping_cart_1_fill" } if helpers.admin_policy(ShopItem).index?
-    # items << { slug: "fulfil",  label: "fulfil",  path: helpers.admin_shop_orders_path(view: "fulfillment"), icon: "shopping_cart_1_fill" } if user.fulfillment_person? && !user.admin?
-    # items << { slug: "seller",  label: "seller",  path: helpers.seller_orders_path, icon: "shopping_cart_1_fill" } if user.seller?
-    # items << { slug: "certify", label: "certify", path: "https://review.hackclub.com/", icon: "ship" } if user.project_certifier?
+      items << {
+        slug: "admin",
+        label: "admin",
+        path: helpers.admin_root_path,
+        icon: "eye"
+      } if user.roles.any?
+    end
 
     items
   end
@@ -83,5 +90,14 @@ class SidebarComponent < ViewComponent::Base
 
   def link_classes_for(item)
     [ "sidebar__nav-link", ("sidebar__nav-link--active" if active?(item)) ].compact.join(" ")
+  end
+
+  def unread_notifications_count
+    return 0 unless user
+    return 0 unless Notification.table_exists?
+
+    # First-render value only; ActionCable pushes live updates after the page
+    # loads, so a brief staleness here is invisible to the user.
+    @unread_notifications_count ||= Notification.unread_count_for(user)
   end
 end

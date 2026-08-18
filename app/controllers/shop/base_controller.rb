@@ -6,7 +6,7 @@ class Shop::BaseController < ApplicationController
       return current_user.shop_region if current_user.shop_region.present?
       return current_user.regions.first if current_user.has_regions?
 
-      primary_address = current_user.addresses.find { |a| a["primary"] } || current_user.addresses.first
+      primary_address = (@user_addresses ||= current_user.addresses).find { |a| a["primary"] } || @user_addresses.first
       country = primary_address&.dig("country")
       region_from_address = Shop::Regionalizable.country_to_region(country)
       return region_from_address if region_from_address != "XX" || country.present?
@@ -31,6 +31,10 @@ class Shop::BaseController < ApplicationController
     @user_balance = current_user&.cached_balance || 0
 
     preload_shop_item_images(@shop_items + Array(@recently_added_items))
+  end
+
+  def prepare_visible_shop_items(items = @shop_items)
+    @visible_shop_items = Array(items).select { |item| item.image.attached? && item.enabled_in_region?(@user_region) }
   end
 
   def preload_shop_item_images(items)
@@ -65,6 +69,13 @@ class Shop::BaseController < ApplicationController
     }
   end
 
+  # The approval that unlocks a free prize redemption for this item: an
+  # after-ship submission or an after-design funding kit. Returns the gate
+  # record (used as the PrizeRedemption source) or nil.
+  def load_redeemable_gate(shop_item)
+    load_redeemable_submission(shop_item) || load_redeemable_funding_request(shop_item)
+  end
+
   def load_redeemable_submission(shop_item)
     return nil unless current_user
     submission_id = params[:mission_submission_id]
@@ -75,10 +86,26 @@ class Shop::BaseController < ApplicationController
       .find_by(id: submission_id)
     return nil unless submission
     return nil unless submission.approved?
-    return nil unless submission.shop_order_id.nil?
     return nil unless submission.ship_event&.post&.user_id == current_user.id
-    return nil unless submission.mission.prizes.exists?(shop_item_id: shop_item.id)
+    # Each after-ship prize is claimable once per submission.
+    return nil unless submission.redeemable_prize_for(shop_item)
 
     submission
+  end
+
+  def load_redeemable_funding_request(shop_item)
+    return nil unless current_user
+    funding_request_id = params[:funding_request_id]
+    return nil if funding_request_id.blank?
+
+    funding_request = Certification::FundingRequest
+      .includes(project: [ :memberships, { mission_attachments: :mission } ])
+      .find_by(id: funding_request_id)
+    return nil unless funding_request&.approved?
+    return nil unless funding_request.owner == current_user
+    # Each design kit is claimable once per approved request.
+    return nil unless funding_request.redeemable_prize_for(shop_item)
+
+    funding_request
   end
 end
