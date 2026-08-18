@@ -832,6 +832,10 @@ body:has(.certification-ysws) {
       gap: var(--space-s);
     }
 
+    &__undo-form {
+      margin: 0;
+    }
+
     &__unclaim-form {
       margin: 0;
 

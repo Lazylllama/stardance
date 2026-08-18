@@ -19,6 +19,12 @@ class Admin::Certification::YswsPolicy < ApplicationPolicy
     index?
   end
 
+  # Reversing a decided review is destructive and admin-only: guardians of
+  # integrity can review, but cannot undo a completed review.
+  def undo?
+    user&.admin? && !record.pending?
+  end
+
   def unclaim?
     user.present? && index? && record.pending? && record.claimed_by?(user)
   end
