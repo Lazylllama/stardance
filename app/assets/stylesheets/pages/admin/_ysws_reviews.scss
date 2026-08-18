@@ -499,6 +499,12 @@ body:has(.certification-ysws) {
     }
   }
 
+  .recordings-card .ship-review__panel {
+    padding: 0;
+    background: none;
+    border: none;
+  }
+
   .detail-value {
     color: var(--color-space-text);
     font-size: var(--font-size-m);

@@ -101,6 +101,12 @@
         <% end %>
       </section>
 
+      <!-- Lapse / Lookout Recordings -->
+      <section class="review-card recordings-card">
+        <%= render "admin/certification/funding_requests/recordings",
+              timelapses: @lapse_timelapses, recordings: @lookout_recordings %>
+      </section>
+
       <% if @review.project.update_description.present? %>
         <!-- Update Description Card -->
         <section class="review-card update-description-card">

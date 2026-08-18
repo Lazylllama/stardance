@@ -134,6 +134,9 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     # banner and the per-devlog notes both disappear from a single check.
     @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
 
+    @lapse_timelapses = lapse_timelapses_for_ysws_review
+    @lookout_recordings = lookout_recordings_for_ysws_review
+
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
       load_commits_with_stats(
@@ -192,6 +195,24 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   private
+
+  RECORDINGS_CACHE_TTL = 1.minute
+
+  def lapse_timelapses_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lapse", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      owner = @review.project.memberships.owner.first&.user
+      LapseService.timelapses_for_project(
+        hackatime_user_id: owner&.hackatime_identity&.uid,
+        project_keys: @review.project.hackatime_keys
+      )
+    end
+  end
+
+  def lookout_recordings_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lookout", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      LookoutService.recordings_for_project(@review.project)
+    end
+  end
 
   def ysws_review_filters
     session[FILTER_SESSION_KEY].to_h.slice("project_type", "sort", "dir", "with_integrity")
