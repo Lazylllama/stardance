@@ -281,6 +281,10 @@ class User < ApplicationRecord
     raffle_participant&.referrals&.status_verified&.count || 0
   end
 
+  def free_sticker_weeks
+    StickerPromo.weeks_for(self)
+  end
+
   REFERRAL_ACHIEVEMENTS = { referral_2: 2, referral_5: 5 }.freeze
 
   def sync_referral_achievements!
