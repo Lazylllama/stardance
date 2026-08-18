@@ -103,7 +103,9 @@ class Project::Report < ApplicationRecord
         SHOULD_NOT_HAVE_BEEN_APPROVED_CHANNEL,
         "Ship approval flagged",
         blocks_path: "notifications/reports/should_not_have_been_approved_slack_message",
-        locals: { project: project, reporter: reporter, reviewer: reviewer, details: details.truncate(SHOULD_NOT_HAVE_BEEN_APPROVED_DETAILS_MAX_LENGTH, omission: "") }
+        locals: { project: project, reporter: reporter, reviewer: reviewer, details: details.truncate(SHOULD_NOT_HAVE_BEEN_APPROVED_DETAILS_MAX_LENGTH, omission: "") },
+        unfurl_links: false,
+        unfurl_media: false
       )
       :ok
     end
