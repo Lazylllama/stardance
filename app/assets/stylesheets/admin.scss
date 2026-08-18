@@ -699,6 +699,18 @@ dialog {
   font-size: 0.8rem;
 }
 
+.admin-report-group__resolve-button {
+  border-radius: 999px;
+  background: var(--color-brand-highlight);
+  color: var(--color-set-1-bg);
+  font-weight: 600;
+
+  &:hover {
+    background: var(--color-brand-highlight-secondary);
+    color: var(--color-set-1-bg);
+  }
+}
+
 .admin-actions-wrap {
   display: flex;
   flex-wrap: wrap;

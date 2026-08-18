@@ -912,6 +912,9 @@ Rails.application.routes.draw do
       end
 
       resources :reports, path: "report", only: [ :index, :show ] do
+        collection do
+          post :resolve_project
+        end
         member do
           post :review
           post :dismiss
