@@ -458,4 +458,35 @@
     font-weight: 500;
     white-space: nowrap;
   }
+
+  // Orders the automation would clear on its own. They sit at the bottom of the
+  // fraud queue and are dimmed so the rows needing a real judgement carry the
+  // eye. Kept legible rather than hidden: a reviewer may still want to look.
+  //
+  // The dimming lands on the cells, not the row: .space-table swaps a solid
+  // zebra background for a translucent hover wash, so fading the row itself
+  // fought that swap and made light rows flash bright then settle darker.
+  // Cells carry no background, so this only touches the content, and the
+  // timing matches the table's own 150ms background transition.
+  &__row--auto-approvable {
+    td {
+      opacity: 0.55;
+      transition: opacity 150ms ease;
+    }
+
+    &:hover td {
+      opacity: 1;
+    }
+  }
+
+  &__auto-approve-tag {
+    display: inline-block;
+    margin-top: var(--space-xxs);
+    padding: var(--space-xxs) var(--space-s);
+    border-radius: calc(var(--border-radius) / 2);
+    background: rgba(129, 255, 255, 0.12);
+    color: s.$set-fg-secondary;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
 }
