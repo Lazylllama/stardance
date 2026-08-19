@@ -74,6 +74,24 @@ class Admin::Missions::SubmissionsControllerTest < ActionDispatch::IntegrationTe
     assert_response :success
   end
 
+  test "overview counts only hardware reviews the mission dash can hand out" do
+    mission = create_mission
+    mission.update!(hardware: true)
+    live = hardware_project_for(mission)
+    deleted = hardware_project_for(mission)
+    Certification::Ship.create!(project: live, status: :pending)
+    Certification::Ship.create!(project: deleted, status: :pending)
+    deleted.soft_delete!
+
+    sign_in @reviewer
+    get admin_mission_reviews_path
+
+    assert_response :success
+    # The review on the soft-deleted project is unreachable from every queue.
+    assert_includes response.body, "1 pending"
+    assert_not_includes response.body, "2 pending"
+  end
+
   test "overview only lists missions the user can review" do
     member = create_member
     other_mission = create_mission
@@ -117,5 +135,13 @@ class Admin::Missions::SubmissionsControllerTest < ActionDispatch::IntegrationTe
                  display_name: "member-#{SecureRandom.hex(4)}",
                  slack_id: "U#{SecureRandom.hex(8)}",
                  granted_roles: granted_roles)
+  end
+
+  def hardware_project_for(mission)
+    project = Project.create!(title: "HW #{SecureRandom.hex(4)}")
+    project.memberships.create!(user: @builder, role: :owner)
+    project.update!(hardware_stage: "build")
+    project.mission_attachments.create!(mission: mission)
+    project
   end
 end
