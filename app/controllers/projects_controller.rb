@@ -195,17 +195,14 @@ class ProjectsController < ApplicationController
         current = latest_ship_event.votes.payout_countable.count
         remaining = [ required - current, 0 ].max
 
-        ratings_total = Post::ShipEvent::VOTE_COST_PER_SHIP
         ratings_remaining = [ -latest_ship_event.payout_recipient.vote_balance, 0 ].max
-        ratings_given = ratings_total - ratings_remaining
 
         @votes_for_payout = {
           ship_event: latest_ship_event,
           current: current,
           required: required,
           remaining: remaining,
-          ratings_given: ratings_given,
-          ratings_total: ratings_total,
+          ratings_remaining: ratings_remaining,
           static_prize: is_static,
           # Suppresses the payout checklist entirely; see PayoutVotesWidget.
           hardware: @project.hardware?,
