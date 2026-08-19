@@ -1,6 +1,6 @@
 class Admin::Shop::OrdersController < Admin::ApplicationController
   before_action :set_paper_trail_whodunnit
-  before_action :set_order, except: [ :index ]
+  before_action :set_order, except: [ :index, :bulk_approve ]
 
   # Filter/search params that should survive navigation between the status
   # chips, the group-by-user toggle, and pagination. Centralised here so the
@@ -41,7 +41,12 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
 
   helper_method :preserved_filter_params, :grouped_by_user?, :item_type_toggles,
                 :hidden_item_types, :grouping_toggle_params, :item_type_toggle_params,
-                :item_type_toggle_hidden?, :assigned_to_me?, :assigned_to_me_toggle_params
+                :item_type_toggle_hidden?, :assigned_to_me?, :assigned_to_me_toggle_params,
+                :approvable_order?
+
+  def approvable_order?(order)
+    policy(order).approve? && order.user_id != current_user.id && order.approvable?
+  end
 
   def preserved_filter_params
     params.permit(*PRESERVED_FILTER_KEYS)
@@ -364,58 +369,36 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   def approve
     authorize @order, :approve?
 
-    if @order.user_id == current_user.id
-      redirect_to admin_shop_order_path(@order), alert: "You cannot approve your own order." and return
-    end
+    result = Admin::ShopOrderApprover.new(@order, actor: current_user, tracking_number: params[:tracking_number]).call
 
-    unless @order.pending? || @order.awaiting_verification_call?
-      redirect_to admin_shop_order_path(@order), alert: "This order has already been processed." and return
-    end
-
-    if @order.requires_additional_review?
-      redirect_to admin_shop_order_path(@order), alert: "This is a high-value order and requires 2 fraud dept reviews before approval (#{@order.reviews.count}/2 so far)." and return
-    end
-
-    old_state = @order.aasm_state
-
-    if @order.shop_item.respond_to?(:fulfill!)
-      begin
-        @order.approve!
-      rescue HCBError => e
-        Rails.logger.error "HCB grant fulfillment failed for order #{@order.id}: #{e.message}"
-        flash[:error] = "HCB grant fulfillment failed (#{e.message}). The order was not approved. Please ask an administrator to re-authenticate the HCB integration before retrying."
-        redirect_to admin_shop_order_path(@order) and return
-      end
-      redirect_to shop_orders_return_path, notice: "Order approved and fulfilled" and return
-    end
-
-    tracking_number = params[:tracking_number].presence
-
-    if @order.shop_item.requires_verification_call?
-      success = @order.queue_for_verification_call && @order.save
-      notice = "Order queued for verification call"
+    if result.approved?
+      redirect_to shop_orders_return_path, notice: result.message
     else
-      if tracking_number.present?
-        @order.tracking_number = tracking_number
-      end
-      success = @order.queue_for_fulfillment && @order.save
-      notice = "Order approved for fulfillment"
+      redirect_to admin_shop_order_path(@order), alert: result.message
+    end
+  end
+
+  def bulk_approve
+    authorize ShopOrder, :approve?
+
+    orders = ShopOrder.includes(:shop_item, :reviews).where(id: params[:order_ids])
+
+    if orders.empty?
+      redirect_back fallback_location: admin_shop_orders_path, alert: "No orders to approve." and return
     end
 
-    if success
-      ::PaperTrail::Version.create!(
-        item_type: "ShopOrder",
-        item_id: @order.id,
-        event: "update",
-        whodunnit: current_user.id,
-        object_changes: {
-          aasm_state: [ old_state, @order.aasm_state ]
-        }
-      )
-      redirect_to shop_orders_return_path, notice: notice
-    else
-      redirect_to admin_shop_order_path(@order), alert: "Failed to approve order: #{@order.errors.full_messages.join(', ')}"
+    approved, failed = orders.map { |order|
+      Admin::ShopOrderApprover.new(order, actor: current_user).call
+    }.partition(&:approved?)
+
+    if approved.any?
+      flash[:notice] = "Approved #{helpers.pluralize(approved.size, 'order')}: #{approved.map { |result| "##{result.order.id}" }.to_sentence}"
     end
+    if failed.any?
+      flash[:alert] = failed.map { |result| "##{result.order.id}: #{result.message}" }.join(" ")
+    end
+
+    redirect_back fallback_location: admin_shop_orders_path
   end
 
   def review_order

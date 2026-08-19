@@ -229,7 +229,7 @@ body.admin-page {
 
   /* ── Buttons ───────────────────────────────────────── */
 
-  button,
+  button:not(.action-btn),
   input[type="submit"] {
     display: inline-flex;
     align-items: center;

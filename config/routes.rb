@@ -746,6 +746,9 @@ Rails.application.routes.draw do
       end
       resource :letter_mail_batch, only: [ :create ]
       resources :orders, only: [ :index, :show ] do
+        collection do
+          post :bulk_approve
+        end
         member do
           post :reveal_address
           post :reveal_phone
