@@ -50,7 +50,47 @@ module Admin
         assert_not_includes Queue.find("ship_certifications").pending.call, hardware
       end
 
+      test "the software mission queue leaves out submissions still awaiting certification" do
+        mission = create_mission
+        queued = ship_to_mission!(software_project, @owner, mission, status: "pending")
+        not_yet = ship_to_mission!(software_project, @owner, mission)
+
+        pending = Queue.find("mission_reviews_software").pending.call
+
+        assert_equal "awaiting_certification", not_yet.status
+        assert_includes pending, queued
+        assert_not_includes pending, not_yet
+      end
+
+      test "the software mission queue splits on the mission flag, not the project" do
+        on_hardware_mission = ship_to_mission!(software_project, @owner, @mission, status: "pending")
+        hardware_build = ship_to_mission!(hardware_project("build"), @owner, create_mission, status: "pending")
+
+        pending = Queue.find("mission_reviews_software").pending.call
+
+        assert_not_includes pending, on_hardware_mission
+        assert_includes pending, hardware_build
+      end
+
+      test "the hardware mission queue counts the funding and ship reviews its dash hands out" do
+        on_mission = attach_to_mission(hardware_project("design"))
+        funding_request(on_mission)
+        ship(on_mission)
+        funding_request(hardware_project("design"))
+        deleted = attach_to_mission(hardware_project("design"))
+        funding_request(deleted)
+        deleted.soft_delete!
+
+        assert_equal 2, Queue.find("mission_reviews_hardware").open_entered_ats.size
+      end
+
       private
+
+      def software_project
+        project = ::Project.create!(title: "SW #{SecureRandom.hex(4)}")
+        project.memberships.create!(user: @owner, role: :owner)
+        project
+      end
 
       def hardware_project(stage)
         project = ::Project.create!(title: "HW #{SecureRandom.hex(4)}")

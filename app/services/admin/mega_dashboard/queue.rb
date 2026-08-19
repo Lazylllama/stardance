@@ -2,18 +2,25 @@ module Admin
   module MegaDashboard
     # Declarative registry of every review queue on the dashboard.
     #
-    # Each queue exposes the same six facts (depth, unclaimed, arrivals,
-    # decisions, latency, oldest waiting), which is what lets one panel
-    # template render all of them. A queue is described by the relation its
-    # items live in plus the SQL for when an item entered and left the queue;
-    # everything else is derived.
+    # Each queue exposes the same five facts (depth, arrivals, decisions,
+    # latency, oldest waiting), which is what lets one panel template render
+    # all of them. A queue is described by the relation its items live in plus
+    # the SQL for when an item entered and left the queue; everything else is
+    # derived.
     class Queue
-      Definition = Data.define(:key, :label, :entered_at, :decided_at, :sla_hours, :scope, :pending, :unclaimed, :path, :pairs) do
-        def unclaimed_count = unclaimed ? unclaimed.call.count : nil
-
-        def claimable? = !unclaimed.nil?
-
+      Definition = Data.define(:key, :label, :entered_at, :decided_at, :sla_hours, :scope, :pending, :path, :pairs, :open_at) do
         def url = path.call(Rails.application.routes.url_helpers)
+
+        # When each item sitting in the queue right now entered it. Read from
+        # the same relation the linked page counts, never inferred from a null
+        # decided_at: a mission submission awaiting certification has no
+        # decision timestamp but has not entered the queue either, which is
+        # what put that panel hundreds above the page it links to.
+        def open_entered_ats
+          return open_at.call if open_at
+
+          pending.call.pluck(Arel.sql(entered_at)).compact
+        end
 
         # [entered_at, decided_at] for every item that was in the queue at any
         # point from `since` onward, plus everything still open. One query per
@@ -35,7 +42,6 @@ module Admin
           label: "Ship certifications",
           scope: -> { ::Certification::Ship.software_only },
           pending: -> { ::Certification::Ship.software_only.where(status: :pending) },
-          unclaimed: -> { ::Certification::Ship.software_only.where(status: :pending, claimed_at: nil) },
           entered_at: "certification_ship_reviews.created_at",
           decided_at: "certification_ship_reviews.decided_at",
           sla_hours: ::Certification::Ship::SLA_DAYS * 24,
@@ -46,7 +52,6 @@ module Admin
           label: "YSWS reviews (GOI)",
           scope: -> { ::Certification::Ysws.all },
           pending: -> { ::Certification::Ysws.pending },
-          unclaimed: -> { ::Certification::Ysws.pending.where(claimed_at: nil) },
           entered_at: "certification_ysws_reviews.created_at",
           decided_at: "COALESCE(certification_ysws_reviews.reviewed_at, certification_ysws_reviews.returned_at)",
           sla_hours: 72,
@@ -55,14 +60,14 @@ module Admin
         {
           key: "mission_reviews_software",
           label: "Mission reviews (software)",
-          # Split on the project's own hardware_stage, not the mission's flag:
-          # the flag is null on some production rows, which put those
-          # submissions in neither queue, and a hardware project can sit under
-          # a mission that isn't flagged. Outer-joined so a submission whose
-          # ship has no project still lands here rather than vanishing.
-          scope: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, projects: { hardware_stage: nil }) },
-          pending: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", projects: { hardware_stage: nil }) },
-          unclaimed: -> { ::Mission::Submission.left_outer_joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", claimed_at: nil, projects: { hardware_stage: nil }) },
+          # The split is the mission's own flag, matching the review overview.
+          # Keying it off the project's hardware_stage counted the same work
+          # twice over: hardware projects reach this table through software
+          # missions too, and a hardware mission's real queue is the one below.
+          scope: -> { ::Mission::Submission.software_reviewable },
+          pending: -> { ::Mission::Submission.software_reviewable.pending },
+          # Rows decided before pending_at existed fall back to created_at, so
+          # their latency still includes the wait for certification.
           entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
           decided_at: "mission_submissions.reviewed_at",
           sla_hours: 72,
@@ -71,14 +76,24 @@ module Admin
         {
           key: "mission_reviews_hardware",
           label: "Mission reviews (hardware)",
-          # Hardware projects are really reviewed through the funding and build
-          # queues, so anything sitting here is unusual and worth seeing alone.
-          scope: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil).where.not(projects: { hardware_stage: nil }) },
-          pending: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending").where.not(projects: { hardware_stage: nil }) },
-          unclaimed: -> { ::Mission::Submission.joins(ship_event: { post: :project }).where(deleted_at: nil, status: "pending", claimed_at: nil).where.not(projects: { hardware_stage: nil }) },
-          entered_at: "COALESCE(mission_submissions.pending_at, mission_submissions.created_at)",
-          decided_at: "mission_submissions.reviewed_at",
-          sla_hours: 72,
+          # A hardware mission is not reviewed through its submissions at all:
+          # the build review auto-approves those. Its queue is the funding
+          # requests and ship certs on its own projects. Scoped to what that
+          # dash hands out, which is why this reads a little under the count on
+          # the overview: that badge also counts reviews on soft-deleted
+          # projects. The global hardware queues are the exact complement, so
+          # nothing here is counted twice.
+          scope: nil,
+          pending: nil,
+          entered_at: nil,
+          decided_at: nil,
+          sla_hours: ::Certification::Ship::SLA_DAYS * 24,
+          open_at: -> { Queue.hardware_mission_reviews.flat_map { |reviews| reviews.pending.pluck(:created_at) } },
+          pairs: ->(since) {
+            Queue.hardware_mission_reviews.flat_map do |reviews|
+              reviews.where("decided_at IS NULL OR decided_at >= ?", since).pluck(:created_at, :decided_at)
+            end
+          },
           path: ->(h) { h.admin_mission_reviews_path }
         },
         {
@@ -86,7 +101,6 @@ module Admin
           label: "Shop orders (fraud)",
           scope: -> { ::ShopOrder.all },
           pending: -> { ::ShopOrder.where(aasm_state: ::ShopOrder::REVIEW_QUEUE_STATES) },
-          unclaimed: nil,
           entered_at: "shop_orders.created_at",
           decided_at: ::ShopOrder::DECIDED_AT_SQL,
           sla_hours: ::ShopOrder::LONG_WAIT_DAYS * 24,
@@ -97,7 +111,6 @@ module Admin
           label: "Integrity reviews",
           scope: -> { ::Certification::Integrity.all },
           pending: -> { ::Certification::Integrity.pending },
-          unclaimed: -> { ::Certification::Integrity.pending.where(claimed_at: nil) },
           entered_at: "certification_integrities.created_at",
           decided_at: "certification_integrities.reviewed_at",
           sla_hours: 48,
@@ -108,7 +121,6 @@ module Admin
           label: "Shop fulfillment",
           scope: -> { ::ShopOrder.all },
           pending: -> { ::ShopOrder.where(aasm_state: "awaiting_periodical_fulfillment") },
-          unclaimed: -> { ::ShopOrder.where(aasm_state: "awaiting_periodical_fulfillment", assigned_to_user_id: nil) },
           entered_at: "shop_orders.awaiting_periodical_fulfillment_at",
           decided_at: "shop_orders.fulfilled_at",
           sla_hours: 7 * 24,
@@ -122,7 +134,6 @@ module Admin
           # a dozen or so higher than the page it points at.
           scope: -> { ::Certification::FundingRequest.in_global_hardware_queue },
           pending: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending },
-          unclaimed: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending.where(claimed_at: nil) },
           entered_at: "certification_funding_requests.created_at",
           decided_at: "certification_funding_requests.decided_at",
           sla_hours: ::Certification::FundingRequest::SLA_DAYS * 24,
@@ -136,7 +147,6 @@ module Admin
           # so without this they were counted nowhere.
           scope: -> { ::Certification::Ship.in_global_hardware_queue },
           pending: -> { ::Certification::Ship.in_global_hardware_queue.pending },
-          unclaimed: -> { ::Certification::Ship.in_global_hardware_queue.pending.where(claimed_at: nil) },
           entered_at: "certification_ship_reviews.created_at",
           decided_at: "certification_ship_reviews.decided_at",
           sla_hours: ::Certification::Ship::SLA_DAYS * 24,
@@ -147,7 +157,6 @@ module Admin
           label: "Vote flags",
           scope: -> { ::Vote::Event.vote_flags },
           pending: -> { ::Vote::Event.pending_vote_flags },
-          unclaimed: nil,
           entered_at: "vote_events.created_at",
           decided_at: nil,
           sla_hours: 72,
@@ -169,7 +178,6 @@ module Admin
           label: "Super star nominations",
           scope: -> { ::Project.where.not(nominated_fire_at: nil) },
           pending: -> { ::Project.fire_nomination_pending },
-          unclaimed: nil,
           entered_at: "projects.nominated_fire_at",
           decided_at: "projects.marked_fire_at",
           sla_hours: 7 * 24,
@@ -180,7 +188,6 @@ module Admin
           label: "Certificates",
           scope: -> { ::Certificate.all },
           pending: -> { ::Certificate.pending },
-          unclaimed: nil,
           entered_at: "certificates.created_at",
           decided_at: "CASE WHEN certificates.status = 'pending' THEN NULL ELSE certificates.updated_at END",
           sla_hours: 72,
@@ -195,7 +202,6 @@ module Admin
           # filtering on "fraud" alone misses every reviewer-raised report.
           scope: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS) },
           pending: -> { ::Project::Report.where(reason: ::Project::Report::REASONS - ::Project::Report::USER_REASONS).pending },
-          unclaimed: nil,
           entered_at: "project_reports.created_at",
           decided_at: "CASE WHEN project_reports.status = 0 THEN NULL ELSE project_reports.updated_at END",
           sla_hours: 72,
@@ -204,7 +210,13 @@ module Admin
       ].freeze
 
       def self.all
-        @all ||= REGISTRY.map { |attrs| Definition.new(**{ pairs: nil }.merge(attrs)) }
+        @all ||= REGISTRY.map { |attrs| Definition.new(**{ pairs: nil, open_at: nil }.merge(attrs)) }
+      end
+
+      # Resolved at call time rather than held in a constant so the classes
+      # survive a development reload.
+      def self.hardware_mission_reviews
+        [ ::Certification::FundingRequest, ::Certification::Ship ].map(&:in_hardware_mission_queue)
       end
 
       def self.find(key)

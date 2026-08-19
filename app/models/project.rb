@@ -86,10 +86,14 @@ class Project < ApplicationRecord
   }
   scope :hardware, -> { where.not(hardware_stage: nil) }
   # A hardware mission reviews its own attached projects on the mission dash, so
-  # the global hardware queue leaves them out.
-  scope :without_hardware_mission, -> {
-    where.not(id: Project::MissionAttachment.active.joins(:mission).where(missions: { hardware: true }).select(:project_id))
-  }
+  # the global hardware queue leaves them out. The two scopes are exact
+  # complements, which is what keeps every hardware review counted once.
+  scope :with_hardware_mission, -> { where(id: hardware_mission_project_ids) }
+  scope :without_hardware_mission, -> { where.not(id: hardware_mission_project_ids) }
+
+  def self.hardware_mission_project_ids
+    Project::MissionAttachment.active.joins(:mission).where(missions: { hardware: true }).select(:project_id)
+  end
   # Projects with no Hackatime project linked for this member yet. Scoped per
   # member rather than per project: on a shared project each member records
   # their own Lapse time, so one member's link doesn't cover anyone else.
