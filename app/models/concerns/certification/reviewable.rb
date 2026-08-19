@@ -9,10 +9,18 @@ module Certification
     # withdrawn) are not decisions: they earn no bounty, stamp no decided_at,
     # and stay out of every queue statistic.
     DECIDED_STATUSES = %w[approved returned].freeze
+    # Everything that ever counted as work in this queue. A rerouted review is
+    # excluded exactly like an unsubmitted one: it got no verdict, and the work
+    # reappears as its own record in the queue it belonged in.
+    QUEUED_STATUSES = (DECIDED_STATUSES + %w[pending]).freeze
 
     class_methods do
       def decided
         where(status: DECIDED_STATUSES)
+      end
+
+      def pending_or_decided
+        where(status: QUEUED_STATUSES)
       end
 
       def available_for(user)

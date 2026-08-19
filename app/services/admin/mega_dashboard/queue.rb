@@ -40,7 +40,7 @@ module Admin
         {
           key: "ship_certifications",
           label: "Ship certifications",
-          scope: -> { ::Certification::Ship.software_only },
+          scope: -> { ::Certification::Ship.software_only.pending_or_decided },
           pending: -> { ::Certification::Ship.software_only.where(status: :pending) },
           entered_at: "certification_ship_reviews.created_at",
           decided_at: "certification_ship_reviews.decided_at",
@@ -132,7 +132,7 @@ module Admin
           # Matches what the linked queue shows: counting the reviews it hides
           # (soft-deleted projects, hardware missions' own) made the panel read
           # a dozen or so higher than the page it points at.
-          scope: -> { ::Certification::FundingRequest.in_global_hardware_queue },
+          scope: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending_or_decided },
           pending: -> { ::Certification::FundingRequest.in_global_hardware_queue.pending },
           entered_at: "certification_funding_requests.created_at",
           decided_at: "certification_funding_requests.decided_at",
@@ -145,7 +145,7 @@ module Admin
           # The build half of the same dash. Ship certifications on hardware
           # projects are left out of the software queue above by `software_only`,
           # so without this they were counted nowhere.
-          scope: -> { ::Certification::Ship.in_global_hardware_queue },
+          scope: -> { ::Certification::Ship.in_global_hardware_queue.pending_or_decided },
           pending: -> { ::Certification::Ship.in_global_hardware_queue.pending },
           entered_at: "certification_ship_reviews.created_at",
           decided_at: "certification_ship_reviews.decided_at",
@@ -216,7 +216,8 @@ module Admin
       # Resolved at call time rather than held in a constant so the classes
       # survive a development reload.
       def self.hardware_mission_reviews
-        [ ::Certification::FundingRequest, ::Certification::Ship ].map(&:in_hardware_mission_queue)
+        [ ::Certification::FundingRequest, ::Certification::Ship ]
+          .map { |model| model.in_hardware_mission_queue.pending_or_decided }
       end
 
       def self.find(key)

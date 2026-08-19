@@ -84,6 +84,20 @@ module Admin
         assert_equal 2, Queue.find("mission_reviews_hardware").open_entered_ats.size
       end
 
+      test "a rerouted review counts like an unsubmitted one, not a decision" do
+        project = hardware_project("build")
+        cert = ship(project)
+        pairs = -> { Queue.find("hardware_build").timestamp_pairs(3.days.ago) }
+
+        assert_equal 1, pairs.call.size
+
+        cert.update!(status: :misfiled)
+        assert_empty pairs.call, "a misfiled review should leave the queue entirely"
+
+        cert.update!(status: :withdrawn)
+        assert_empty pairs.call, "a withdrawn review should leave the queue entirely"
+      end
+
       private
 
       def software_project
