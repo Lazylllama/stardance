@@ -3,6 +3,7 @@
 # Table name: certification_ship_reviews
 #
 #  id                        :bigint           not null, primary key
+#  bonus_stardust            :float
 #  claim_expires_at          :datetime
 #  claimed_at                :datetime
 #  decided_at                :datetime
@@ -12,7 +13,7 @@
 #  proof_video_url           :string
 #  recert_reason             :text
 #  stardust_earned           :float
-#  status                    :integer          default("pending"), not null
+#  status                    :integer          default(0), not null
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  external_certification_id :string
@@ -71,10 +72,16 @@ module Certification
       post_ship_event || project&.last_ship_event
     end
 
+    # misfiled: a reviewer says this belongs in the design queue and the builder
+    # hasn't answered yet. withdrawn: the builder agreed, so the ship is rolled
+    # back and the project returns to the design stage. Neither is a verdict, so
+    # both stay out of the approval-rate and decision tallies.
     enum :status, {
       pending: 0,
       approved: 1,
-      returned: 2
+      returned: 2,
+      misfiled: 3,
+      withdrawn: 4
     }, default: :pending
 
     EXTERNAL_DECISION_MAP = { "APPROVED" => :approved, "REJECTED" => :returned }.freeze
@@ -144,6 +151,9 @@ module Certification
                                 allow_blank: true
     validates :verdict_video,
               content_type: { in: ACCEPTED_VIDEO_TYPES, spoofing_protection: true }
+    validates :bonus_stardust,
+              numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 100 },
+              allow_nil: true
 
     scope :for_reviewer, ->(user) {
       joins(:project)
@@ -157,8 +167,24 @@ module Certification
         : joins(:project).where(projects: { project_type: type })
     }
 
+    # A hardware ship is certified in the hardware build queue
+    # (Admin::Certification::HardwareReviewsController), which selects the same
+    # rows with `hardware_stage IS NOT NULL`. This is the other half of that
+    # split: without it one review sits in both queues and a shipwright gets
+    # handed a build cert they aren't reviewing for.
+    #
+    # Deliberately not folded into `for_reviewer`/`available_for` — the hardware
+    # queue builds on those, so narrowing them there would empty it.
+    scope :software_only, -> { joins(:project).where(projects: { hardware_stage: nil }) }
+
     def self.available_for(user)
       super.merge(for_reviewer(user))
+    end
+
+    # Claim-next for the software queue. The hardware queue has its own
+    # candidate lookup, so this narrowing stays on Ship rather than the concern.
+    def self.next_eligible_scope(user)
+      super.software_only
     end
 
     # Health target for the pending queue. Above this we read as "behind".
@@ -169,24 +195,27 @@ module Certification
 
     # Snapshot of queue health for the reviewer dashboard. Counts are global
     # (every reviewer shares one queue), so this is intentionally not scoped
-    # to the current user the way the listing is.
+    # to the current user the way the listing is. Software only, so the header
+    # numbers agree with the rows the shipwright is actually shown.
     def self.dashboard_stats(now: Time.current)
       today = now.beginning_of_day
       week = now.beginning_of_week
-      approved_count = where(status: :approved).count
-      returned_count = where(status: :returned).count
+      base = software_only
+      approved_count = base.where(status: :approved).count
+      returned_count = base.where(status: :returned).count
       decided_count = approved_count + returned_count
 
-      decided = where.not(status: :pending)
+      decided = base.decided
 
-      pending_ages = where(status: :pending).pluck(:created_at)
+      pending_ages = base.where(status: :pending).pluck(:created_at)
       median_pending_wait = if pending_ages.any?
         sorted = pending_ages.map { |t| now - t }.sort
         (median_value(sorted) / 3600.0).round(1)
       end
 
+      # Table-qualified: `base` joins projects, which has its own created_at.
       avg_decision_secs = decided.where.not(decided_at: nil)
-        .average(Arel.sql("EXTRACT(EPOCH FROM (decided_at - created_at))"))
+        .average(Arel.sql("EXTRACT(EPOCH FROM (certification_ship_reviews.decided_at - certification_ship_reviews.created_at))"))
       avg_decision_hours = avg_decision_secs ? (avg_decision_secs / 3600.0).round(1) : nil
 
       {
@@ -196,13 +225,14 @@ module Certification
         decided: decided_count,
         approval_rate: decided_count.zero? ? nil : (approved_count * 100.0 / decided_count).round(1),
         decisions_today: decided.where(decided_at: today..).count,
-        new_today: where(created_at: today..).count,
+        new_today: base.where(created_at: today..).count,
         decisions_this_week: decided.where(decided_at: week..).count,
-        new_this_week: where(created_at: week..).count,
-        oldest_pending: where(status: :pending).order(created_at: :asc).first,
+        new_this_week: base.where(created_at: week..).count,
+        oldest_pending: base.where(status: :pending).order(created_at: :asc).first,
         queue_target: QUEUE_TARGET,
         sla_days: SLA_DAYS,
-        overdue_pending: where(status: :pending).where("created_at < ?", now - SLA_DAYS.days).count,
+        overdue_pending: base.where(status: :pending)
+                             .where("certification_ship_reviews.created_at < ?", now - SLA_DAYS.days).count,
         median_pending_wait_hours: median_pending_wait,
         avg_decision_hours: avg_decision_hours
       }
@@ -214,7 +244,7 @@ module Certification
       returned_int = statuses[:returned]
 
       rows = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .joins(:reviewer)
         .group(Arel.sql("DATE(decided_at)"), "users.id", "users.display_name")
         .select(
@@ -251,7 +281,7 @@ module Certification
       returned_int = statuses[:returned]
 
       decisions = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .group(Arel.sql("DATE(decided_at)"))
         .select(
           Arel.sql("DATE(decided_at) AS day"),
@@ -266,7 +296,7 @@ module Certification
         .transform_keys { |k| k.is_a?(Date) ? k : Date.parse(k.to_s) }
 
       unique_reviewers = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .where.not(reviewer_id: nil)
         .group(Arel.sql("DATE(decided_at)"))
         .select(
@@ -280,7 +310,7 @@ module Certification
         .pluck(:created_at, :decided_at)
 
       median_wait_by_day = where("decided_at >= ?", start)
-        .where.not(status: :pending)
+        .decided
         .where.not(decided_at: nil)
         .pluck(:created_at, :decided_at)
         .group_by { |_, da| da.to_date }
@@ -310,7 +340,7 @@ module Certification
     # Reviewers ranked by completed decisions over a window. Returns rows of
     # { name:, count: } for :daily, :weekly, or :alltime.
     def self.leaderboard(period, now: Time.current, limit: 10)
-      scope = where.not(reviewer_id: nil).where.not(status: :pending)
+      scope = where.not(reviewer_id: nil).decided
       case period.to_sym
       when :daily  then scope = scope.where(decided_at: now.beginning_of_day..)
       when :weekly then scope = scope.where(decided_at: now.beginning_of_week..)
@@ -345,7 +375,7 @@ module Certification
 
     def self.decided_today_count(reviewer_id, now: Time.current)
       where(reviewer_id: reviewer_id)
-        .where.not(status: :pending)
+        .decided
         .where(decided_at: now.beginning_of_day..)
         .count
     end
@@ -383,22 +413,71 @@ module Certification
     REVIEW_BOUNTY = 1.25 # This will be updated once we add the project types.
 
     before_save :stamp_claimed_at, if: -> { will_save_change_to_reviewer_id? && reviewer_id.present? && claimed_at.nil? }
-    before_save :stamp_decided_at, if: -> { will_save_change_to_status? && status_change&.last != "pending" && decided_at.nil? }
-    before_save :assign_stardust_earned, if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
+    before_save :stamp_decided_at, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && decided_at.nil? }
+    before_save :assign_stardust_earned, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
-    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
+    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? }
+    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? && project&.hardware? }
+    after_create_commit :post_submission_to_hardware_review_channel!, if: -> { project&.hardware? }
 
     # Timeline cards for decided reviews sort by when the verdict landed.
     def decided_on
       decided_at || updated_at
     end
 
+    # Read by Notifications::Hardware::BuildReviewed to render the Slack blocks,
+    # so this has to stay public.
+    def notification_locals
+      routes = Rails.application.routes.url_helpers
+      # default_url_options is only configured in production, so a bare
+      # reverse_merge on it raises NoMethodError in development and test.
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
+                   .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
+
+      {
+        project_title: project.title,
+        project_url: routes.project_url(project, **url_opts),
+        approved: approved?,
+        reviewer_name: reviewer&.display_name,
+        feedback: feedback.to_s
+      }
+    end
+
+
+    def queue_mismatch_flagged_label = "build certification"
+    def queue_mismatch_suggested_label = "design funding"
+
     private
+
+    # Read straight off the association rather than through
+    # Project#last_ship_event, which deliberately skips misfiled ships - the
+    # restore path has to be able to find the one it just hid.
+    def queue_mismatch_ship_event
+      post_ship_event || project&.ship_events&.first
+    end
+
+    def hide_from_public_surfaces!
+      queue_mismatch_ship_event&.update!(certification_status: "misfiled")
+    end
+
+    def restore_to_public_surfaces!
+      queue_mismatch_ship_event&.update!(certification_status: "pending")
+    end
+
+    # The builder confirmed they need funding after all: the project goes back
+    # to the design stage so it can ask for a grant. Build devlogs keep their
+    # phase - the hours are real, and re-filing them as design would erase time
+    # the builder already logged.
+    def apply_queue_conversion!
+      project.converting_review_queue = true
+      project.update!(hardware_stage: "design")
+      project.roll_back_withdrawn_ship!
+    end
 
     def assign_stardust_earned
       total_count = Certification::Ship.decided_today_count(reviewer_id) + 1
       multiplier = Certification::Ship.multiplier_for_milestone(total_count)
-      self.stardust_earned = REVIEW_BOUNTY * multiplier
+      self.stardust_earned = (REVIEW_BOUNTY * multiplier) + (bonus_stardust || 0)
     end
 
     def stamp_claimed_at
@@ -410,7 +489,7 @@ module Certification
     end
 
     def apply_verdict_to_project!
-      return if pending?
+      return unless decided?
       project.with_lock do
         ship_event = verdict_ship_event
         latest = ship_event.nil? || ship_event == project.last_ship_event
@@ -423,6 +502,7 @@ module Certification
             project.approve! if project.may_approve?
           end
           create_ysws_review_for_ship(ship_event) if ship_event
+          collapse_mission_build_review!(ship_event)
         when :returned
           ship_event&.update!(certification_status: "returned")
           if latest
@@ -431,6 +511,20 @@ module Certification
           end
         end
       end
+    end
+
+    # Hardware missions review the build as one decision: certifying the ship
+    # (just above, which cascades the mission submission to `pending`) also
+    # finalizes that submission, granting the after-ship prize and any
+    # achievement. Software missions keep their separate mission approval.
+    def collapse_mission_build_review!(ship_event)
+      submission = ship_event&.mission_submission
+      return unless submission&.mission&.hardware?
+      return unless submission.may_approve?
+
+      submission.update!(reviewed_by: reviewer, reviewed_at: Time.current, rejection_message: nil)
+      submission.approve!
+      submission.grant_rewards!(reviewer_id: reviewer&.id)
     end
 
     def create_ysws_review_for_ship(ship_event)
@@ -456,11 +550,29 @@ module Certification
       ).call
     end
 
+    # Software keeps the direct DM: its approval copy sends the project off to
+    # voting, which hardware never enters.
     def notify_owner!
+      return notify_owner_of_build! if project&.hardware?
+
+      notify_owner_by_slack!
+    end
+
+    def notify_owner_of_build!
+      Notifications::Hardware::BuildReviewed.notify(
+        recipient: owner,
+        actor: reviewer,
+        record: self
+      )
+    rescue StandardError => e
+      Rails.logger.error("Ship ##{id} notify_owner_of_build! failed: #{e.message}")
+    end
+
+    def notify_owner_by_slack!
       return unless owner&.slack_id.present?
 
       routes = Rails.application.routes.url_helpers
-      url_opts = Rails.application.config.action_controller.default_url_options
+      url_opts = (Rails.application.config.action_controller.default_url_options || {})
                       .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
 
       locals = {

@@ -50,6 +50,7 @@ class Mission::Submission < ApplicationRecord
   include Ledgerable
   include AASM
   include MissionReviewable
+  include Mission::PrizeRedeemable
 
   has_paper_trail
 
@@ -103,7 +104,6 @@ class Mission::Submission < ApplicationRecord
   scope :in_review, -> { where.not(status: %w[approved rejected]) }
 
   scope :reviewable,  -> { pending }
-  scope :unredeemed,  -> { approved.where(shop_order_id: nil) }
   scope :stale_pending, ->(days: 7) {
     pending.where("pending_at < ?", days.days.ago)
   }
@@ -112,6 +112,24 @@ class Mission::Submission < ApplicationRecord
   # that predate pending_at (or never reached the queue).
   def queue_entered_at
     pending_at || created_at
+  end
+
+  # Redemption-gate interface (see Mission::PrizeRedeemable): an approved
+  # submission claims the mission's after-shipping prizes.
+  def redemption_mission = mission
+  def redemption_prize_category = :after_shipping
+
+  # Rewards granted when a submission is approved: the mission achievement and
+  # any fixed stardust. Idempotent. reviewer_id is recorded on the ledger entry.
+  def grant_rewards!(reviewer_id:)
+    grant_mission_achievement
+    grant_fixed_stardust(reviewer_id: reviewer_id)
+  end
+
+  # Undoes grant_rewards! when a decision is reversed.
+  def reverse_rewards!(reviewer_id:)
+    reverse_fixed_stardust(reviewer_id: reviewer_id)
+    revoke_mission_achievement
   end
 
   # Per-mission reviewers/owners, minus teammates (no self-review). Global
@@ -130,7 +148,7 @@ class Mission::Submission < ApplicationRecord
     project = ship_event&.post&.project
     builder = ship_event&.post&.user
     routes = Rails.application.routes.url_helpers
-    url_opts = Rails.application.config.action_controller.default_url_options
+    url_opts = (Rails.application.config.action_controller.default_url_options || {})
                     .reverse_merge(host: "stardance.hackclub.com", protocol: "https")
 
     {
@@ -147,6 +165,51 @@ class Mission::Submission < ApplicationRecord
   end
 
   private
+
+  def reward_recipient
+    ship_event&.post&.user
+  end
+
+  def grant_mission_achievement
+    return if mission.achievement_slug.blank?
+    return unless reward_recipient
+    return if reward_recipient.achievements.exists?(achievement_slug: mission.achievement_slug)
+
+    reward_recipient.achievements.create!(achievement_slug: mission.achievement_slug, earned_at: Time.current)
+  end
+
+  def grant_fixed_stardust(reviewer_id:)
+    return unless mission.fixed_stardust_payout&.positive?
+    return unless ledger_entries.sum(:amount).zero?
+    return unless reward_recipient
+
+    ledger_entries.create!(
+      user: reward_recipient,
+      amount: mission.fixed_stardust_payout,
+      reason: "Mission: #{mission.name}",
+      created_by: "mission_submission:#{id} (#{reviewer_id})"
+    )
+  end
+
+  def reverse_fixed_stardust(reviewer_id:)
+    net = ledger_entries.sum(:amount)
+    return unless net.positive?
+    return unless reward_recipient
+
+    ledger_entries.create!(
+      user: reward_recipient,
+      amount: -net,
+      reason: "Mission reversal: #{mission.name}",
+      created_by: "mission_submission:#{id} undo (#{reviewer_id})"
+    )
+  end
+
+  def revoke_mission_achievement
+    return if mission.achievement_slug.blank?
+    return unless reward_recipient
+
+    reward_recipient.achievements.where(achievement_slug: mission.achievement_slug).destroy_all
+  end
 
   def stamp_pending_at
     self.pending_at = Time.current

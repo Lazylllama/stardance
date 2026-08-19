@@ -99,7 +99,14 @@ class ShopOrder < ApplicationRecord
   validate :check_mission_unlock_requirement, on: :create
   validate :check_mission_prize_requires_redemption, on: :create
 
-  attr_accessor :redeeming_mission_submission
+  # A free mission-prize redemption is gated by one of two approvals: a
+  # Mission::Submission (after-ship prize) or a Certification::FundingRequest
+  # (after-design kit). Either one makes the order free.
+  attr_accessor :redeeming_mission_submission, :redeeming_funding_request
+
+  def redeeming_prize?
+    redeeming_mission_submission.present? || redeeming_funding_request.present?
+  end
 
   validates :internal_rejection_reason, presence: true, if: :rejected?
   validates :fraud_related_project_id, presence: true, if: :rejected?
@@ -302,6 +309,10 @@ class ShopOrder < ApplicationRecord
     high_value? && reviews.count < 2
   end
 
+  def approvable?
+    (pending? || awaiting_verification_call?) && !requires_additional_review?
+  end
+
   # States that still need a fraud/shop-manager verdict, mirroring the
   # Certification::Ship review queue for the fraud dashboard overview.
   REVIEW_QUEUE_STATES = %w[pending awaiting_verification awaiting_verification_call on_hold].freeze
@@ -409,14 +420,13 @@ class ShopOrder < ApplicationRecord
     # normal price: freezing 0 skips the balance check, the negative payout,
     # and any refund-on-reject (all gated on frozen_item_price > 0), so a
     # regular shop item given as a static prize never touches the ledger.
-    if redeeming_mission_submission.present?
+    if redeeming_prize?
       self.frozen_item_price = 0
       return
     end
 
-    # Use price_for_user so per-user pricing (e.g. the Outpost Ticket discount)
-    # is enforced at purchase, not just displayed. Falls back to the regional
-    # price for ordinary items.
+    # Use price_for_user so any per-user pricing is enforced at purchase, not
+    # just displayed. Falls back to the regional price for ordinary items.
     order_region = region.presence || Shop::Regionalizable.country_to_region(frozen_address&.dig("country"))
     self.frozen_item_price = shop_item.price_for_user(user, order_region || "XX")
   end
@@ -450,7 +460,7 @@ class ShopOrder < ApplicationRecord
   end
 
   def check_user_balance
-    return if redeeming_mission_submission.present?
+    return if redeeming_prize?
     return unless frozen_item_price&.positive? && quantity.present?
 
     total_cost_for_validation = frozen_item_price * quantity
@@ -467,8 +477,8 @@ class ShopOrder < ApplicationRecord
 
   def check_mission_prize_requires_redemption
     return unless shop_item&.mission_prize_only?
-    return if redeeming_mission_submission.present?
-    errors.add(:base, "This item can only be claimed by redeeming an approved mission submission.")
+    return if redeeming_prize?
+    errors.add(:base, "This item can only be claimed by redeeming an approved mission prize.")
   end
 
   USPS_SUSPENDED_COUNTRIES = %w[

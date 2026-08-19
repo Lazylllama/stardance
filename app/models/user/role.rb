@@ -15,7 +15,8 @@ class User
       new(7, :shop_manager, "Can create/edit draft shop items and view orders without PII"),
       new(8, :mission_reviewer, "Can review submissions for any mission across the platform"),
       new(9, :raffle_admin, "Can manage the referral raffle: weeks, draws, participants, and referrals"),
-      new(11, :workshop_manager, "Can create and manage workshops and see their RSVPs and attendees")
+      new(11, :workshop_manager, "Can create and manage workshops and see their RSVPs and attendees"),
+      new(12, :nda_helper, "NDA-covered helper with read-only access to users, projects, and vote data")
     ].freeze
 
     self::SLUGGED = self::ALL.index_by(&:name).freeze

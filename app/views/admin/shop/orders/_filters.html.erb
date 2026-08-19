@@ -125,5 +125,17 @@
 
     <%= f.hidden_field :goob, value: params[:goob] if params[:goob] %>
     <%= f.hidden_field :view, value: params[:view] if params[:view] %>
+
+    <%# Fulfillment folks don't get the status select above, so carry the status %>
+    <%# through rather than widening their queue back out on submit. %>
+    <%= f.hidden_field :status, value: params[:status] if current_user.fulfillment_person? && params[:status].present? %>
+
+    <%# Carry the folded-away item types through, so applying a filter doesn't %>
+    <%# quietly reset the toggles above. A blank entry means "nothing hidden". %>
+    <% if @view == "fulfillment" %>
+      <% (hidden_item_types.presence || [ "" ]).each do |type| %>
+        <%= hidden_field_tag "hidden_types[]", type, id: nil %>
+      <% end %>
+    <% end %>
   <% end %>
 </div>

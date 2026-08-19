@@ -23,6 +23,9 @@ module Notifications
       Notifications::Payouts::ShipEventIssued
       Notifications::Payouts::VoteDeficitBlocked
       Notifications::ShopOrders::StatusChanged
+      Notifications::Hardware::FundingRequestReviewed
+      Notifications::Hardware::BuildReviewed
+      Notifications::Hardware::ReviewQueueMismatch
       Notifications::Workshops::StartingSoon
     ].freeze
 

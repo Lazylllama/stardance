@@ -9,11 +9,13 @@
 #  feedback_video_url         :string
 #  hours_at_payout            :float
 #  hours_at_ship              :float
+#  lifecycle_data_quality     :string
 #  multiplier                 :float
 #  originality_median         :decimal(5, 2)
 #  originality_percentile     :decimal(5, 2)
 #  overall_percentile         :decimal(5, 2)
 #  overall_score              :decimal(5, 2)
+#  paid_at                    :datetime
 #  payout                     :float
 #  payout_basis_locked_at     :datetime
 #  payout_basis_overall_score :decimal(5, 2)
@@ -30,8 +32,16 @@
 #  usability_median           :decimal(5, 2)
 #  usability_percentile       :decimal(5, 2)
 #  votes_count                :integer          default(0), not null
+#  voting_completed_at        :datetime
+#  voting_started_at          :datetime
 #  created_at                 :datetime         not null
 #  updated_at                 :datetime         not null
+#
+# Indexes
+#
+#  index_post_ship_events_on_paid_at              (paid_at)
+#  index_post_ship_events_on_voting_completed_at  (voting_completed_at)
+#  index_post_ship_events_on_voting_started_at    (voting_started_at)
 #
 class Post::ShipEvent < ApplicationRecord
   include Postable
@@ -53,6 +63,13 @@ class Post::ShipEvent < ApplicationRecord
   RETURN_REASON_MAX_LENGTH = 1_000
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
+  LIFECYCLE_DATA_QUALITIES = %w[live backfilled_exact backfilled_estimated].freeze
+  # Certification statuses that take a ship out of every public surface: the
+  # feed, the profile, search, recommendations, and the voting pool. "rejected"
+  # is a verdict; "misfiled" is a reviewer saying the ship went to the wrong
+  # queue, which the owner still sees on their own project page so they can
+  # answer it (see Project::QueueMismatch).
+  HIDDEN_STATUSES = %w[rejected misfiled].freeze
 
   include HasPostAttachments
 
@@ -80,14 +97,23 @@ class Post::ShipEvent < ApplicationRecord
                             inverse_of: :ship_event,
                             dependent: :destroy
 
+  before_save :stamp_rating_lifecycle
   after_update :sync_mission_submission_status, if: :saved_change_to_certification_status?
 
   scope :voteable, -> {
     where(certification_status: "approved", payout: nil)
       .where(Vote.countable_count_lt(VOTES_TO_LEAVE_POOL))
       .where("post_ship_events.hours_at_ship > 0")
+      .joins(:project)
+      .where.not(projects: { demo_url: [ nil, "" ] })
+      .where.not(projects: { repo_url: [ nil, "" ] })
       .where.not(id: Mission::Submission.with_deleted.where(payout_path: "static_prize").select(:ship_event_id))
   }
+
+  def voting_links_present?
+    project&.demo_url.present? && project&.repo_url.present?
+  end
+
   scope :paid_out, -> { where(certification_status: "approved").where.not(payout: nil) }
 
   after_commit :decrement_user_vote_balance, on: :create
@@ -96,6 +122,7 @@ class Post::ShipEvent < ApplicationRecord
   validates :body, presence: { message: "Update message can't be blank" }
   validates :body, length: { maximum: BODY_MAX_LENGTH }, on: :create
   validates :review_instructions, length: { maximum: REVIEW_INSTRUCTIONS_MAX_LENGTH }, allow_blank: true
+  validates :lifecycle_data_quality, inclusion: { in: LIFECYCLE_DATA_QUALITIES }, allow_nil: true
   validate :project_can_be_shipped, on: :create
   has_paper_trail ignore: [ :votes_count, :synced_at ]
 
@@ -120,8 +147,9 @@ class Post::ShipEvent < ApplicationRecord
     update!(hours_at_ship: hours_logged_in_ship_window)
   end
 
-  # All non-deleted devlogs in this ship's window, regardless of phase —
-  # unlike hours_at_ship, which only counts build-phase devlogs on hardware.
+  # All non-deleted devlogs in this ship's window, regardless of phase or
+  # funding — unlike hours_at_ship, which on hardware drops explicit design
+  # work and anything logged before the funding request.
   def window_devlogs_count
     return 0 unless post&.project && post.created_at
 
@@ -130,14 +158,38 @@ class Post::ShipEvent < ApplicationRecord
 
   private
 
+  def stamp_rating_lifecycle
+    if will_save_change_to_certification_status? && certification_status == "approved" && voting_started_at.nil?
+      self.voting_started_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+
+    if will_save_change_to_payout? && payout.present? && paid_at.nil?
+      self.paid_at = Time.current
+      self.lifecycle_data_quality ||= "live"
+    end
+  end
+
   def hours_logged_in_ship_window
     return 0 unless post&.project && post.created_at
 
     devlogs_in_ship_window.sum("post_devlogs.duration_seconds").to_f / 3600
   end
 
+  # Hardware pays for build time, not the design work the grant was awarded
+  # against. Explicit design-phase time is dropped; build time counts, and so
+  # does software time (phase nil) carried over from a project that started as
+  # software and converted to hardware later. On top of that the funding
+  # request, when there is one, is the real build boundary: anything logged
+  # before it is pre-funding and doesn't count, whatever its phase. A project
+  # that skipped funding has no cutoff, so all of its non-design time counts
+  # back to the project's start.
   def devlogs_in_ship_window
-    window_devlogs.then { |scope| project.hardware? ? scope.where(post_devlogs: { phase: "build" }) : scope }
+    return window_devlogs unless project.hardware?
+
+    scope = window_devlogs.where("post_devlogs.phase IS DISTINCT FROM 'design'")
+    cutoff = hardware_payout_cutoff
+    cutoff ? scope.where("posts.created_at >= ?", cutoff) : scope
   end
 
   def window_devlogs
@@ -160,6 +212,9 @@ class Post::ShipEvent < ApplicationRecord
   def decrement_user_vote_balance
     return unless post&.user
     return if mission_submission&.payout_path == "static_prize"
+    # Vote debt buys a place in the rating pool. Hardware never enters it, so
+    # charging for a ship the builder can't work off would strand them.
+    return if project&.hardware?
 
     post.user.increment!(:vote_balance, -VOTE_COST_PER_SHIP)
   end

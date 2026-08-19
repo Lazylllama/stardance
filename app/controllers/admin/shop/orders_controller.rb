@@ -1,6 +1,6 @@
 class Admin::Shop::OrdersController < Admin::ApplicationController
   before_action :set_paper_trail_whodunnit
-  before_action :set_order, except: [ :index ]
+  before_action :set_order, except: [ :index, :bulk_approve ]
 
   # Filter/search params that should survive navigation between the status
   # chips, the group-by-user toggle, and pagination. Centralised here so the
@@ -8,13 +8,109 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   PRESERVED_FILTER_KEYS = [
     :user_search, :shop_item_id, :status, :date_from, :date_to, :sort, :view,
     :goob, :region, :item_type, :min_tickets, :max_tickets, :has_tracking,
-    :order_type, { assignee_ids: [] }
+    :order_type, { assignee_ids: [], hidden_types: [] }
   ].freeze
 
-  helper_method :preserved_filter_params
+  # TutorialNothing is never fulfilled by a human, so it's dropped from the
+  # queue outright rather than given a toggle nobody would reach for.
+  ALWAYS_HIDDEN_ITEM_TYPES = %w[ShopItem::TutorialNothing].freeze
+
+  # Item-type groups the fulfillment queue can fold away, one toggle each.
+  # FreeStickers needs no human work and WarehouseItem is fulfilled by the
+  # external warehouse, so those start folded away. Mail is packed by hand and
+  # stays visible — HQ mail and letter mail share a single toggle because
+  # they're worked as one pile. Add new LetterMail subclasses to the mail group
+  # so they fold with the rest of it.
+  ITEM_TYPE_TOGGLES = [
+    { label: "Free Stickers", hidden_by_default: true, types: %w[ShopItem::FreeStickers] },
+    { label: "Warehouse Item", hidden_by_default: true, types: %w[ShopItem::WarehouseItem] },
+    { label: "HQ Mail", hidden_by_default: false, types: %w[
+      ShopItem::HQMailItem
+      ShopItem::LetterMail
+      ShopItem::NonmachinableLetterMail
+    ] }
+  ].freeze
+
+  TOGGLEABLE_ITEM_TYPES = ITEM_TYPE_TOGGLES.flat_map { |toggle| toggle[:types] }.freeze
+
+  DEFAULT_HIDDEN_ITEM_TYPES = ITEM_TYPE_TOGGLES.select { |toggle| toggle[:hidden_by_default] }
+                                               .flat_map { |toggle| toggle[:types] }.freeze
+
+  # Number of user groups shown per page when grouping by user.
+  GROUPS_PER_PAGE = 25
+
+  helper_method :preserved_filter_params, :grouped_by_user?, :item_type_toggles,
+                :hidden_item_types, :grouping_toggle_params, :item_type_toggle_params,
+                :item_type_toggle_hidden?, :assigned_to_me?, :assigned_to_me_toggle_params,
+                :approvable_order?
+
+  def approvable_order?(order)
+    policy(order).approve? && order.user_id != current_user.id && order.approvable?
+  end
 
   def preserved_filter_params
     params.permit(*PRESERVED_FILTER_KEYS)
+  end
+
+  # Fulfillment works order-by-order per person, so the queue groups by user
+  # unless explicitly ungrouped. Every other view stays flat by default.
+  def grouped_by_user?
+    return params[:goob] != "false" if @view == "fulfillment"
+
+    params[:goob] == "true"
+  end
+
+  def item_type_toggles
+    ITEM_TYPE_TOGGLES
+  end
+
+  def item_type_toggle_hidden?(toggle)
+    toggle[:types].all? { |type| hidden_item_types.include?(type) }
+  end
+
+  def hidden_item_types
+    @hidden_item_types ||= if @view != "fulfillment"
+      []
+    else
+      toggled = if params.key?(:hidden_types)
+        Array(params[:hidden_types]) & TOGGLEABLE_ITEM_TYPES
+      else
+        DEFAULT_HIDDEN_ITEM_TYPES
+      end
+
+      # An explicit item-type filter beats the folded-away defaults, otherwise
+      # filtering down to a hidden type would come back empty.
+      (toggled | ALWAYS_HIDDEN_ITEM_TYPES) - [ params[:item_type] ]
+    end
+  end
+
+  def grouping_toggle_params
+    preserved_filter_params.merge(goob: !grouped_by_user?)
+  end
+
+  # Shortcut for the assignee filter below: narrowed to just the viewer's own
+  # orders, or off. Mixed selections are made in the filter form itself.
+  def assigned_to_me?
+    Array(params[:assignee_ids]).map(&:to_s) == [ current_user.id.to_s ]
+  end
+
+  def assigned_to_me_toggle_params
+    return preserved_filter_params.except(:assignee_ids) if assigned_to_me?
+
+    preserved_filter_params.merge(assignee_ids: [ current_user.id.to_s ])
+  end
+
+  def item_type_toggle_params(toggle)
+    next_hidden = if item_type_toggle_hidden?(toggle)
+      hidden_item_types - toggle[:types]
+    else
+      hidden_item_types | toggle[:types]
+    end
+
+    # An empty array is dropped from the query string entirely, which would read
+    # back as "no param given" and restore the defaults — send a blank entry so
+    # "nothing hidden" survives the round trip.
+    preserved_filter_params.merge(hidden_types: next_hidden.presence || [ "" ])
   end
 
   def index
@@ -63,6 +159,19 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     orders = apply_shared_filters(orders)
     base = apply_shared_filters(ShopOrder.includes(:shop_item, :user))
 
+    # Folded-away item types only come off the list itself — the stats below and
+    # the counts on the toggles stay whole so nothing vanishes silently.
+    if hidden_item_types.any?
+      orders = orders.where.not(shop_item_id: ShopItem.where(type: hidden_item_types))
+    end
+
+    if @view == "fulfillment"
+      @awaiting_counts_by_type = apply_shared_filters(ShopOrder.joins(:shop_item))
+                                   .where(aasm_state: "awaiting_periodical_fulfillment",
+                                          shop_items: { type: TOGGLEABLE_ITEM_TYPES })
+                                   .group("shop_items.type").count
+    end
+
     @c = {
       pending: base.where(aasm_state: "pending").count,
       awaiting_verification: base.where(aasm_state: "awaiting_verification").count,
@@ -89,9 +198,15 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     else orders.order(created_at: :desc)
     end
 
-    # Grouping
-    if params[:goob] == "true"
-      @grouped_orders = orders.group_by(&:user).map do |user, user_orders|
+    # Grouping. Paginate the *users* rather than the orders so every page holds
+    # whole groups — grouping is the fulfillment default, so loading the entire
+    # matching set at once isn't an option.
+    if grouped_by_user?
+      order_counts_by_user = orders.unscope(:includes).reorder(nil).group(:user_id).count
+      user_ids = order_counts_by_user.sort_by { |user_id, count| [ -count, user_id ] }.map(&:first)
+      @pagy, page_user_ids = pagy(:offset, user_ids, limit: GROUPS_PER_PAGE)
+
+      @grouped_orders = orders.where(user_id: page_user_ids).group_by(&:user).map do |user, user_orders|
         {
           user: user,
           orders: user_orders,
@@ -144,10 +259,9 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     @user_orders = @order.user.shop_orders.where.not(id: @order.id).order(created_at: :desc).limit(10)
     @user_projects = @order.user.projects.includes(:hackatime_projects).order(created_at: :desc)
 
-    # Find sibling LetterMail orders for Theseus coalesce button
-    if @order.shop_item.type == "ShopItem::LetterMail" && @order.awaiting_periodical_fulfillment?
+    if @order.shop_item.is_a?(ShopItem::LetterMail) && @order.awaiting_periodical_fulfillment?
       @theseus_sibling_orders = ShopOrder.joins(:shop_item)
-                                         .where(shop_items: { type: "ShopItem::LetterMail" })
+                                         .where(shop_items: { type: @order.shop_item.type })
                                          .where(user_id: @order.user_id, frozen_address_ciphertext: @order.frozen_address_ciphertext)
                                          .where(aasm_state: "awaiting_periodical_fulfillment")
                                          .where.not(id: @order.id)
@@ -255,52 +369,36 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   def approve
     authorize @order, :approve?
 
-    if @order.user_id == current_user.id
-      redirect_to admin_shop_order_path(@order), alert: "You cannot approve your own order." and return
-    end
+    result = Admin::ShopOrderApprover.new(@order, actor: current_user, tracking_number: params[:tracking_number]).call
 
-    unless @order.pending? || @order.awaiting_verification_call?
-      redirect_to admin_shop_order_path(@order), alert: "This order has already been processed." and return
-    end
-
-    if @order.requires_additional_review?
-      redirect_to admin_shop_order_path(@order), alert: "This is a high-value order and requires 2 fraud dept reviews before approval (#{@order.reviews.count}/2 so far)." and return
-    end
-
-    old_state = @order.aasm_state
-
-    if @order.shop_item.respond_to?(:fulfill!)
-      @order.approve!
-      redirect_to shop_orders_return_path, notice: "Order approved and fulfilled" and return
-    end
-
-    tracking_number = params[:tracking_number].presence
-
-    if @order.shop_item.requires_verification_call?
-      success = @order.queue_for_verification_call && @order.save
-      notice = "Order queued for verification call"
+    if result.approved?
+      redirect_to shop_orders_return_path, notice: result.message
     else
-      if tracking_number.present?
-        @order.tracking_number = tracking_number
-      end
-      success = @order.queue_for_fulfillment && @order.save
-      notice = "Order approved for fulfillment"
+      redirect_to admin_shop_order_path(@order), alert: result.message
+    end
+  end
+
+  def bulk_approve
+    authorize ShopOrder, :approve?
+
+    orders = ShopOrder.includes(:shop_item, :reviews).where(id: params[:order_ids])
+
+    if orders.empty?
+      redirect_back fallback_location: admin_shop_orders_path, alert: "No orders to approve." and return
     end
 
-    if success
-      ::PaperTrail::Version.create!(
-        item_type: "ShopOrder",
-        item_id: @order.id,
-        event: "update",
-        whodunnit: current_user.id,
-        object_changes: {
-          aasm_state: [ old_state, @order.aasm_state ]
-        }
-      )
-      redirect_to shop_orders_return_path, notice: notice
-    else
-      redirect_to admin_shop_order_path(@order), alert: "Failed to approve order: #{@order.errors.full_messages.join(', ')}"
+    approved, failed = orders.map { |order|
+      Admin::ShopOrderApprover.new(order, actor: current_user).call
+    }.partition(&:approved?)
+
+    if approved.any?
+      flash[:notice] = "Approved #{helpers.pluralize(approved.size, 'order')}: #{approved.map { |result| "##{result.order.id}" }.to_sentence}"
     end
+    if failed.any?
+      flash[:alert] = failed.map { |result| "##{result.order.id}: #{result.message}" }.join(" ")
+    end
+
+    redirect_back fallback_location: admin_shop_orders_path
   end
 
   def review_order
@@ -656,9 +754,9 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
 
     order_ids = (Array(params[:order_ids]).map(&:to_i) | [ @order.id ]).uniq
 
-    @order.user.with_advisory_lock("theseus_send", timeout_seconds: 10) do
+    @order.user.with_advisory_lock("theseus_send/#{@order.user_id}", timeout_seconds: 10) do
       orders_to_send = ShopOrder.joins(:shop_item)
-                                .where(id: order_ids, shop_items: { type: "ShopItem::LetterMail" }, aasm_state: "awaiting_periodical_fulfillment")
+                                .where(id: order_ids, shop_items: { type: @order.shop_item.type }, aasm_state: "awaiting_periodical_fulfillment")
                                 .to_a
 
       stale_ids = order_ids - orders_to_send.map(&:id)
@@ -666,7 +764,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
         redirect_to admin_shop_order_path(@order), alert: "Order(s) #{stale_ids.join(', ')} no longer awaiting fulfillment. Please refresh and try again." and return
       end
 
-      letter_id = TheseusService.create_letter(orders_to_send, queue: "stardance-envelope")
+      letter_id = TheseusService.create_letter(orders_to_send, queue: @order.shop_item.class::THESEUS_QUEUE)
       orders_to_send.each { |o| o.mark_fulfilled!(letter_id, nil, "#{current_user.display_name} - Letter Mail (Theseus)") }
 
       notice = "Sent to Theseus (letter #{letter_id})"

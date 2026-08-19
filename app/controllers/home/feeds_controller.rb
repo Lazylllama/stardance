@@ -4,6 +4,7 @@ class Home::FeedsController < ApplicationController
   FEED_LIMIT = 10
   FIRST_PAGE_LIMIT = 3
   RECOMMENDATION_POOL = 100 # after this, we fallback to SQL
+  BACKFILL_OVERSAMPLE = 10
   GORSE_TIMEOUT = 0.75
   TABS = %w[for_you following popular newest new_builders].freeze
   FeedPage = Struct.new(:page, :limit, :offset, :next, keyword_init: true)
@@ -38,13 +39,23 @@ class Home::FeedsController < ApplicationController
 
   def load_for_you_feed
     recommended = recommended_posts
-    backfill = feed_scope.where.not(id: recommended.map(&:id))
+    backfill = filtered_feed_scope(Gorse::PostPayload.recommendable_feed_scope(current_user))
+      .where.not(id: recommended.map(&:id))
 
     @pagy = feed_pagy
     @feed_posts, @feed_post_sources, has_next = compose_feed(recommended, backfill, @pagy)
     @pagy.next = @pagy.page + 1 if has_next
 
     preload_feed_associations(@feed_posts)
+  end
+
+  def filtered_feed_scope(scope)
+    scope
+      .joins("LEFT JOIN users feed_authors ON feed_authors.id = posts.user_id")
+      .joins("LEFT JOIN projects feed_projects ON feed_projects.id = posts.project_id")
+      .where("feed_projects.id IS NULL OR feed_projects.description IS NOT NULL")
+      .where("feed_authors.banned = FALSE")
+      .order(Arel.sql(quality_latest_order_sql))
   end
 
   def load_following_feed
@@ -142,7 +153,7 @@ class Home::FeedsController < ApplicationController
     remaining = page_candidate_limit - rec_slice.size
     if remaining.positive?
       sql_offset = [ pagy.offset - recommended.size, 0 ].max
-      backfill_posts = backfill.offset(sql_offset).limit(remaining).to_a
+      backfill_posts = backfill.offset(sql_offset).limit(remaining * BACKFILL_OVERSAMPLE).to_a
       # Batch-load postables up front: the visibility filter below reads
       # `post.postable` on every candidate, which would otherwise fire one
       # query per post. preload_feed_associations later deep-loads from here.
@@ -155,24 +166,31 @@ class Home::FeedsController < ApplicationController
       end
     end
 
-    posts, sources = dedupe_by_content(candidates.first(pagy.limit))
-    [ posts, sources, candidates.size > pagy.limit ]
+    diverse_posts, sources = select_diverse_candidates(candidates, limit: page_candidate_limit)
+    posts = diverse_posts.first(pagy.limit)
+    [ posts, sources.slice(*posts), diverse_posts.size > pagy.limit ]
   end
 
-  # don't want to show dupe reposts
-  def dedupe_by_content(candidates)
+  def select_diverse_candidates(candidates, limit:)
     origins = repost_original_ids(candidates.map(&:first))
     posts = []
     sources = {}
-    seen = Set.new
+    seen_content_ids = Set.new
+    seen_user_ids = Set.new
+    seen_project_ids = Set.new
 
     candidates.each do |post, source|
-      key = post.repost? ? origins[post.postable_id] : post.id
-      next if key.nil? || seen.include?(key)
+      content_id = post.repost? ? origins[post.postable_id] : post.id
+      next if content_id.nil? || seen_content_ids.include?(content_id)
+      next if post.user_id.present? && seen_user_ids.include?(post.user_id)
+      next if post.project_id.present? && seen_project_ids.include?(post.project_id)
 
-      seen << key
+      seen_content_ids << content_id
+      seen_user_ids << post.user_id if post.user_id.present?
+      seen_project_ids << post.project_id if post.project_id.present?
       posts << post
       sources[post] = source
+      break if posts.size >= limit
     end
 
     [ posts, sources ]
@@ -186,12 +204,7 @@ class Home::FeedsController < ApplicationController
   end
 
   def feed_scope
-    Gorse::PostPayload.feed_scope(current_user)
-      .joins("LEFT JOIN users feed_authors ON feed_authors.id = posts.user_id")
-      .joins("LEFT JOIN projects feed_projects ON feed_projects.id = posts.project_id")
-      .where("feed_projects.id IS NULL OR feed_projects.description IS NOT NULL")
-      .where("feed_authors.banned = FALSE")
-      .order(Arel.sql(quality_latest_order_sql))
+    filtered_feed_scope(Gorse::PostPayload.feed_scope(current_user))
   end
 
   def quality_latest_order_sql

@@ -135,7 +135,10 @@
               <% end %>
             </td>
             <td>
-              <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+              <div class="shop-orders__row-actions">
+                <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+                <%= render "approve_button", order: order %>
+              </div>
             </td>
           </tr>
         <% end %>

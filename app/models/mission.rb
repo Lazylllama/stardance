@@ -47,6 +47,7 @@ class Mission < ApplicationRecord
   has_many :memberships, class_name: "Mission::Membership", dependent: :destroy
   has_many :shop_unlocks, class_name: "Mission::ShopUnlock", dependent: :destroy
   has_many :submissions, class_name: "Mission::Submission", dependent: :destroy
+  has_many :prize_redemptions, class_name: "Mission::PrizeRedemption", dependent: :destroy
   has_many :attachments, class_name: "Project::MissionAttachment", dependent: :destroy
   has_many :projects, through: :attachments
   has_many :guide_variants, -> { order(:position, :id) },

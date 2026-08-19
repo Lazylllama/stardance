@@ -8,12 +8,18 @@
                       disabled. Used for devlogs belonging to earlier reviews.
     sidebar_trigger - when true, this item triggers the details sidebar in
                       popup mode (only the first item on the page should).
+    mac_recommendation - this devlog's entry from the MAC pre-screen report, or
+                      nil when the pre-screen didn't run, had nothing for it, or
+                      suggested no reduction.
+                      Read-only: it suggests minutes, it never sets them.
 
   Relies on the page-level @repo_info and @devlog_commits for the git graph.
 %>
 <% frozen ||= false %>
 <% sidebar_trigger ||= false %>
-<div class="devlog-item<%= " devlog-item--frozen" if frozen %>"
+<% mac_recommendation ||= nil %>
+<div id="devlog-review-<%= devlog_review.id %>"
+     class="devlog-item<%= " devlog-item--frozen" if frozen %>"
      <% unless frozen %>
        data-controller="certification--ysws--devlog-review"
        data-certification--ysws--devlog-review-id-value="<%= devlog_review.id %>"
@@ -24,6 +30,9 @@
   <div class="devlog-main">
     <div class="devlog-header-row">
       <span class="devlog-id">Devlog #<%= devlog_review.post_devlog.id %></span>
+      <% if (devlog_posted_at = devlog_review.post_devlog.post&.created_at) %>
+        <span class="devlog-date"><%= devlog_posted_at.strftime("%b %-d, %Y") %></span>
+      <% end %>
       <% if devlog_review.approved? %>
         <span class="devlog-status status-approved">Approved</span>
       <% elsif devlog_review.rejected? %>
@@ -42,6 +51,8 @@
 
     <div class="devlog-media-section">
       <div class="media-label">Devlog Media (<%= devlog_review.post_devlog.attachments.size %>)</div>
+      <div class="media-row">
+        <div class="media-row__media">
       <% if devlog_review.post_devlog.attachments.any? %>
         <div class="media-grid">
           <% devlog_review.post_devlog.attachments.each do |attachment| %>
@@ -64,6 +75,25 @@
           <div class="placeholder-text">No media attached</div>
         </div>
       <% end %>
+        </div>
+
+        <%# Read-only on purpose: the pre-screen suggests, the reviewer decides.
+            The reasoning leads — it's what the decision turns on; the suggested
+            number follows it. %>
+        <% if mac_recommendation && mac_recommendation["recommended_minutes"] %>
+          <div class="<%= mac_hint_classes(mac_recommendation) %>">
+            <% if mac_recommendation["justification"].present? %>
+              <p class="mac-hint__reason"><%= mac_recommendation["justification"] %></p>
+            <% end %>
+            <p class="mac-hint__headline">
+              suggests
+              <span class="mac-hint__original"><%= mac_recommendation["original_minutes"].to_i %></span>
+              <span class="mac-hint__arrow" aria-hidden="true">→</span>
+              <span class="mac-hint__suggested"><%= mac_recommendation["recommended_minutes"].to_i %> min</span>
+            </p>
+          </div>
+        <% end %>
+      </div>
     </div>
 
     <div class="devlog-time">
@@ -145,21 +175,28 @@
       </div>
       <% unless frozen %>
         <div class="quick-adjust-buttons">
-          <button class="adjust-btn"
-                  data-action="click->certification--ysws--devlog-review#quickAdjust"
-                  data-adjust-action="50%">50%</button>
-          <button class="adjust-btn"
-                  data-action="click->certification--ysws--devlog-review#quickAdjust"
-                  data-adjust-action="25%">25%</button>
-          <button class="adjust-btn"
-                  data-action="click->certification--ysws--devlog-review#quickAdjust"
-                  data-adjust-action="-30">-30min</button>
-          <button class="adjust-btn"
-                  data-action="click->certification--ysws--devlog-review#quickAdjust"
-                  data-adjust-action="-60">-1hr</button>
-          <button class="adjust-btn"
-                  data-action="click->certification--ysws--devlog-review#quickAdjust"
-                  data-adjust-action="reset">Reset</button>
+          <div class="quick-adjust-buttons__row">
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="50%">50%</button>
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="25%">25%</button>
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="-15">-15min</button>
+          </div>
+          <div class="quick-adjust-buttons__row">
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="-30">-30min</button>
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="-60">-1hr</button>
+            <button class="adjust-btn"
+                    data-action="click->certification--ysws--devlog-review#quickAdjust"
+                    data-adjust-action="reset">Reset</button>
+          </div>
         </div>
       <% end %>
     </div>
