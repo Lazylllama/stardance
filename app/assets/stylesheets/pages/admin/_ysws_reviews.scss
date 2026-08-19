@@ -1047,6 +1047,18 @@ body:has(.certification-ysws) {
         box-shadow: 0 4px 12px rgba(255, 141, 157, 0.3);
       }
     }
+
+    &.btn-resync {
+      background: rgba(149, 219, 255, 0.1);
+      color: var(--color-brand-blue);
+      border-color: var(--color-brand-blue);
+
+      &:hover:not(:disabled) {
+        background: rgba(149, 219, 255, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(149, 219, 255, 0.3);
+      }
+    }
   }
 
   // Main Grid Layout

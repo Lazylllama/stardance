@@ -382,6 +382,19 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     }, status: :unprocessable_entity
   end
 
+  def resync
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review
+
+    unless @review.reviewed_at?
+      redirect_to admin_certification_ysws_review_path(@review), alert: "Cannot resync a review that hasn't been completed."
+      return
+    end
+
+    ::Certification::YswsAirtableSyncJob.perform_later(@review.id)
+    redirect_to admin_certification_ysws_review_path(@review), notice: "Airtable resync enqueued for review ##{@review.id}."
+  end
+
   def return_to_ship_cert
     @review = ::Certification::Ysws.find(params[:id])
     authorize @review, :update?

@@ -56,6 +56,11 @@
           <button class="btn-action btn-undo" disabled>
             undo review
           </button>
+          <%= button_to "Resync to Airtable",
+                        admin_certification_resync_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-resync",
+                        title: @review.airtable_synced_at ? "Last synced: #{@review.airtable_synced_at.strftime('%Y-%m-%d %H:%M UTC')}" : "Never synced" %>
         <% end %>
 
         <div class="review-detail-header__review-actions">

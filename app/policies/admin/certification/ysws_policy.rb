@@ -22,4 +22,8 @@ class Admin::Certification::YswsPolicy < ApplicationPolicy
   def unclaim?
     user.present? && index? && record.pending? && record.claimed_by?(user)
   end
+
+  def resync?
+    index?
+  end
 end
