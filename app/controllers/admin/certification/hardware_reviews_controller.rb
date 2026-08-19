@@ -25,11 +25,7 @@ class Admin::Certification::HardwareReviewsController < Admin::Certification::Ap
 
   # Hardware projects not attached to a hardware mission.
   def reviewable_projects
-    Project.where.not(hardware_stage: nil).where.not(id: hardware_mission_project_ids)
-  end
-
-  def hardware_mission_project_ids
-    Project::MissionAttachment.active.joins(:mission).where(missions: { hardware: true }).select(:project_id)
+    Project.hardware.without_hardware_mission
   end
 
   def authorize_hardware_queue
