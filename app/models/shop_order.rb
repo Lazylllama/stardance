@@ -64,6 +64,7 @@ class ShopOrder < ApplicationRecord
   include AASM
   include Ledgerable
   include FunnelResyncTrigger
+  include Shop::AutoApprovable
 
   belongs_to :user
   belongs_to :shop_item
@@ -369,6 +370,9 @@ class ShopOrder < ApplicationRecord
     scope = PaperTrail::Version
               .where(item_type: "ShopOrder")
               .where.not(whodunnit: nil)
+              # Unattended approvals stamp a class name rather than a user id;
+              # they belong in the audit log, not in a ranking of reviewers.
+              .where("whodunnit ~ '^[0-9]+$'")
               .where("object_changes -> 'aasm_state' ->> 1 IN (?)", DECISION_TARGET_STATES)
 
     case period.to_sym
