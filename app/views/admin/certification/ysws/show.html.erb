@@ -1,6 +1,8 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer certification--ysws--complete-review certification--ysws--return-to-ship-cert" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>" data-certification--ysws--complete-review-review-id-value="<%= @review.id %>" data-certification--ysws--return-to-ship-cert-review-id-value="<%= @review.id %>">
+  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @mac_analysis, repo_url: @review.project&.repo_url, total_minutes: @review.original_minutes) %>
+
   <!-- Header Section -->
   <div class="review-detail-header">
     <%= link_to "← back", admin_certification_ysws_reviews_path, class: "btn-secondary slim", "aria-label": "Back to review queue" %>
@@ -97,6 +99,12 @@
             <div class="placeholder-text">No review video recorded</div>
           </div>
         <% end %>
+      </section>
+
+      <!-- Lapse / Lookout Recordings -->
+      <section class="review-card recordings-card">
+        <%= render "admin/certification/funding_requests/recordings",
+              timelapses: @lapse_timelapses, recordings: @lookout_recordings %>
       </section>
 
       <% if @review.project.update_description.present? %>
@@ -196,10 +204,12 @@
             <span class="detail-key">Submitter:</span>
             <span class="detail-value" style="display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap;">
               <span><%= @review.user.display_name || "Unknown User" %></span>
-              <span class="fraud-links" style="display: inline-flex; gap: var(--space-xxs);">
-                <a href="https://billy.3kh0.net/?u=<%= @review.user.slack_id %>" class="fraud-link" target="_blank">Billy</a>
-                <a href="https://joe.fraud.hackclub.com/profile/<%= @review.user.slack_id %>" class="fraud-link" target="_blank">Joe</a>
-              </span>
+              <% if @review.user.slack_id.present? %>
+                <span class="fraud-links" style="display: inline-flex; gap: var(--space-xxs);">
+                  <%= link_to "Hackatime", telescreen_hackatime_url(slack_id: @review.user.slack_id), class: "fraud-link", target: "_blank", rel: "noopener noreferrer" %>
+                  <%= link_to "Telescreen", telescreen_subject_url(@review.user.slack_id), class: "fraud-link", target: "_blank", rel: "noopener noreferrer" %>
+                </span>
+              <% end %>
             </span>
           </div>
 
@@ -319,7 +329,7 @@
               <span class="devlog-review-group__meta">shipped <%= prior_review.created_at.to_date %> · read-only</span>
             </div>
             <% prior_review.devlog_reviews.each do |devlog_review| %>
-              <%= render "devlog_review", devlog_review: devlog_review, frozen: true %>
+              <%= render "devlog_review", devlog_review: devlog_review, frozen: true, mac_recommendation: nil %>
             <% end %>
           </div>
         <% end %>
@@ -331,7 +341,8 @@
             </div>
           <% end %>
           <% @review.devlog_reviews.each_with_index do |devlog_review, index| %>
-            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0 %>
+            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0,
+                  mac_recommendation: @mac_analysis&.recommendation_for(devlog_review.id) %>
           <% end %>
         </div>
       </div>

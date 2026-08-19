@@ -12,8 +12,8 @@
     "@fullstory/browser": "^2.0.8",
     "@hotwired/stimulus": "^3.2.2",
     "@hotwired/turbo-rails": "^8.0.23",
-    "@rails/actioncable": "^8.1.300",
-    "@rails/activestorage": "^8.1.300",
+    "@rails/actioncable": "^7.2.302",
+    "@rails/activestorage": "^7.2.302",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "chartkick": "^5.0.1",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "prettier": "^3.9.5"
+    "prettier": "^3.9.6"
   },
   "packageManager": "yarn@4.16.0"
 }

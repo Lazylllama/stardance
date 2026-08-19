@@ -39,7 +39,7 @@ class Vote::Matchmaker
     end
 
     def near_payout_in(pool)
-      pool.order(votes_count: :desc, created_at: :asc).first
+      pool.order(Vote.countable_count_for_ship_events.desc, created_at: :asc).first
     end
 
     def gated_pool
@@ -77,6 +77,10 @@ class Vote::Matchmaker
     def candidate_ship_events
       scope = Post::ShipEvent
         .joins(:project)
+        # Hardware is certified by a reviewer against its timelapse, not rated by
+        # peers, so it never enters the pool. Its owner is charged no vote debt
+        # either, so hardware builders neither feed nor draw from this pool.
+        .where(projects: { hardware_stage: nil })
         .where.not(id: @user.votes.select(:ship_event_id))
         .where.not(id: @user.vote_assignments.select(:ship_event_id))
         .where.not(posts: { project_id: @user.projects.select(:id) })

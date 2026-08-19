@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -190,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.string "hcb_grant_hashid"
     t.text "internal_reason"
     t.integer "lock_version", default: 0, null: false
+    t.boolean "prizes_waived", default: false, null: false
     t.bigint "project_id", null: false
     t.integer "requested_amount_cents", null: false
     t.bigint "reviewer_id"
@@ -222,6 +223,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.index ["reviewer_id"], name: "index_certification_integrities_on_reviewer_id"
     t.index ["ship_event_id"], name: "index_certification_integrities_on_ship_event_id", unique: true
     t.index ["status"], name: "index_certification_integrities_on_status"
+  end
+
+  create_table "certification_mac_analyses", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "generated_at", null: false
+    t.jsonb "report", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "ysws_review_id", null: false
+    t.index ["ysws_review_id"], name: "index_certification_mac_analyses_on_ysws_review_id", unique: true
   end
 
   create_table "certification_ship_reviews", force: :cascade do |t|
@@ -406,10 +416,43 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.string "client_id"
     t.text "client_secret_ciphertext"
     t.datetime "created_at", null: false
+    t.datetime "expires_at"
     t.string "redirect_uri"
     t.text "refresh_token_ciphertext"
     t.string "slug"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "jelly_conversations", force: :cascade do |t|
+    t.integer "assignee_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "first_response_seconds"
+    t.string "jelly_id", null: false
+    t.datetime "last_inbound_at"
+    t.datetime "last_outbound_at"
+    t.datetime "messages_synced_at"
+    t.datetime "opened_at"
+    t.datetime "remote_updated_at"
+    t.datetime "resolved_at"
+    t.string "status", null: false
+    t.datetime "synced_at"
+    t.datetime "updated_at", null: false
+    t.index ["jelly_id"], name: "index_jelly_conversations_on_jelly_id", unique: true
+    t.index ["remote_updated_at"], name: "index_jelly_conversations_on_remote_updated_at"
+    t.index ["status"], name: "index_jelly_conversations_on_status"
+  end
+
+  create_table "jelly_daily_stats", force: :cascade do |t|
+    t.integer "arrivals"
+    t.integer "awaiting_reply_count"
+    t.datetime "created_at", null: false
+    t.integer "median_first_response_seconds"
+    t.integer "open_count"
+    t.integer "p95_hang_seconds"
+    t.date "recorded_on", null: false
+    t.integer "resolutions"
+    t.datetime "updated_at", null: false
+    t.index ["recorded_on"], name: "index_jelly_daily_stats_on_recorded_on", unique: true
   end
 
   create_table "ledger_entries", force: :cascade do |t|
@@ -501,7 +544,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.index ["prerequisite_mission_id"], name: "index_mission_prerequisites_on_prerequisite_mission_id"
   end
 
+  create_table "mission_prize_redemptions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "mission_id", null: false
+    t.bigint "mission_prize_id", null: false
+    t.bigint "shop_order_id", null: false
+    t.bigint "source_id", null: false
+    t.string "source_type", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["mission_id"], name: "index_mission_prize_redemptions_on_mission_id"
+    t.index ["mission_prize_id"], name: "index_mission_prize_redemptions_on_mission_prize_id"
+    t.index ["shop_order_id"], name: "index_mission_prize_redemptions_on_shop_order_id", unique: true
+    t.index ["source_type", "source_id", "mission_prize_id"], name: "index_prize_redemptions_on_source_and_prize", unique: true
+    t.index ["source_type", "source_id"], name: "index_mission_prize_redemptions_on_source"
+    t.index ["user_id"], name: "index_mission_prize_redemptions_on_user_id"
+  end
+
   create_table "mission_prizes", force: :cascade do |t|
+    t.integer "category", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.bigint "mission_id", null: false
@@ -705,11 +766,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.string "feedback_video_url"
     t.float "hours_at_payout"
     t.float "hours_at_ship"
+    t.string "lifecycle_data_quality"
     t.float "multiplier"
     t.decimal "originality_median", precision: 5, scale: 2
     t.decimal "originality_percentile", precision: 5, scale: 2
     t.decimal "overall_percentile", precision: 5, scale: 2
     t.decimal "overall_score", precision: 5, scale: 2
+    t.datetime "paid_at"
     t.float "payout"
     t.datetime "payout_basis_locked_at"
     t.decimal "payout_basis_overall_score", precision: 5, scale: 2
@@ -727,6 +790,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.decimal "usability_median", precision: 5, scale: 2
     t.decimal "usability_percentile", precision: 5, scale: 2
     t.integer "votes_count", default: 0, null: false
+    t.datetime "voting_completed_at"
+    t.datetime "voting_started_at"
+    t.index ["paid_at"], name: "index_post_ship_events_on_paid_at"
+    t.index ["voting_completed_at"], name: "index_post_ship_events_on_voting_completed_at"
+    t.index ["voting_started_at"], name: "index_post_ship_events_on_voting_started_at"
   end
 
   create_table "post_views", force: :cascade do |t|
@@ -1431,6 +1499,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
     t.string "geocoded_subdivision"
     t.string "granted_roles", default: [], null: false, array: true
     t.string "guest_email"
+    t.datetime "hardware_channel_invited_at"
     t.boolean "has_gotten_free_stickers", default: false
     t.boolean "has_pending_achievements", default: false, null: false
     t.string "hcb_email"
@@ -1605,6 +1674,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
   add_foreign_key "certification_integrities", "post_ship_events", column: "ship_event_id"
   add_foreign_key "certification_integrities", "users", column: "claimed_by_id"
   add_foreign_key "certification_integrities", "users", column: "reviewer_id"
+  add_foreign_key "certification_mac_analyses", "certification_ysws_reviews", column: "ysws_review_id"
   add_foreign_key "certification_ship_reviews", "post_ship_events", on_delete: :nullify
   add_foreign_key "certification_ship_reviews", "projects"
   add_foreign_key "certification_ship_reviews", "users", column: "reviewer_id"
@@ -1638,6 +1708,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
   add_foreign_key "mission_memberships", "users"
   add_foreign_key "mission_prerequisites", "missions", column: "dependent_mission_id"
   add_foreign_key "mission_prerequisites", "missions", column: "prerequisite_mission_id"
+  add_foreign_key "mission_prize_redemptions", "mission_prizes"
+  add_foreign_key "mission_prize_redemptions", "missions"
+  add_foreign_key "mission_prize_redemptions", "shop_orders"
+  add_foreign_key "mission_prize_redemptions", "users"
   add_foreign_key "mission_prizes", "missions"
   add_foreign_key "mission_prizes", "shop_items"
   add_foreign_key "mission_section_completions", "mission_steps", on_delete: :cascade
@@ -1676,10 +1750,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
   add_foreign_key "raffle_draws", "raffle_participants", column: "winner_participant_id"
   add_foreign_key "raffle_draws", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_participants", "raffle_weeks", column: "signup_week_id"
-  add_foreign_key "raffle_participants", "users"
   add_foreign_key "raffle_referrals", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_referrals", "raffle_weeks", column: "credited_week_id"
-  add_foreign_key "raffle_referrals", "users", column: "referred_user_id"
   add_foreign_key "raffle_weekly_claims", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_weekly_claims", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_weeks", "raffle_participants", column: "winner_participant_id"
@@ -1698,7 +1770,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_223107) do
   add_foreign_key "shop_item_sources", "shop_items"
   add_foreign_key "shop_item_sources", "shop_sources"
   add_foreign_key "shop_items", "users"
-  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify, validate: false
+  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify
   add_foreign_key "shop_items", "users", column: "default_assigned_user_id", on_delete: :nullify
   add_foreign_key "shop_order_modifier_selections", "shop_item_modifiers"
   add_foreign_key "shop_order_modifier_selections", "shop_orders"

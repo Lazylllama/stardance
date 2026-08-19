@@ -32,7 +32,7 @@ class FeedPresentationComponentsTest < ViewComponent::TestCase
       show_record: true
     )
 
-    assert_selector "button.feed-composer__record[aria-label='Record a timelapse']"
+    assert_selector "a.feed-composer__record[aria-label='Record a timelapse'][href='#{LapseService::APP_URL}']"
   end
 
   test "project composer (default) omits the record-a-timelapse button" do

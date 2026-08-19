@@ -884,3 +884,44 @@
   max-height: 200px;
   overflow-y: auto;
 }
+
+// Review verdict buttons on admin pages.
+//
+// admin.scss styles `.admin-content button, .admin-content input[type=submit]`
+// generically. That's (0,2,1) for the submit input, which outranks a plain
+// `.action-btn--primary` (0,1,0) no matter which stylesheet loads last, so
+// every action button on an admin page is flattened into the same dark fill
+// with a barely-visible hover. Scoping under `.admin-content` reaches (0,3,0)
+// and gives these two back their own treatment.
+//
+// Both hover the same way on purpose: outlined at rest, filled with their own
+// accent on hover, so Submit verdict and Unclaim read as a pair.
+.admin-content .review-form__actions {
+  .action-btn--primary {
+    // Matches the feedback textarea's fill (admin.scss gives inputs
+    // --color-space-bg-2), so the controls in this form read as one set.
+    background-color: var(--color-space-bg-2);
+    border-color: var(--color-brand-highlight);
+    color: var(--color-brand-highlight);
+
+    &:hover:not([aria-disabled="true"]),
+    &:focus-visible:not([aria-disabled="true"]) {
+      background-color: var(--color-brand-highlight);
+      color: var(--color-set-1-bg);
+      box-shadow: none;
+    }
+  }
+
+  .action-btn--destructive {
+    background-color: var(--color-space-bg-2);
+    border-color: var(--color-brand-salmon);
+    color: var(--color-brand-salmon);
+
+    &:hover:not([aria-disabled="true"]),
+    &:focus-visible:not([aria-disabled="true"]) {
+      background-color: var(--color-brand-salmon);
+      color: var(--color-set-1-bg);
+      box-shadow: none;
+    }
+  }
+}

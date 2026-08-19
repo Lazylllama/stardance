@@ -65,15 +65,18 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     # custom-select query as a COUNT(*), which the aliased column would break.
     @reviews = scope.to_a
 
-    # Per-reviewer progress toward the devlog-review goal.
-    @devlog_goal      = ::Certification::Ysws::DEFAULT_DEVLOG_REVIEW_GOAL
-    @devlog_reviewed  = ::Certification::Ysws.reviewer_devlog_count(current_user.id)
-    @devlog_remaining = [ @devlog_goal - @devlog_reviewed, 0 ].max
+    # Per-reviewer pace against the daily devlog-review goal, averaged across the
+    # current review week (Wednesday 4pm to the following Wednesday 4pm). Left nil
+    # when the flag is off so the queue skips both the query and the widget — and
+    # when the progress panel is on, since that panel leads with the same figure.
+    @devlog_pace = ::Certification::Ysws.reviewer_devlog_pace(current_user.id) if
+      Flipper.enabled?(:devlog_review_pace, current_user) &&
+      !Flipper.enabled?(:reviewer_progress_panel, current_user)
   end
 
   def show
     @review = ::Certification::Ysws
-      .includes(:project, :user, :reviewer, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
+      .includes(:project, :user, :reviewer, :mac_analysis, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .find(params[:id])
     authorize @review
 
@@ -126,6 +129,13 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       username = @repo_info[:username]
       @contribution_data = ::Certification::YswsService.fetch_contributions(platform, username)
     end
+
+    # The MAC pre-screen is flagged per reviewer: left nil when it's off so the
+    # banner and the per-devlog notes both disappear from a single check.
+    @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
+
+    @lapse_timelapses = lapse_timelapses_for_ysws_review
+    @lookout_recordings = lookout_recordings_for_ysws_review
 
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
@@ -185,6 +195,24 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   private
+
+  RECORDINGS_CACHE_TTL = 1.minute
+
+  def lapse_timelapses_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lapse", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      owner = @review.project.memberships.owner.first&.user
+      LapseService.timelapses_for_project(
+        hackatime_user_id: owner&.hackatime_identity&.uid,
+        project_keys: @review.project.hackatime_keys
+      )
+    end
+  end
+
+  def lookout_recordings_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lookout", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      LookoutService.recordings_for_project(@review.project)
+    end
+  end
 
   def ysws_review_filters
     session[FILTER_SESSION_KEY].to_h.slice("project_type", "sort", "dir", "with_integrity")
@@ -333,6 +361,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     end
 
     @review.update_columns(reviewer_id: current_user.id, reviewed_at: Time.current)
+    @review.touch
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Marked reviewed_at=#{@review.reviewed_at}; enqueuing AirtableSyncJob"
 
     ::Certification::YswsAirtableSyncJob.perform_later(@review.id)

@@ -1182,10 +1182,12 @@
     }
   }
 
+  // Opens upward: feed cards carry content-visibility, whose paint containment
+  // clips anything hanging below the card.
   &__repost-panel {
     position: absolute;
     z-index: 5;
-    top: calc(100% + var(--space-xs));
+    bottom: calc(100% + var(--space-xs));
     left: 50%;
     width: max-content;
     min-width: 128px;
@@ -2263,5 +2265,130 @@
       border-radius: 3px;
       font-size: 0.9em;
     }
+  }
+}
+
+// Funding request on the project timeline. Short by design: the amount and,
+// once decided, the verdict. Mirrors .ship-decision-card so the two review
+// outcomes read as the same kind of event.
+.funding-request-card {
+  // Same border as a ship post, so a funding request reads as part of the same
+  // project story. Only a returned request breaks out of it.
+  --funding-accent: var(--color-brand-highlight);
+
+  background: var(--color-set-4-bg);
+  border-color: var(--funding-accent);
+  gap: var(--space-xxs);
+
+  &--returned {
+    --funding-accent: var(--color-brand-salmon);
+  }
+
+  // The byline is a single line but the avatar is 39px, so the shared
+  // flex-start header would leave a dead strip under it before the body.
+  &__header {
+    align-items: center;
+  }
+
+  &__amount {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--funding-accent);
+  }
+
+  &__tier {
+    font-size: var(--font-size-s);
+    font-weight: 500;
+    color: var(--color-space-text-muted);
+  }
+
+  &__message {
+    color: var(--color-space-text);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
+    p {
+      margin: 0;
+    }
+
+    p + p {
+      margin-top: var(--space-xs);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    justify-content: flex-start;
+  }
+}
+
+// A reviewer's "wrong queue?" question. Peach rather than salmon: the builder
+// hasn't done anything wrong, they just have to answer before anything moves.
+.queue-mismatch-card {
+  --queue-mismatch-accent: var(--color-brand-peach);
+
+  background: var(--color-set-4-bg);
+  border-color: var(--queue-mismatch-accent);
+  gap: var(--space-xs);
+
+  &__header {
+    align-items: center;
+  }
+
+  &__badge {
+    margin-left: auto;
+    padding: var(--space-xxs) var(--space-xs);
+    border: 1px solid var(--queue-mismatch-accent);
+    border-radius: 999px;
+    font-size: var(--font-size-s);
+    font-weight: 600;
+    color: var(--queue-mismatch-accent);
+    white-space: nowrap;
+  }
+
+  &__heading {
+    margin: 0 0 var(--space-xxs);
+    font-size: var(--font-size-m);
+    font-weight: 700;
+    color: var(--color-brand-cream);
+  }
+
+  &__body {
+    color: var(--color-space-text);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
+    p {
+      margin: 0;
+    }
+
+    p + p {
+      margin-top: var(--space-xs);
+    }
+  }
+
+  &__reason {
+    margin: var(--space-xs) 0;
+    padding-left: var(--space-s);
+    border-left: 2px solid var(--queue-mismatch-accent);
+    color: var(--color-space-text-muted);
+  }
+
+  &__note {
+    color: var(--color-space-text-muted);
+    font-size: var(--font-size-s);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    justify-content: flex-start;
   }
 }

@@ -63,6 +63,9 @@ module Certification
     # An integrity check hangs off the ship event (one per ship event), so a
     # review maps 1-1 to one through its own ship event.
     has_one :integrity_check, through: :post_ship_event, source: :integrity_check
+    has_one :mac_analysis, class_name: "Certification::MACAnalysis",
+                           foreign_key: :ysws_review_id,
+                           dependent: :destroy
 
     validates :original_minutes, numericality: { greater_than_or_equal_to: 0 }, allow_nil: false
     validates :approved_minutes, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
@@ -76,6 +79,7 @@ module Certification
     # ---- Review-queue scopes ---------------------------------------------
 
     scope :pending, -> { where(reviewed_at: nil, returned_at: nil) }
+    scope :without_mac_analysis, -> { left_joins(:mac_analysis).where(certification_mac_analyses: { id: nil }) }
 
     # A review is visible to a reviewer if nobody holds an active claim on it,
     # or they're the one holding it.
@@ -99,9 +103,12 @@ module Certification
       select("certification_ysws_reviews.*", "#{TODO_DEVLOG_COUNT_SQL} AS todo_devlog_count")
     }
 
-    # Reviews whose ship event already carries an integrity check. The queue
-    # defaults to this — a review can't be completed without one.
-    scope :with_integrity_check, -> { joins(:integrity_check) }
+    # Reviews whose ship event already carries a decided integrity check. The
+    # queue defaults to this — a review can't be completed without one, and a
+    # still-pending integrity check isn't decided yet.
+    scope :with_integrity_check, -> {
+      joins(:integrity_check).where.not(certification_integrities: { status: :pending })
+    }
 
     scope :by_project_type, ->(type) {
       type == "unclassified" \
@@ -129,9 +136,39 @@ module Certification
       self[:todo_devlog_count].to_i
     end
 
-    # Default per-reviewer target for completed devlog reviews. Shown as a
-    # "reviews left until goal reached" widget on the review queue.
-    DEFAULT_DEVLOG_REVIEW_GOAL = 222
+    # The ship certification a reviewer should actually look at for this review.
+    #
+    # ship_cert_id is only populated when the ship event went through manual
+    # ship certification. Reships auto-approve off a passing URL probe and never
+    # mint a cert, so the column stays null even though the project was
+    # certified on an earlier ship. Fall back the same way #return_to_ship_cert
+    # does — match the ship event first, then the project's most recent approved
+    # cert — so reship reviews still point somewhere real.
+    def effective_ship_cert
+      return ship_cert if ship_cert
+
+      project_certs = Certification::Ship.where(project_id: project_id)
+      project_certs.find_by(post_ship_event_id: post_ship_event_id) ||
+        project_certs.approved.order(Arel.sql("decided_at DESC NULLS LAST"), id: :desc).first
+    end
+
+    # Per-reviewer target for completed devlog reviews: a daily rate that
+    # reviewers are expected to average across the review week, rather than hit
+    # every single day. Drives the pace widget on the review queue.
+    DEVLOG_REVIEW_GOAL_PER_DAY = 30
+
+    # Rolling window the reviewer leaderboard ranks on. Deliberately independent
+    # of the review week: it's always this full span, so a reviewer's standing
+    # doesn't reset to zero every Wednesday 4pm.
+    LEADERBOARD_WINDOW = 3.days
+
+    # Program-facing time zone. The app's default zone is UTC, but reviewers,
+    # review weeks and bonus windows all run on Eastern wall-clock time.
+    PROGRAM_ZONE = Time.find_zone!("America/New_York")
+
+    # Review weeks run Wednesday 4pm to the following Wednesday 4pm, Eastern.
+    REVIEW_WEEK_START_DAY = :wednesday
+    REVIEW_WEEK_START_HOUR = 16
 
     # Projected stardust per reviewed devlog, tiered by the reviewer's running
     # devlog-review count: a reviewer's Nth devlog pays the rate for the tier N
@@ -156,15 +193,13 @@ module Certification
     # whose parent review completed within `window` earn that much extra
     # stardust *on top of* their tier rate (additive, so a reviewer never loses
     # their higher tier rate for reviewing during a window). Windows are
-    # non-overlapping; the New York zone is used so EDT offsets apply correctly
-    # regardless of the app's default zone.
+    # non-overlapping and expressed in PROGRAM_ZONE so EDT offsets apply
+    # correctly regardless of the app's default zone.
     BONUS_WINDOWS = [
       # 11am EDT July 9 2026 → 4pm EDT July 13 2026.
-      [ Time.find_zone!("America/New_York").local(2026, 7, 9, 11, 0)..
-        Time.find_zone!("America/New_York").local(2026, 7, 13, 16, 0), 0.1 ],
+      [ PROGRAM_ZONE.local(2026, 7, 9, 11, 0)..PROGRAM_ZONE.local(2026, 7, 13, 16, 0), 0.1 ],
       # 4:15pm EDT July 24 2026 → 4:15pm EDT July 27 2026 (Mon).
-      [ Time.find_zone!("America/New_York").local(2026, 7, 24, 16, 15)..
-        Time.find_zone!("America/New_York").local(2026, 7, 27, 16, 15), 0.05 ]
+      [ PROGRAM_ZONE.local(2026, 7, 24, 16, 15)..PROGRAM_ZONE.local(2026, 7, 27, 16, 15), 0.05 ]
     ].freeze
 
     # SQL expression yielding the per-devlog bonus stardust for a review, based
@@ -189,47 +224,186 @@ module Certification
       end.round(2)
     end
 
-    # All-time devlog-review leaderboard. A devlog counts as reviewed once its
-    # parent YSWS review is completed (reviewed_at present); completion already
-    # forces every child devlog out of :pending. Projected stardust scales with
-    # each reviewer's total via the DEVLOG_STARDUST_TIERS rate tiers, plus the
-    # per-devlog bonus for any devlogs reviewed within a BONUS_WINDOWS window.
-    #   => [{ reviewer_id:, name:, devlogs:, stardust: }, ...] desc by devlogs
-    def self.reviewer_devlog_leaderboard
+    # The DEVLOG_STARDUST_TIERS entry a reviewer on `count` lifetime devlogs is
+    # working toward, or nil once they're on the top tier. Mirrors
+    # Certification::Ship.next_milestone so both reviewer surfaces read alike.
+    #   => { threshold:, rate:, current_rate:, devlogs_needed:, percent: }
+    def self.next_stardust_tier(count)
+      # The first tier's threshold is 0, so a non-negative count always sits at
+      # or past it — index is never 0 and the tier below always exists.
+      index = DEVLOG_STARDUST_TIERS.index { |threshold, _rate| threshold > count }
+      return nil if index.nil?
+
+      threshold, rate         = DEVLOG_STARDUST_TIERS[index]
+      floor,     current_rate = DEVLOG_STARDUST_TIERS[index - 1]
+
+      {
+        threshold: threshold,
+        rate: rate,
+        current_rate: current_rate,
+        devlogs_needed: threshold - count,
+        # Progress through the current tier's own span, so a reviewer who just
+        # crossed into a tier starts near empty rather than three-quarters full.
+        percent: ((count - floor) / (threshold - floor).to_f * 100).clamp(0, 100).round
+      }
+    end
+
+    # Devlog-review leaderboard for the trailing LEADERBOARD_WINDOW. A devlog
+    # counts as reviewed once its parent YSWS review is completed (reviewed_at
+    # present); completion already forces every child devlog out of :pending.
+    #
+    # `devlogs` — and the ranking — cover only the window, and reviewers with
+    # nothing in it are left off entirely. `stardust` stays all-time projected
+    # payout: it scales with each reviewer's lifetime total via the
+    # DEVLOG_STARDUST_TIERS rate tiers, plus the per-devlog bonus for any devlogs
+    # reviewed within a BONUS_WINDOWS window.
+    # `reviews` counts the distinct YSWS reviews completed in the same window —
+    # one per ship review, however many devlogs it covered.
+    #   => [{ reviewer_id:, name:, devlogs:, reviews:, stardust: }, ...] desc by devlogs
+    def self.reviewer_devlog_leaderboard(now: Time.current)
+      window_start = now - LEADERBOARD_WINDOW
+
+      windowed_counts = Certification::Devlog
+        .joins(:ysws_review)
+        .where(certification_ysws_reviews: { reviewed_at: window_start.. })
+        .where.not(certification_ysws_reviews: { reviewer_id: nil })
+        .group("certification_ysws_reviews.reviewer_id")
+        .count
+
+      return [] if windowed_counts.empty?
+
+      windowed_review_counts = where(reviewed_at: window_start..)
+        .where(reviewer_id: windowed_counts.keys)
+        .group(:reviewer_id)
+        .count
+
       bonus_case = bonus_stardust_case_sql
 
-      # Count devlogs per reviewer, split by their per-devlog bonus amount, so
-      # tier rates apply to the total while each bonus applies only to the
-      # devlogs reviewed in its window.
+      # All-time counts for the ranked reviewers, split by their per-devlog bonus
+      # amount, so tier rates apply to the lifetime total while each bonus applies
+      # only to the devlogs reviewed in its window.
       Certification::Devlog
         .joins(ysws_review: :reviewer)
         .where.not(certification_ysws_reviews: { reviewed_at: nil })
+        .where(certification_ysws_reviews: { reviewer_id: windowed_counts.keys })
         .group("users.id", "users.display_name", Arel.sql(bonus_case))
         .count
         .group_by { |(reviewer_id, name, _bonus), _count| [ reviewer_id, name ] }
         .map do |(reviewer_id, name), entries|
-          devlogs        = entries.sum { |_key, count| count }
-          bonus_stardust = entries.sum { |(_id, _name, bonus), count| bonus.to_f * count }
-          stardust       = (stardust_for_devlog_count(devlogs) + bonus_stardust).round(2)
+          all_time_devlogs = entries.sum { |_key, count| count }
+          bonus_stardust   = entries.sum { |(_id, _name, bonus), count| bonus.to_f * count }
+          stardust         = (stardust_for_devlog_count(all_time_devlogs) + bonus_stardust).round(2)
           {
             reviewer_id: reviewer_id,
             name: name,
-            devlogs: devlogs,
+            devlogs: windowed_counts[reviewer_id],
+            reviews: windowed_review_counts.fetch(reviewer_id, 0),
             stardust: stardust
           }
         end
-        .sort_by { |row| [ -row[:devlogs], row[:name] ] }
+        .sort_by { |row| [ -row[:devlogs], row[:name].to_s ] }
     end
 
-    # All-time count of devlogs a given reviewer has reviewed. A devlog counts
-    # as reviewed once its parent YSWS review is completed (reviewed_at present),
-    # matching the leaderboard's definition.
-    def self.reviewer_devlog_count(reviewer_id)
+    # Devlog reviews credited to a reviewer, applying the counting rule the whole
+    # model shares: a devlog counts as reviewed once its parent YSWS review is
+    # completed (reviewed_at present), not by the child's own status.
+    def self.reviewed_devlogs_for(reviewer_id)
       Certification::Devlog
         .joins(:ysws_review)
         .where.not(certification_ysws_reviews: { reviewed_at: nil })
         .where(certification_ysws_reviews: { reviewer_id: reviewer_id })
+    end
+
+    # All-time count of devlogs a given reviewer has reviewed, matching the
+    # leaderboard's definition.
+    def self.reviewer_devlog_count(reviewer_id, since: nil)
+      scope = reviewed_devlogs_for(reviewer_id)
+      scope = scope.where(certification_ysws_reviews: { reviewed_at: since.. }) if since
+      scope.count
+    end
+
+    # Start of the review week containing `now`: the most recent Wednesday 4pm
+    # Eastern. `beginning_of_week` lands on that Wednesday at midnight, so the
+    # 4pm cutoff can still be in the future — when it is, the week started a
+    # week earlier.
+    def self.review_week_start(now = Time.current)
+      cutoff = now.in_time_zone(PROGRAM_ZONE)
+        .beginning_of_week(REVIEW_WEEK_START_DAY)
+        .change(hour: REVIEW_WEEK_START_HOUR)
+      cutoff <= now ? cutoff : cutoff - 1.week
+    end
+
+    # 1-based day within the review week containing `now`. Days run on the same
+    # 4pm boundary as the week itself, so this is 1 on the first 4pm-to-4pm day
+    # and 7 on the last.
+    #
+    # Each 4pm-to-4pm day is keyed by the calendar date it started on, keeping
+    # the count wall-clock exact across DST — dividing elapsed seconds by 24h
+    # would report an 8th day in the week the clocks fall back, and shift every
+    # boundary by an hour in the week they spring forward.
+    def self.review_week_day_number(now = Time.current)
+      local     = now.in_time_zone(PROGRAM_ZONE)
+      day_start = local.hour < REVIEW_WEEK_START_HOUR ? local.to_date - 1 : local.to_date
+
+      (day_start - review_week_start(now).to_date).to_i.clamp(0, 6) + 1
+    end
+
+    # A reviewer's pace against the daily goal for the current review week.
+    #
+    # `needed_today` is the catch-up figure: how many more devlogs would bring the
+    # week's running average up to the daily goal by the end of today. A reviewer
+    # who fell behind yesterday owes that shortfall on top of today's quota.
+    def self.reviewer_devlog_pace(reviewer_id, now: Time.current)
+      day_number = review_week_day_number(now)
+      reviewed   = reviewer_devlog_count(reviewer_id, since: review_week_start(now))
+
+      {
+        reviewed: reviewed,
+        day_number: day_number,
+        daily_average: reviewed / day_number.to_f,
+        needed_today: [ (DEVLOG_REVIEW_GOAL_PER_DAY * day_number) - reviewed, 0 ].max
+      }
+    end
+
+    # Whether a single reviewer clears the daily goal averaged across the review
+    # week so far — the single-reviewer form of `reviewers_on_pace`.
+    def self.reviewer_on_pace?(reviewer_id, now: Time.current)
+      reviewer_devlog_pace(reviewer_id, now: now)[:needed_today].zero?
+    end
+
+    # Devlogs each reviewer has reviewed so far this review week, in one query.
+    # The single definition of "this week's work" — `reviewer_daily_averages`
+    # divides it by the day number, the progress panel ranks on it directly.
+    #   => { reviewer_id => count, ... }
+    def self.reviewer_weekly_devlog_counts(now: Time.current)
+      Certification::Devlog
+        .joins(:ysws_review)
+        .where(certification_ysws_reviews: { reviewed_at: review_week_start(now).. })
+        .where.not(certification_ysws_reviews: { reviewer_id: nil })
+        .group("certification_ysws_reviews.reviewer_id")
         .count
+    end
+
+    # Every reviewer's devlogs-per-day for the current review week — the same
+    # figure `reviewer_devlog_pace` reports as `daily_average`, for all reviewers
+    # in one query so the leaderboard doesn't need one per row.
+    #   => { reviewer_id => average, ... }
+    def self.reviewer_daily_averages(now: Time.current)
+      day_number = review_week_day_number(now)
+
+      reviewer_weekly_devlog_counts(now: now)
+        .transform_values { |reviewed| reviewed / day_number.to_f }
+    end
+
+    # Reviewer ids already meeting the daily goal averaged across the review week
+    # so far — the same bar `reviewer_devlog_pace` reports as "on pace". Returned
+    # as a Set so the leaderboard can mark rows without a query per row. Callers
+    # that already hold the averages pass them in to avoid a second query.
+    def self.reviewers_on_pace(now: Time.current, daily_averages: reviewer_daily_averages(now: now))
+      daily_averages
+        .select { |_reviewer_id, average| average >= DEVLOG_REVIEW_GOAL_PER_DAY }
+        .keys
+        .to_set
     end
 
     # Devlogs reviewed per reviewer per day over the trailing window, bucketed by
@@ -256,6 +430,84 @@ module Certification
         end
 
       { labels: labels, series: series }
+    end
+
+    # reviewed_at as a calendar date in the program's zone. The column is a
+    # timestamp without zone holding UTC, so it has to be labelled UTC before it
+    # can be converted — a bare `AT TIME ZONE` would read it as Eastern already
+    # and shift every date by the offset.
+    REVIEWED_LOCAL_DATE_SQL = <<~SQL.squish.freeze
+      (certification_ysws_reviews.reviewed_at AT TIME ZONE 'UTC'
+        AT TIME ZONE '#{PROGRAM_ZONE.tzinfo.name}')::date
+    SQL
+
+    # Devlogs a reviewer reviewed on each program-zone calendar day.
+    #   => { Date => count, ... }
+    def self.reviewer_devlogs_by_day(reviewer_id)
+      reviewed_devlogs_for(reviewer_id)
+        .group(Arel.sql(REVIEWED_LOCAL_DATE_SQL))
+        .count
+        .transform_keys(&:to_date)
+    end
+
+    # Consecutive days ending today with at least one devlog reviewed. Today only
+    # anchors the streak once there's work on it, so a morning before the first
+    # review of the day doesn't read as a break.
+    def self.reviewer_streak(devlogs_by_day, now: Time.current)
+      day = now.in_time_zone(PROGRAM_ZONE).to_date
+      day -= 1 unless devlogs_by_day.key?(day)
+
+      streak = 0
+      while devlogs_by_day.key?(day)
+        streak += 1
+        day -= 1
+      end
+      streak
+    end
+
+    # Everything the reviewer progress panel shows for one reviewer: their pace
+    # against the daily goal, what their reviewing adds up to all-time, their
+    # momentum, and where they stand in the crew this review week.
+    #
+    # Deliberately no approval/rejection rate: shown as a number to improve, it
+    # rewards rubber-stamping.
+    def self.reviewer_progress(reviewer_id, now: Time.current)
+      pace           = reviewer_devlog_pace(reviewer_id, now: now)
+      weekly_counts  = reviewer_weekly_devlog_counts(now: now)
+      devlogs_by_day = reviewer_devlogs_by_day(reviewer_id)
+
+      crew_weekly = weekly_counts.values.sum
+      my_weekly   = weekly_counts.fetch(reviewer_id, 0)
+      # Ranked only among reviewers who did something this week — matching the
+      # leaderboard, which leaves an empty window off entirely.
+      ranking = weekly_counts.sort_by { |_id, count| -count }.map(&:first)
+
+      lifetime_devlogs, approved_minutes, people = reviewed_devlogs_for(reviewer_id)
+        .pick(Arel.sql(<<~SQL.squish))
+          COUNT(*),
+          COALESCE(SUM(certification_devlog_reviews.approved_minutes), 0),
+          COUNT(DISTINCT certification_ysws_reviews.user_id)
+        SQL
+
+      best_day, best_day_devlogs = devlogs_by_day.max_by { |day, count| [ count, day ] }
+
+      {
+        pace: pace,
+        on_pace: pace[:needed_today].zero?,
+        lifetime_devlogs: lifetime_devlogs,
+        hours_certified: (approved_minutes / 60.0).round,
+        # Distinct people, not projects — one maker with three reviewed projects
+        # counts once.
+        people_reviewed: people,
+        streak: reviewer_streak(devlogs_by_day, now: now),
+        best_day: best_day,
+        best_day_devlogs: best_day_devlogs,
+        weekly_devlogs: my_weekly,
+        share_of_week: crew_weekly.zero? ? 0.0 : (my_weekly / crew_weekly.to_f * 100),
+        rank: ranking.index(reviewer_id)&.succ,
+        crew_size: ranking.size,
+        next_tier: next_stardust_tier(lifetime_devlogs)
+      }
     end
 
     def pending?
