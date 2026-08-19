@@ -28,17 +28,10 @@ module Admin
       # experience. Its return_at is still read, but only to flag rework.
       STAGES = [
         { key: "funding_wait", label: "Waiting for a reviewer" },
-        { key: "funding_review", label: "Funding review" },
         { key: "ship_cert", label: "Ship certification" },
         { key: "voting", label: "Rating" },
         { key: "payout", label: "Payout" }
       ].freeze
-
-      # Time inside the journey that no tracked stage accounts for: the gap
-      # between shipping and the cert being opened, and between a cert decision
-      # and voting starting. Named rather than hidden, so the segments add up to
-      # the real end-to-end figure instead of silently falling short.
-      UNATTRIBUTED = { key: "unattributed", label: "Other" }.freeze
 
       # A fixed-prize ship never enters voting, so the span between its cert
       # decision and its payout is the mission reviewer deciding, not a payout
@@ -48,7 +41,7 @@ module Admin
         "hardware_build" => { "ship_cert" => "Build certification" }
       }.freeze
 
-      Journey = Data.define(:ship_event_id, :path, :segments, :total, :reworked)
+      Journey = Data.define(:ship_event_id, :path, :segments, :reworked)
 
       def initialize(period: QueueStats::DEFAULT_PERIOD, now: Time.current)
         @period = PERIODS.key?(period.to_s) ? period.to_s : QueueStats::DEFAULT_PERIOD
@@ -142,14 +135,13 @@ module Admin
             ship_event_id: id,
             path: path,
             segments: segments.compact,
-            total: total,
             reworked: returned_ysws.include?(id) || cert&.[](4).present?
           )
         end
       end
 
-      # A funding request is its own short journey: submitted, waiting for a
-      # reviewer, then decided. It happens before the build, so it is measured
+      # A funding request is its own short journey: the stretch it sits waiting
+      # for a reviewer. It happens before the build, so it is measured
       # separately rather than folded into the build's timeline.
       def build_funding_journeys
         ::Certification::FundingRequest
@@ -164,11 +156,7 @@ module Admin
             Journey.new(
               ship_event_id: id,
               path: "hardware_design",
-              segments: {
-                "funding_wait" => { wait: claimed_at - created_at, work: 0.0 },
-                "funding_review" => { wait: decided_at - claimed_at, work: 0.0 }
-              },
-              total: total,
+              segments: { "funding_wait" => { wait: claimed_at - created_at, work: 0.0 } },
               reworked: false
             )
           end
@@ -204,26 +192,26 @@ module Admin
         labels = STAGE_LABELS_BY_PATH.fetch(path, {})
         rows = journeys.map { |journey| durations_for(journey) }
 
-        stages = (STAGES + [ UNATTRIBUTED ]).filter_map do |stage|
+        medians = STAGES.filter_map do |stage|
           # Only journeys that actually pass through the step count toward its
           # median; a path that skips a stage would otherwise drag it to zero.
           values = rows.filter_map { |row| row[stage[:key]] }
           median = median_of(values)
-          next if median.nil?
-
-          {
-            key: stage[:key],
-            label: labels.fetch(stage[:key], stage[:label]),
-            count: values.size,
-            median_hours: (median / 3600.0).round(1)
-          }
+          [ stage, values.size, median ] if median
         end
 
         # Widths are each step's share of the summed medians, so the bar stays
-        # full and the steps stay visually comparable.
-        total = stages.sum { |stage| stage[:median_hours] }
-        stages.each do |stage|
-          stage[:share] = total.positive? ? ((stage[:median_hours] / total) * 100).round(1) : nil
+        # full and the steps stay visually comparable. Shares come off the raw
+        # seconds, so a step short enough to round to 0.0h still draws.
+        total = medians.sum { |_stage, _count, median| median }
+        stages = medians.map do |stage, count, median|
+          {
+            key: stage[:key],
+            label: labels.fetch(stage[:key], stage[:label]),
+            count: count,
+            median_hours: (median / 3600.0).round(1),
+            share: total.positive? ? ((median / total) * 100).round(1) : nil
+          }
         end
 
         {
@@ -239,12 +227,9 @@ module Admin
         values.sort[(values.size - 1) / 2]
       end
 
-      # Each stage the journey actually has, plus whatever none of them covers.
       # Stages the journey skipped stay nil so they don't count as zero.
       def durations_for(journey)
-        parts = STAGES.to_h { |stage| [ stage[:key], segment_total(journey, stage[:key]) ] }
-        parts[UNATTRIBUTED[:key]] = [ journey.total - parts.values.compact.sum, 0.0 ].max
-        parts
+        STAGES.to_h { |stage| [ stage[:key], segment_total(journey, stage[:key]) ] }
       end
 
       def segment_total(journey, key)
