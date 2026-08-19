@@ -54,7 +54,7 @@ jobs:
 
       - name: Install system dependencies
         if: matrix.system_packages
-        timeout-minutes: 10
+        timeout-minutes: 5
         env:
           DEBIAN_FRONTEND: noninteractive
         run: bash .github/scripts/apt-install.sh ${{ matrix.system_packages }}
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/checkout@v7.0.0
 
       - name: Install system dependencies
-        timeout-minutes: 10
+        timeout-minutes: 5
         env:
           DEBIAN_FRONTEND: noninteractive
         run: bash .github/scripts/apt-install.sh libblas-dev liblapack-dev
