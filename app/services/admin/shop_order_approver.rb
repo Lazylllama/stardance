@@ -24,12 +24,17 @@ module Admin
 
     attr_reader :order, :actor, :tracking_number
 
+    # Rescues StandardError rather than HCBError alone: fulfilment also raises
+    # plain errors (a cancelled grant, a failed save), and those used to reach
+    # the reviewer as a 500 instead of a message they could act on.
     def fulfill_immediately
       order.approve!
       success("Order ##{order.id} approved and fulfilled")
-    rescue HCBError => e
-      Rails.logger.error "HCB grant fulfillment failed for order #{order.id}: #{e.message}"
-      failure("HCB grant fulfillment failed (#{e.message}). The order was not approved. Please ask an administrator to re-authenticate the HCB integration before retrying.")
+    rescue StandardError => e
+      Rails.logger.error "Fulfillment failed for order #{order.id}: #{e.message}"
+      Sentry.capture_exception(e, extra: { shop_order_id: order.id })
+      failure("Fulfillment failed (#{e.message}). The order was not approved and nothing was charged. " \
+              "If this is an HCB grant, an administrator may need to re-authenticate the HCB integration before retrying.")
     end
 
     def queue_for_next_step

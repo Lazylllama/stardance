@@ -189,13 +189,24 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     end
 
     # Sorting - always uses database ordering now
+    # The fraud queue is worked oldest-first, and orders the automation would
+    # clear on its own are its lowest priority, so those sink below everything
+    # a person actually has to judge. Applied before the sort below so it stays
+    # the primary key whichever ordering the reviewer picks.
+    @auto_approvable_ids = auto_approvable_ids_in(orders)
+    if @auto_approvable_ids.any?
+      orders = orders.order(
+        Arel.sql(ShopOrder.sanitize_sql_array([ "CASE WHEN shop_orders.id IN (?) THEN 1 ELSE 0 END", @auto_approvable_ids ]))
+      )
+    end
+
     orders = case params[:sort]
     when "id_asc" then orders.order(id: :asc)
     when "id_desc" then orders.order(id: :desc)
-    when "created_at_asc" then orders.order(created_at: :asc)
+    when "created_at_desc" then orders.order(created_at: :desc)
     when "shells_asc" then orders.order(frozen_item_price: :asc)
     when "shells_desc" then orders.order(frozen_item_price: :desc)
-    else orders.order(created_at: :desc)
+    else orders.order(created_at: :asc)
     end
 
     # Grouping. Paginate the *users* rather than the orders so every page holds
@@ -676,6 +687,20 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     end
   end
   private
+
+  # Only the fraud queue cares, and only a pending order can qualify, so the
+  # question is asked about as few rows as possible. Reloaded with just the
+  # associations the predicate reads rather than reusing the list's includes,
+  # which drag in each buyer's projects for nothing.
+  def auto_approvable_ids_in(scope)
+    return [] unless @view == "shop_orders"
+
+    candidates = ShopOrder
+      .where(id: scope.unscope(:includes).reorder(nil).where(aasm_state: "pending").select(:id))
+      .includes(:user, :shop_item, :selected_modifiers, accessory_orders: :shop_item)
+
+    ShopOrder.auto_approvable_ids(candidates)
+  end
 
   def set_order
     @order = ShopOrder.includes(mission_submission: :mission).find(params[:id])
