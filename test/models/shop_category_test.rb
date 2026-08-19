@@ -1,3 +1,20 @@
+# == Schema Information
+#
+# Table name: shop_categories
+#
+#  id         :bigint           not null, primary key
+#  hub_title  :string           not null
+#  position   :integer          default(0), not null
+#  slug       :string           not null
+#  title      :string           not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#
+# Indexes
+#
+#  index_shop_categories_on_position  (position)
+#  index_shop_categories_on_slug      (slug) UNIQUE
+#
 require "test_helper"
 
 class ShopCategoryTest < ActiveSupport::TestCase
