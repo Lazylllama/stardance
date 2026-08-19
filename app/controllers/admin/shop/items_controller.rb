@@ -21,6 +21,10 @@ class Admin::Shop::ItemsController < Admin::ApplicationController
       else
         Shop::Regionalizable::REGION_CODES.each { |c| @shop_item.public_send("enabled_#{c.downcase}=", true) }
       end
+      @shop_item.name        = params[:prefill_name]        if params[:prefill_name].present?
+      @shop_item.description = params[:prefill_description] if params[:prefill_description].present?
+      @shop_item.usd_cost    = params[:prefill_usd_cost]    if params[:prefill_usd_cost].present?
+      @suggestion_id = params[:suggestion_id]
     end
 
     def create
@@ -34,6 +38,11 @@ class Admin::Shop::ItemsController < Admin::ApplicationController
       end
 
       if @shop_item.save
+        if params[:suggestion_id].present?
+          suggestion = ShopSuggestion.find_by(id: params[:suggestion_id])
+          suggestion&.update!(shop_item: @shop_item)
+          suggestion&.accept!
+        end
         redirect_to admin_shop_item_path(@shop_item), notice: shop_manager? ? "Draft item created." : "Shop item created successfully."
       else
         @shop_item_types = ShopItem::SELECTABLE_TYPES

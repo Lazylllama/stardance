@@ -7,7 +7,6 @@ class ApplicationController < ActionController::Base
   include Pagy::Method
   include Achievementable
   include Trackable
-  include OutpostEmailing
 
   before_action :store_referral_code
   before_action :remember_page
@@ -110,7 +109,7 @@ class ApplicationController < ActionController::Base
   # improvised a bit. a linked list sorta..
   def remember_page
     return unless request.get? && request.format.html?
-    return if request.xhr?
+    return if request.xhr? || turbo_frame_request?
 
     current_path = request.path
     pages = session[:previous_pages] ||= []

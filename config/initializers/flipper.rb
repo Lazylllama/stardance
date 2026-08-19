@@ -22,7 +22,6 @@ Rails.application.config.after_initialize do
       %w[
         shop_open
         git_commit_2025-12-25
-        shop_suggestion_box
         voting
         shop_backlogged
         kitchen_comic
@@ -40,8 +39,13 @@ Rails.application.config.after_initialize do
         week_1_release
         hardware_flow
         ship_event_payouts
-        lookout
         payout_recommendations
+        disable_internal_sw_dash_reviews
+        sharable_purchase
+        shigimi_eyes
+        devlog_review_pace
+        reviewer_progress_panel
+        mac_analysis
       ].each { |flag| Flipper.add(flag) }
     end
   rescue StandardError => e

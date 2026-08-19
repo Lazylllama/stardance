@@ -1,10 +1,14 @@
 class Admin::ProjectPolicy < ApplicationPolicy
   def index?
-    user.admin? || user.fraud_dept? || user.helper?
+    user.admin? || user.fraud_dept? || user.helper? || user.nda_helper?
   end
 
   def show?
     index?
+  end
+
+  def view_votes?
+    user.admin? || user.nda_helper?
   end
 
   def restore?

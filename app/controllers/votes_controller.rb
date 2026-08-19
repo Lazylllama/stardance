@@ -125,7 +125,7 @@ class VotesController < ApplicationController
         .where("posts.created_at <= ?", assigned_ship_post.created_at)
         .order(created_at: :desc)
         .select { |post| post.postable.present? }
-        .reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected" }
+        .reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES) }
     end
 
     def vote_params

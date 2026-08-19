@@ -43,4 +43,26 @@
     background: rgba(74, 222, 128, 0.18);
     color: #4ade80;
   }
+
+  &--reviewed {
+    background: rgba(74, 222, 128, 0.18);
+    color: #4ade80;
+  }
+
+  // Queue-routing states, not verdicts: peach while it waits on the builder,
+  // dimmed once it has been rolled back.
+  &--misfiled {
+    background: rgba(255, 213, 152, 0.18);
+    color: var(--color-brand-peach);
+  }
+
+  &--withdrawn {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-space-text-muted, rgba(255, 255, 255, 0.6));
+  }
+
+  &--dismissed {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-space-text-muted, rgba(255, 255, 255, 0.6));
+  }
 }
