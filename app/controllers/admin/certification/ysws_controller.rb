@@ -403,7 +403,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
     result = ::Certification::YswsReviewUndoer.new(@review).call
     unless result.undone
-      return redirect_to admin_certification_ysws_reviews_path,
+      return redirect_to admin_certification_ysws_review_path(@review),
                          alert: "That review can't be undone."
     end
 
@@ -414,7 +414,9 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
                       "Reset to pending; airtable_record_deleted=#{result.airtable_record_deleted} " \
                       "unified_record_id=#{result.unified_record_id}"
 
-    redirect_to admin_certification_ysws_reviews_path,
+    # Back to the review itself, not the queue: #show re-claims it for the
+    # admin who just undid it, so they can pick the review straight back up.
+    redirect_to admin_certification_ysws_review_path(@review),
                 notice: "Review ##{@review.id} reset to pending."
   rescue Pundit::NotAuthorizedError
     raise
