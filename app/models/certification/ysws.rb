@@ -546,17 +546,7 @@ module Certification
     end
 
     def check_and_update_unified_db_status!
-      api_key  = Rails.application.credentials.dig(:ysws_review, :airtable_api_key) ||
-                 Rails.application.credentials&.airtable&.api_key ||
-                 ENV["AIRTABLE_API_KEY"]
-      base_id  = Rails.application.credentials.dig(:ysws_review, :airtable_base_id) ||
-                 ENV["YSWS_REVIEW_AIRTABLE_BASE_ID"]
-      tbl_name = Rails.application.credentials.dig(:ysws_review, :airtable_table_name) ||
-                 ENV["YSWS_REVIEW_AIRTABLE_TABLE"] ||
-                 "YSWS Project Submission"
-
-      table = Norairrecord.table(api_key, base_id, tbl_name)
-      record = table.all(filter: "{review_id} = '#{id}'").first
+      record = ::Certification::YswsAirtable.record_for(id)
       unified_record_id = record&.[]("Automation - YSWS Record ID").presence
 
       update_column(:in_unified_db, unified_record_id) if unified_record_id.present? && in_unified_db != unified_record_id

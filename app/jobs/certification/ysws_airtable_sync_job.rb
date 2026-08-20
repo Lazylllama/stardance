@@ -24,6 +24,13 @@ module Certification
       review = find_review(ysws_review_id)
       return unless review
 
+      # An undo can land between #complete enqueuing this job and it running.
+      # Never write a submission row for a review that's back in the queue.
+      if review.pending?
+        Rails.logger.info "[YswsAirtableSyncJob] Skipping review ##{review.id}: back to pending"
+        return
+      end
+
       Rails.logger.info "[YswsAirtableSyncJob] Starting sync for review ##{review.id}"
 
       # Check if this review has already been submitted to unified DB
@@ -71,7 +78,7 @@ module Certification
 
     def check_stardance_review_submitted_unified(review)
       # Fetch existing Airtable record by review_id
-      existing_record = table.all(filter: "{review_id} = '#{review.id}'").first
+      existing_record = ::Certification::YswsAirtable.record_for(review.id)
 
       # If record exists and has "Automation - YSWS Record ID" populated, it's already in unified DB
       if existing_record && existing_record["Automation - YSWS Record ID"].present?
@@ -585,28 +592,7 @@ module Certification
     end
 
     def table
-      @table ||= Norairrecord.table(
-        airtable_api_key,
-        airtable_base_id,
-        table_name
-      )
-    end
-
-    def table_name
-      Rails.application.credentials.dig(:ysws_review, :airtable_table_name) ||
-        ENV["YSWS_REVIEW_AIRTABLE_TABLE"] ||
-        "YSWS Project Submission"
-    end
-
-    def airtable_api_key
-      Rails.application.credentials.dig(:ysws_review, :airtable_api_key) ||
-        Rails.application.credentials&.airtable&.api_key ||
-        ENV["AIRTABLE_API_KEY"]
-    end
-
-    def airtable_base_id
-      Rails.application.credentials.dig(:ysws_review, :airtable_base_id) ||
-        ENV["YSWS_REVIEW_AIRTABLE_BASE_ID"]
+      @table ||= ::Certification::YswsAirtable.table
     end
   end
 end

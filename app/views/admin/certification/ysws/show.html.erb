@@ -52,10 +52,16 @@
           </div>
         <% end %>
 
+        <% if policy(@review).undo? %>
+          <%= button_to "undo review",
+                        admin_certification_undo_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-undo",
+                        form: { class: "review-detail-header__undo-form",
+                                data: { turbo_confirm: "Undo this review? It goes back to the pending queue and its Airtable submission record is deleted. If it already reached the Unified YSWS base, that record will NOT be removed — remove it by hand." } } %>
+        <% end %>
+
         <% if @review.reviewed_at %>
-          <button class="btn-action btn-undo" disabled>
-            undo review
-          </button>
           <%= button_to "Resync to Airtable",
                         admin_certification_resync_ysws_review_path(@review),
                         method: :post,

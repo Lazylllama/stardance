@@ -395,6 +395,36 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     redirect_to admin_certification_ysws_review_path(@review), notice: "Airtable resync enqueued for review ##{@review.id}."
   end
 
+  # Reverses a completed review: back to pending, Airtable submission record
+  # deleted. Admin-only, and never for returned reviews (see YswsPolicy#undo?).
+  def undo
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review, :undo?
+
+    result = ::Certification::YswsReviewUndoer.new(@review).call
+    unless result.undone
+      return redirect_to admin_certification_ysws_reviews_path,
+                         alert: "That review can't be undone."
+    end
+
+    # PaperTrail carries the field-level diff but no whodunnit, so this line is
+    # the record of who reversed what — including the unified record id, which
+    # the reversal itself throws away.
+    Rails.logger.info "[YSWS#undo] user=#{current_user&.id} review=#{@review.id} " \
+                      "Reset to pending; airtable_record_deleted=#{result.airtable_record_deleted} " \
+                      "unified_record_id=#{result.unified_record_id}"
+
+    redirect_to admin_certification_ysws_reviews_path,
+                notice: "Review ##{@review.id} reset to pending."
+  rescue Pundit::NotAuthorizedError
+    raise
+  rescue StandardError => e
+    Rails.logger.error "[YSWS#undo] user=#{current_user&.id} review=#{params[:id]} #{e.class}: #{e.message}"
+    Sentry.capture_exception(e, tags: { category: "certification.ysws" }, extra: { ysws_review_id: params[:id], user_id: current_user&.id })
+    redirect_to admin_certification_ysws_review_path(params[:id]),
+                alert: "Failed to undo review: #{e.message}"
+  end
+
   def return_to_ship_cert
     @review = ::Certification::Ysws.find(params[:id])
     authorize @review, :update?

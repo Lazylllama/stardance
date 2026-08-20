@@ -904,6 +904,7 @@ Rails.application.routes.draw do
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
       delete "review/:id/claim", to: "ysws#unclaim", as: "ysws_claim"
       post "review/:id/complete", to: "ysws#complete", as: "complete_ysws_review"
+      post "review/:id/undo", to: "ysws#undo", as: "undo_ysws_review"
       post "review/:id/return_to_ship_cert", to: "ysws#return_to_ship_cert", as: "return_to_ship_cert_ysws_review"
       post "review/:id/resync", to: "ysws#resync", as: "resync_ysws_review"
 
