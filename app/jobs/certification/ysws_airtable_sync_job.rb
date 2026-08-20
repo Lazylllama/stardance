@@ -24,6 +24,13 @@ module Certification
       review = find_review(ysws_review_id)
       return unless review
 
+      # An undo can land between #complete enqueuing this job and it running.
+      # Never write a submission row for a review that's back in the queue.
+      if review.pending?
+        Rails.logger.info "[YswsAirtableSyncJob] Skipping review ##{review.id}: back to pending"
+        return
+      end
+
       Rails.logger.info "[YswsAirtableSyncJob] Starting sync for review ##{review.id}"
 
       # Check if this review has already been submitted to unified DB
