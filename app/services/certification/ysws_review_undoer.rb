@@ -7,9 +7,13 @@ module Certification
   # This is the inverse of Admin::Certification::YswsController#complete: it
   # clears every field that decision stamped, drops the claim so the review is
   # up for grabs again, and deletes the row the sync job upserted into the YSWS
-  # Project Submission table. Devlog verdicts are deliberately left alone — the
-  # reviewer's per-devlog work survives so the review can simply be completed
-  # again.
+  # Project Submission table.
+  #
+  # Devlog verdicts survive by default, so the reviewer's per-devlog work is
+  # still there and the review can simply be completed again. Pass
+  # `reset_devlogs: true` to take those back to pending as well — that clears
+  # each verdict's justification and approved minutes, so the whole review has
+  # to be redone from scratch.
   #
   # Returned reviews are out of scope: #return_to_ship_cert also opens a recert
   # Certification::Ship and transfers the external certification id to it, and
@@ -24,12 +28,14 @@ module Certification
     # the automation on that side once a submission is picked up.
     UNIFIED_RECORD_ID_FIELD = "Automation - YSWS Record ID"
 
-    Result = Struct.new(:undone, :airtable_record_deleted, :unified_record_id, keyword_init: true)
+    Result = Struct.new(:undone, :airtable_record_deleted, :unified_record_id, :devlog_reviews_reset,
+                        keyword_init: true)
 
-    attr_reader :review
+    attr_reader :review, :reset_devlogs
 
-    def initialize(review)
+    def initialize(review, reset_devlogs: false)
       @review = review
+      @reset_devlogs = reset_devlogs
     end
 
     def call
@@ -43,6 +49,7 @@ module Certification
       deleted = delete_airtable_record(record)
 
       undone = false
+      devlogs_reset = 0
       review.with_lock do
         # Re-check under the row lock so a double-submit can't undo twice.
         next unless undoable?
@@ -57,11 +64,20 @@ module Certification
           claimed_by_id: nil,
           claimed_at: nil
         )
+        if reset_devlogs
+          # Certification::Devlog#reset_to_pending! clears the status, the
+          # approved minutes and the justification in one go.
+          devlogs = review.devlog_reviews.to_a
+          devlogs.each(&:reset_to_pending!)
+          devlogs_reset = devlogs.size
+        end
+
         undone = true
       end
       return refused unless undone
 
-      Result.new(undone: true, airtable_record_deleted: deleted, unified_record_id: unified_record_id)
+      Result.new(undone: true, airtable_record_deleted: deleted, unified_record_id: unified_record_id,
+                 devlog_reviews_reset: devlogs_reset)
     end
 
     private
@@ -72,7 +88,7 @@ module Certification
     end
 
     def refused
-      Result.new(undone: false, airtable_record_deleted: false, unified_record_id: nil)
+      Result.new(undone: false, airtable_record_deleted: false, unified_record_id: nil, devlog_reviews_reset: 0)
     end
 
     # True when a record was found and deleted. A record that isn't there is
