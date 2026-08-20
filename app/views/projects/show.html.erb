@@ -510,6 +510,12 @@
                               } %>
                 <% end %>
 
+                <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !is_member && current_user&.can_review? %>
+                  <%= link_to "Review", admin_certification_hardware_review_path(@project),
+                              class: "project-show__pill project-show__pill--outline project-show__pill--review",
+                              data: { turbo_frame: "_top" } %>
+                <% end %>
+
                 <%= render "projects/report_button", project: @project, is_member: is_member %>
               </div>
             </div>

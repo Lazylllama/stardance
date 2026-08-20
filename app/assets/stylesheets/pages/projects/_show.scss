@@ -709,6 +709,19 @@ turbo-frame#project_hero {
   gap: 6px;
 }
 
+.project-show__pill--review {
+  border-color: var(--color-brand-orange);
+  color: var(--color-brand-orange);
+
+  &:hover:not(:disabled):not([aria-disabled="true"]),
+  &:focus-visible:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-brand-orange-soft);
+    border-color: var(--color-brand-orange);
+    color: var(--color-brand-orange);
+    outline: none;
+  }
+}
+
 .project-show__pill-icon {
   width: 16px;
   height: 16px;
