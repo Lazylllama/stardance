@@ -411,9 +411,6 @@
     }
   }
 
-  // Stretches the anchor over its whole row, so the row is clickable without
-  // giving up link semantics. Anything interactive added to a row later needs
-  // its own stacking context to stay above it.
   &__row-link {
     &::after {
       content: "";
@@ -421,7 +418,6 @@
       inset: 0;
     }
 
-    // Ring traces the row rather than just the title text.
     &:focus-visible {
       outline: none;
 
