@@ -397,11 +397,13 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
 
   # Reverses a completed review: back to pending, Airtable submission record
   # deleted. Admin-only, and never for returned reviews (see YswsPolicy#undo?).
+  # reset_devlogs=1 also takes every devlog verdict back to pending.
   def undo
     @review = ::Certification::Ysws.find(params[:id])
     authorize @review, :undo?
 
-    result = ::Certification::YswsReviewUndoer.new(@review).call
+    reset_devlogs = ActiveModel::Type::Boolean.new.cast(params[:reset_devlogs]).present?
+    result = ::Certification::YswsReviewUndoer.new(@review, reset_devlogs: reset_devlogs).call
     unless result.undone
       return redirect_to admin_certification_ysws_review_path(@review),
                          alert: "That review can't be undone."
@@ -412,12 +414,14 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     # the reversal itself throws away.
     Rails.logger.info "[YSWS#undo] user=#{current_user&.id} review=#{@review.id} " \
                       "Reset to pending; airtable_record_deleted=#{result.airtable_record_deleted} " \
-                      "unified_record_id=#{result.unified_record_id}"
+                      "unified_record_id=#{result.unified_record_id} " \
+                      "devlog_reviews_reset=#{result.devlog_reviews_reset}"
 
     # Back to the review itself, not the queue: #show re-claims it for the
     # admin who just undid it, so they can pick the review straight back up.
-    redirect_to admin_certification_ysws_review_path(@review),
-                notice: "Review ##{@review.id} reset to pending."
+    notice = "Review ##{@review.id} reset to pending."
+    notice += " #{result.devlog_reviews_reset} devlog verdict(s) cleared." if result.devlog_reviews_reset.positive?
+    redirect_to admin_certification_ysws_review_path(@review), notice: notice
   rescue Pundit::NotAuthorizedError
     raise
   rescue StandardError => e
