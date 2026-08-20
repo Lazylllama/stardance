@@ -61,6 +61,7 @@ class Post::ShipEvent < ApplicationRecord
   BODY_MAX_LENGTH = Post::Devlog::BODY_MAX_LENGTH
   REVIEW_INSTRUCTIONS_MAX_LENGTH = 2_000
   RETURN_REASON_MAX_LENGTH = 1_000
+  UNCERTIFIED_SUBMISSION_MESSAGE = "Your ship was not certified. See the ship feedback for what to change."
   MAX_ATTACHMENTS = 2
   ACCEPTED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
   LIFECYCLE_DATA_QUALITIES = %w[live backfilled_exact backfilled_estimated].freeze
@@ -226,18 +227,32 @@ class Post::ShipEvent < ApplicationRecord
 
   # Drives the Mission::Submission state machine off ship cert transitions.
   # See docs/missions-design.md "Certification interaction" for the spec.
+  # "returned" is the verdict the ship queue actually writes; "rejected" only
+  # comes from an admin forcing the project state.
   def sync_mission_submission_status
     submission = mission_submission
     return unless submission
 
     case certification_status
     when "approved"
-      submission.certify! if submission.may_certify?
-    when "rejected"
+      if submission.may_certify?
+        submission.certify!
+      elsif failed_certification?(submission)
+        submission.update_columns(rejection_message: nil)
+        submission.undo!
+      end
+    when "returned", "rejected"
       if submission.may_fail_certification?
-        submission.update_columns(rejection_message: "Ship was not certified — see ship feedback for details.")
+        submission.update_columns(rejection_message: UNCERTIFIED_SUBMISSION_MESSAGE)
         submission.fail_certification!
       end
     end
+  end
+
+  # A submission certification knocked back, as opposed to one a mission
+  # reviewer judged: only the reviewer path stamps reviewed_by, and their
+  # verdict has to survive a later re-certification.
+  def failed_certification?(submission)
+    submission.rejected? && submission.reviewed_by_id.nil?
   end
 end
