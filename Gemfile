@@ -37,7 +37,11 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-gem "image_processing", "~> 1.2"
+# image_processing 2.x treats the backends as soft deps and requires whichever
+# one it needs, so Bundler does not have to load them itself.
+gem "image_processing", "~> 2.0"
+gem "ruby-vips", require: false
+gem "mini_magick", require: false
 
 # Certificate PDF downloads (wraps the vips-rendered certificate image)
 gem "prawn"
