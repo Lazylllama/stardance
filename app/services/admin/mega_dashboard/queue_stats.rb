@@ -23,8 +23,7 @@ module Admin
       def tiles
         {
           arrivals: arrivals_in_period.size,
-          depth: open_pairs.size,
-          unclaimed: queue.unclaimed_count,
+          depth: open_waits.size,
           median_decision_hours: percentile_hours(decided_latencies, 50),
           decided_sample: decided_latencies.size
         }
@@ -34,12 +33,11 @@ module Admin
         {
           decisions: decided_in_period.size,
           p90_decision_hours: percentile_hours(decided_latencies, 90),
-          median_wait_hours: percentile_hours(open_pairs.map { |entered, _| @now - entered }, 50),
-          oldest_wait_hours: open_pairs.map { |entered, _| (@now - entered) / 3600.0 }.max&.round(1),
-          overdue: open_pairs.count { |entered, _| @now - entered > queue.sla_hours.hours },
+          oldest_wait_hours: open_waits.map { |wait| wait / 3600.0 }.max&.round(1),
+          overdue: open_waits.count { |wait| wait > queue.sla_hours.hours },
           # A fixed cross-queue ageing line, independent of each queue's own SLA,
           # so the panels can be compared against one another.
-          over_three_days: open_pairs.count { |entered, _| @now - entered > 3.days },
+          over_three_days: open_waits.count { |wait| wait > 3.days },
           sla_hours: queue.sla_hours,
           # Net is the change in the pool, so it reads the way the queue feels:
           # positive when more arrives than leaves, negative when it drains.
@@ -77,7 +75,11 @@ module Admin
 
       def dates = (window_start.to_date..@now.to_date).to_a
 
-      def open_pairs = @pairs.select { |entered, decided| entered && decided.nil? }
+      # How long each item currently in the queue has been waiting. Comes from
+      # the queue's own pending relation, so depth and ageing always agree with
+      # the review page the panel links to; the entered/decided pairs below
+      # only drive the historical series.
+      def open_waits = @open_waits ||= queue.open_entered_ats.map { |entered| @now - entered }
 
       def arrivals_in_period = @pairs.select { |entered, _| entered && entered >= window_start }
 
@@ -100,9 +102,9 @@ module Admin
       # sign, and only exists when the queue is actually shrinking.
       def days_to_clear
         drain_per_day = (decided_in_period.size - arrivals_in_period.size) / @period_days.to_f
-        return if drain_per_day <= 0 || open_pairs.empty?
+        return if drain_per_day <= 0 || open_waits.empty?
 
-        (open_pairs.size / drain_per_day).round(1)
+        (open_waits.size / drain_per_day).round(1)
       end
 
       def percentile_hours(seconds, percentile)

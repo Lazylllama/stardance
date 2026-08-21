@@ -30,7 +30,7 @@
         <dl class="integrity-review__list">
           <div class="integrity-review__row">
             <dt class="integrity-review__term">Title</dt>
-            <dd class="integrity-review__value"><%= link_to project.title, project_path(project) %></dd>
+            <dd class="integrity-review__value"><%= link_to project.title, admin_project_path(project) %></dd>
           </div>
           <div class="integrity-review__row">
             <dt class="integrity-review__term">Project ID</dt>
@@ -95,7 +95,7 @@
             <dt class="integrity-review__term">Name</dt>
             <dd class="integrity-review__value">
               <% if shipper.display_name.present? %>
-                <%= link_to shipper.display_name, profile_path(shipper.display_name) %>
+                <%= link_to shipper.display_name, admin_user_path(shipper) %>
               <% else %>
                 <%= dash %>
               <% end %>
@@ -219,7 +219,7 @@
 
       <div class="integrity-review__actions" role="group" aria-label="Review decision">
         <%= button_tag "Not Fraudulent", type: :submit, name: "decision", value: "pass", class: "integrity-review__action integrity-review__action--pass" %>
-        <%= button_tag "Fraudulent", type: :submit, name: "decision", value: "fraud", class: "integrity-review__action integrity-review__action--fraud", data: { turbo_confirm: "Mark this project as fraudulent? This rejects it in the YSWS review." } %>
+        <%= button_tag "Fraudulent", type: :submit, name: "decision", value: "fraud", class: "integrity-review__action integrity-review__action--fraud", data: { turbo_confirm: "Mark this project as fraudulent?" } %>
         <%= button_tag "Deduct hours", type: :submit, name: "decision", value: "deduct", class: "integrity-review__action integrity-review__action--deduct" %>
       </div>
     <% end %>

@@ -43,7 +43,7 @@ class Shop::BaseController < ApplicationController
 
     ActiveRecord::Associations::Preloader.new(
       records: items,
-      associations: { image_attachment: [ :blob, :record ] }
+      associations: { image_attachment: :blob }
     ).call
   end
 

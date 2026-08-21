@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_21_072613) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -1411,6 +1411,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
     t.index ["user_id"], name: "index_user_achievements_on_user_id"
   end
 
+  create_table "user_data_exports", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.string "zip_filename"
+    t.index ["user_id", "status"], name: "index_user_data_exports_on_user_id_and_status"
+    t.index ["user_id"], name: "index_user_data_exports_on_user_id"
+    t.index ["user_id"], name: "index_user_data_exports_on_user_id_active", unique: true, where: "(((status)::text = 'pending'::text) OR ((status)::text = 'processing'::text))"
+  end
+
   create_table "user_hackatime_projects", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -1750,8 +1762,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
   add_foreign_key "raffle_draws", "raffle_participants", column: "winner_participant_id"
   add_foreign_key "raffle_draws", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_participants", "raffle_weeks", column: "signup_week_id"
+  add_foreign_key "raffle_participants", "users"
   add_foreign_key "raffle_referrals", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_referrals", "raffle_weeks", column: "credited_week_id"
+  add_foreign_key "raffle_referrals", "users", column: "referred_user_id"
   add_foreign_key "raffle_weekly_claims", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_weekly_claims", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_weeks", "raffle_participants", column: "winner_participant_id"
@@ -1770,7 +1784,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
   add_foreign_key "shop_item_sources", "shop_items"
   add_foreign_key "shop_item_sources", "shop_sources"
   add_foreign_key "shop_items", "users"
-  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify
+  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify, validate: false
   add_foreign_key "shop_items", "users", column: "default_assigned_user_id", on_delete: :nullify
   add_foreign_key "shop_order_modifier_selections", "shop_item_modifiers"
   add_foreign_key "shop_order_modifier_selections", "shop_orders"
@@ -1794,6 +1808,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_142740) do
   add_foreign_key "show_and_tell_payout_records", "users", column: "payout_given_by_id"
   add_foreign_key "streak_activities", "users"
   add_foreign_key "user_achievements", "users"
+  add_foreign_key "user_data_exports", "users"
   add_foreign_key "user_hackatime_projects", "projects"
   add_foreign_key "user_hackatime_projects", "users"
   add_foreign_key "user_identities", "users"

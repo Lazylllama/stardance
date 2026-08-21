@@ -1,10 +1,10 @@
-<% content_for :title, @view == 'fulfillment' ? 'Pending Fulfillment' : 'Shop Orders' %>
+<% content_for :title, @view == 'fulfillment' ? 'Pending Fulfillment' : 'Fraud Review' %>
 <% content_for :stylesheets do %>
   <%= stylesheet_link_tag "admin", "data-turbo-track": "reload" %>
 <% end %>
 <div class="shop-orders">
   <div class="shop-orders__header">
-    <h1 class="shop-orders__title"><%= @view == 'fulfillment' ? 'Pending Fulfillment' : 'Shop Orders' %></h1>
+    <h1 class="shop-orders__title"><%= @view == 'fulfillment' ? 'Pending Fulfillment' : 'Fraud Review' %></h1>
     <% if current_user.fulfillment_person? && !current_user.admin? && current_user.has_regions? %>
       <span class="shop-orders__region">📍 <%= current_user.regions_display %></span>
     <% end %>
@@ -12,7 +12,7 @@
 
   <div class="shop-orders__view-tabs">
     <% if current_user.admin? || current_user.fraud_dept? %>
-      <%= render ActionButtonComponent.new(text: "Shop Orders", href: admin_shop_orders_path(view: 'shop_orders'), size: :small, variant: @view == 'shop_orders' ? :primary : :secondary) %>
+      <%= render ActionButtonComponent.new(text: "Fraud Review", href: admin_shop_orders_path(view: 'shop_orders'), size: :small, variant: @view == 'shop_orders' ? :primary : :secondary) %>
     <% end %>
     <% if current_user.admin? || current_user.fulfillment_person? %>
       <%= render ActionButtonComponent.new(text: "Pending Fulfillment", href: admin_shop_orders_path(view: 'fulfillment'), size: :small, variant: @view == 'fulfillment' ? :primary : :secondary) %>

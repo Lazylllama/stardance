@@ -71,7 +71,7 @@ class Shop::ItemsController < Shop::BaseController
 
     prepare_shop_chrome
     load_shop_items
-    @shop_items = Shop::Categorization.filter(@shop_items, @slug)
+    @shop_items = @category.filter(@shop_items)
     prepare_visible_shop_items
   end
 

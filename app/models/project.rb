@@ -85,6 +85,15 @@ class Project < ApplicationRecord
     user ? where.not(id: user.projects) : all
   }
   scope :hardware, -> { where.not(hardware_stage: nil) }
+  # A hardware mission reviews its own attached projects on the mission dash, so
+  # the global hardware queue leaves them out. The two scopes are exact
+  # complements, which is what keeps every hardware review counted once.
+  scope :with_hardware_mission, -> { where(id: hardware_mission_project_ids) }
+  scope :without_hardware_mission, -> { where.not(id: hardware_mission_project_ids) }
+
+  def self.hardware_mission_project_ids
+    Project::MissionAttachment.active.joins(:mission).where(missions: { hardware: true }).select(:project_id)
+  end
   # Projects with no Hackatime project linked for this member yet. Scoped per
   # member rather than per project: on a shared project each member records
   # their own Lapse time, so one member's link doesn't cover anyone else.
@@ -605,6 +614,7 @@ class Project < ApplicationRecord
   def shipping_requirements
     owner_vote_balance = memberships.owner.first&.user&.vote_balance.to_i
     votes_needed = [ -owner_vote_balance, 0 ].max
+    mission_review = blocking_mission_submission
     [
       {
         key: :demo_url,
@@ -687,6 +697,17 @@ class Project < ApplicationRecord
         passed: previous_ship_event_has_payout?
       },
       {
+        key: :mission_review,
+        label: "Your mission submission must clear review before you ship again",
+        fail_label: mission_review&.rejected? ?
+          "Your mission submission was returned. Address the feedback and request a re-review" :
+          "Wait for your mission submission to be reviewed before shipping again",
+        tooltip: mission_review&.rejected? ?
+          "A reviewer returned your mission submission. Address their feedback and request a re-review from the ship on your timeline, or detach the mission to carry on without it." :
+          "Your ship is waiting on a mission reviewer. You can ship again once they've made a decision.",
+        passed: mission_review.nil?
+      },
+      {
         key: :vote_balance,
         label: "Maintain a non-negative vote balance",
         fail_label: "Vote at least #{votes_needed} #{'time'.pluralize(votes_needed)} before shipping!",
@@ -742,12 +763,34 @@ class Project < ApplicationRecord
 
   def ship_blocking_errors = shipping_requirements.reject { |r| r[:passed] }.map { |r| r[:label] }
 
+  # The latest ship's mission submission while it still owes a decision:
+  # `pending` waits on a reviewer, `rejected` waits on the builder to address
+  # the feedback and request a re-review. Either way the project can't ship
+  # again. A ship the certifier rejected is left to the re-certification flow.
+  def blocking_mission_submission
+    ship = last_ship_event
+    return nil if ship.nil? || ship.certification_status == "rejected"
+
+    submission = ship.mission_submission
+    submission if submission&.pending? || submission&.rejected?
+  end
+
   # The single most relevant reason the project can't ship yet, as a short
   # actionable message — used for the ship button's disabled tooltip. Returns
   # nil when the project is shippable.
   def ship_blocker_message
     req = shipping_requirements.find { |r| !r[:passed] }
     req && (req[:fail_label] || req[:label])
+  end
+
+  # The mission-review blocker, when that's what's holding the ship button.
+  # Takes precedence over the other blockers in the UI: nothing the builder
+  # fixes on the project itself unblocks a review that hasn't landed yet.
+  def mission_review_blocker_message
+    req = shipping_requirements.find { |r| r[:key] == :mission_review }
+    return nil if req[:passed]
+
+    req[:fail_label] || req[:label]
   end
 
   # Whether every project-info requirement (see INFO_REQUIREMENT_KEYS) passes,
@@ -913,7 +956,10 @@ class Project < ApplicationRecord
     # a "previous ship awaiting payout" — it's the one currently being
     # (re-)certified, so it must not block re-certification.
     return true unless last_ship_event.certification_status == "approved"
-    sub = last_ship_event.mission_submission
+    # with_deleted so a fixed-prize ship whose mission was detached doesn't
+    # strand the project: Post::ShipEvent.voteable keeps that ship out of the
+    # rating pool either way, so no payout is ever coming for it.
+    sub = Mission::Submission.with_deleted.find_by(ship_event_id: last_ship_event.id)
     return true if sub&.payout_path == "static_prize"
     false
   end

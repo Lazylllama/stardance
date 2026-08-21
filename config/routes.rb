@@ -590,6 +590,7 @@ Rails.application.routes.draw do
       end
     end
     resource :notification_settings, only: [ :show, :update ], controller: "notification_settings"
+    resources :data_exports, only: [ :index, :create, :show, :destroy ]
     # Temporary: central list of a builder's Lookout recordings so they can push
     # any un-sent time to Hackatime after the recorder's retirement. Removed with
     # the rest of the recovery surface after LookoutSession::FINALIZE_DEADLINE.
@@ -746,6 +747,9 @@ Rails.application.routes.draw do
       end
       resource :letter_mail_batch, only: [ :create ]
       resources :orders, only: [ :index, :show ] do
+        collection do
+          post :bulk_approve
+        end
         member do
           post :reveal_address
           post :reveal_phone
@@ -901,7 +905,9 @@ Rails.application.routes.draw do
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
       delete "review/:id/claim", to: "ysws#unclaim", as: "ysws_claim"
       post "review/:id/complete", to: "ysws#complete", as: "complete_ysws_review"
+      post "review/:id/undo", to: "ysws#undo", as: "undo_ysws_review"
       post "review/:id/return_to_ship_cert", to: "ysws#return_to_ship_cert", as: "return_to_ship_cert_ysws_review"
+      post "review/:id/resync", to: "ysws#resync", as: "resync_ysws_review"
 
       # Admin payout management
       resources :payouts, only: [ :index, :show ] do
@@ -912,6 +918,9 @@ Rails.application.routes.draw do
       end
 
       resources :reports, path: "report", only: [ :index, :show ] do
+        collection do
+          post :resolve_project
+        end
         member do
           post :review
           post :dismiss

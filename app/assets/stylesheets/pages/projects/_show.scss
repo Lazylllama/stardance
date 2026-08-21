@@ -709,6 +709,19 @@ turbo-frame#project_hero {
   gap: 6px;
 }
 
+.project-show__pill--review {
+  border-color: var(--color-brand-orange);
+  color: var(--color-brand-orange);
+
+  &:hover:not(:disabled):not([aria-disabled="true"]),
+  &:focus-visible:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-brand-orange-soft);
+    border-color: var(--color-brand-orange);
+    color: var(--color-brand-orange);
+    outline: none;
+  }
+}
+
 .project-show__pill-icon {
   width: 16px;
   height: 16px;
@@ -1132,6 +1145,24 @@ turbo-frame#project_hero {
   &--clickable {
     font: inherit;
     cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  &--info {
+    cursor: help;
+
+    &:focus-visible {
+      outline: 2px solid var(--badge-accent, var(--color-brand-mint));
+      outline-offset: 2px;
+    }
+  }
+
+  &--clickable,
+  &--info {
     transition:
       background 120ms ease,
       border-color 120ms ease;
@@ -1148,7 +1179,6 @@ turbo-frame#project_hero {
         var(--badge-accent, var(--color-brand-salmon)) 65%,
         transparent
       );
-      outline: none;
     }
   }
 }
@@ -1799,7 +1829,6 @@ turbo-frame#project_hero {
   .feed-composer__chips,
   .feed-composer__grid,
   .feed-composer__attach-wrap,
-  .feed-composer__info-wrap,
   .feed-composer__toolbar {
     flex-shrink: 0;
   }
