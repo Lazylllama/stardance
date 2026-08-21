@@ -453,6 +453,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-xxs);
+    // Let the tools side (which holds the time-status text) shrink and wrap
+    // instead of overrunning the submit group in a narrow composer/modal.
+    min-width: 0;
   }
 
   // Unverified `!` warning sits just left of the Post button.
@@ -460,6 +463,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-xs);
+    // Keep the Post button + IDV badge at full size; the tools side gives first.
+    flex-shrink: 0;
   }
 
   &__tool-btn {
@@ -578,6 +583,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-xs);
+    // Allow the status/warning line to wrap within the shrunk tools side
+    // rather than pushing the toolbar wider than its container.
+    min-width: 0;
 
     &[hidden] {
       display: none;
@@ -587,6 +595,7 @@
   &__info-text {
     font-size: calc(var(--font-size-s) * 1.2);
     color: var(--color-space-text-muted);
+    overflow-wrap: anywhere;
 
     &--warn {
       color: var(--color-brand-salmon);
