@@ -6,6 +6,7 @@ class AddUniqueActiveExportIndexToUserDataExports < ActiveRecord::Migration[8.1]
               unique: true,
               where: "status = 'pending' OR status = 'processing'",
               name: "index_user_data_exports_on_user_id_active",
-              algorithm: :concurrently
+              algorithm: :concurrently,
+              if_not_exists: true
   end
 end
