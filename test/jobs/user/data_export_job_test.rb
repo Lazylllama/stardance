@@ -81,6 +81,22 @@ class User::DataExportJobTest < ActiveJob::TestCase
     refute @export.zip_file.attached?
   end
 
+  test "marks export as failed when an attachment cannot be downloaded" do
+    job = User::DataExportJob.new
+    job.define_singleton_method(:download_attachment) do |*|
+      raise IOError, "attachment unavailable"
+    end
+
+    assert_raises(IOError) do
+      job.perform(@export.id)
+    end
+
+    @export.reload
+    assert_equal "failed", @export.status
+    assert_match(/attachment unavailable/, @export.error_message)
+    refute @export.zip_file.attached?
+  end
+
   private
 
   def zip_entry_names(export)

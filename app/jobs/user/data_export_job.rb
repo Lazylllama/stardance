@@ -112,8 +112,6 @@ class User::DataExportJob < ApplicationJob
 
     zip.put_next_entry(entry_name)
     blob.open { |file| IO.copy_stream(file, zip) }
-  rescue StandardError => e
-    Rails.logger.warn("DataExport: failed to download attachment #{blob&.filename}: #{e.message}")
   end
 
   def write_readme(zip, user)
