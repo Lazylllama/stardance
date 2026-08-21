@@ -1145,6 +1145,24 @@ turbo-frame#project_hero {
   &--clickable {
     font: inherit;
     cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  &--info {
+    cursor: help;
+
+    &:focus-visible {
+      outline: 2px solid var(--badge-accent, var(--color-brand-mint));
+      outline-offset: 2px;
+    }
+  }
+
+  &--clickable,
+  &--info {
     transition:
       background 120ms ease,
       border-color 120ms ease;
@@ -1161,7 +1179,6 @@ turbo-frame#project_hero {
         var(--badge-accent, var(--color-brand-salmon)) 65%,
         transparent
       );
-      outline: none;
     }
   }
 }
