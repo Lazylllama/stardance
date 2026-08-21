@@ -203,10 +203,15 @@ module Admin
                                .pluck(:project_id, :mission_id).to_h
         return {} if project_to_mission.empty?
 
-        project_ids = project_to_mission.keys
+        # Scoped the same way the mission's own hardware dash builds its queue,
+        # so this badge cannot drift from the page it sends reviewers to. A
+        # review on a soft-deleted or non-hardware project is unreachable from
+        # every queue, so counting it reports a backlog nobody can work.
         counts = Hash.new(0)
         [ ::Certification::FundingRequest, ::Certification::Ship ].each do |model|
-          model.where(project_id: project_ids, status: :pending).pluck(:project_id).each do |pid|
+          model.in_hardware_mission_queue.pending
+               .where(project_id: project_to_mission.keys)
+               .pluck(:project_id).each do |pid|
             counts[project_to_mission[pid]] += 1
           end
         end
