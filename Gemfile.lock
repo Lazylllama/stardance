@@ -872,6 +872,7 @@ DEPENDENCIES
   rubocop
   rubocop-rails-omakase
   ruby-vips
+  rubyzip (~> 3.0)
   selenium-webdriver
   sentry-rails (~> 6.7)
   sentry-ruby (~> 6.7)

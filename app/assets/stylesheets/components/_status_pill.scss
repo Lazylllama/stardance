@@ -65,4 +65,19 @@
     background: rgba(255, 255, 255, 0.08);
     color: var(--color-space-text-muted, rgba(255, 255, 255, 0.6));
   }
+
+  &--processing {
+    background: var(--color-brand-blue-soft);
+    color: var(--color-brand-blue);
+  }
+
+  &--completed {
+    background: var(--color-brand-mint-soft);
+    color: var(--color-brand-mint);
+  }
+
+  &--failed {
+    background: var(--color-brand-salmon-soft);
+    color: var(--color-brand-salmon);
+  }
 }

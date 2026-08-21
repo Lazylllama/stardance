@@ -590,6 +590,7 @@ Rails.application.routes.draw do
       end
     end
     resource :notification_settings, only: [ :show, :update ], controller: "notification_settings"
+    resources :data_exports, only: [ :index, :create, :show, :destroy ]
     # Temporary: central list of a builder's Lookout recordings so they can push
     # any un-sent time to Hackatime after the recorder's retirement. Removed with
     # the rest of the recovery surface after LookoutSession::FINALIZE_DEADLINE.

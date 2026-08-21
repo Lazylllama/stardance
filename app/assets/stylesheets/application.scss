@@ -103,5 +103,6 @@
 @use "pages/raffle";
 @use "pages/notifications" as notifications_page;
 @use "pages/notification_settings" as notification_settings_page;
+@use "pages/data_exports" as data_exports_page;
 @use "pages/rng";
 @use "landing/landing_footer";

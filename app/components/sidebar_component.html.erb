@@ -167,6 +167,12 @@
         <small class="settings-form__hint">Links your coding time from Hackatime to your projects</small>
       </div>
 
+      <div class="settings-form__field">
+        <label class="settings-form__label">Export Data</label>
+        <%= link_to "Export Data", my_data_exports_path, class: "settings-form__hackatime-btn settings-form__export-btn" %>
+        <small class="settings-form__hint">Download a ZIP of your projects, devlogs, and images</small>
+      </div>
+
       <div class="modal__actions">
         <button type="button" class="modal__actions-close" onclick="document.getElementById('settings-form').reset(); document.getElementById('settings-modal').close()">Cancel</button>
         <%= f.submit "Save", class: "modal__actions-close modal__actions-close--primary" %>

@@ -104,6 +104,7 @@ class User < ApplicationRecord
   has_many :project_follows, dependent: :destroy
   has_many :followed_projects, through: :project_follows, source: :project
   has_one :preference, class_name: "User::Preference", dependent: :destroy
+  has_many :data_exports, class_name: "User::DataExport", dependent: :destroy
 
   has_many :follows_as_follower, class_name: "Follow", foreign_key: :follower_id, dependent: :destroy, inverse_of: :follower
   has_many :follows_as_followed, class_name: "Follow", foreign_key: :followed_id, dependent: :destroy, inverse_of: :followed
