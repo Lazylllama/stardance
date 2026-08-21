@@ -208,15 +208,22 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
     when "shells_desc" then orders.order(frozen_item_price: :desc)
     else orders.order(created_at: :asc)
     end
+    orders = orders.order(sort_column => sort_direction)
 
     # Grouping. Paginate the *users* rather than the orders so every page holds
     # whole groups — grouping is the fulfillment default, so loading the entire
-    # matching set at once isn't an option.
+    # matching set at once isn't an option. Groups are ordered (and paginated)
+    # by each user's most sort-relevant order — eg. sorting oldest-first
+    # surfaces the user holding the oldest order first, even if that same user
+    # also happens to hold the newest one.
     if grouped_by_user?
-      order_counts_by_user = orders.unscope(:includes).reorder(nil).group(:user_id).count
-      user_ids = order_counts_by_user.sort_by { |user_id, count| [ -count, user_id ] }.map(&:first)
+      aggregate = sort_direction == :asc ? :minimum : :maximum
+      group_extremes = orders.unscope(:includes).reorder(nil).group(:user_id).public_send(aggregate, sort_column)
+      user_ids = group_extremes.sort_by { |user_id, value| [ value, user_id ] }.map(&:first)
+      user_ids.reverse! if sort_direction == :desc
       @pagy, page_user_ids = pagy(:offset, user_ids, limit: GROUPS_PER_PAGE)
 
+      group_order = page_user_ids.each_with_index.to_h
       @grouped_orders = orders.where(user_id: page_user_ids).group_by(&:user).map do |user, user_orders|
         {
           user: user,
@@ -224,7 +231,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
           total_items: user_orders.sum(&:quantity),
           total_shells: user_orders.sum { |o| o.total_cost || 0 }
         }
-      end.sort_by { |g| -g[:orders].size }
+      end.sort_by { |g| group_order[g[:user].id] }
     else
       @pagy, @shop_orders = pagy(:offset, orders, limit: 50)
     end
