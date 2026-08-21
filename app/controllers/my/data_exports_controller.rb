@@ -21,6 +21,11 @@ class My::DataExportsController < ApplicationController
     User::DataExportJob.perform_later(data_export.id)
 
     redirect_to my_data_exports_path, notice: "Your data export has been queued. You'll be able to download it once it's ready."
+  rescue ActiveRecord::RecordNotUnique
+    # The partial unique index on (user_id) WHERE status IN ('pending',
+    # 'processing') backs the check above at the DB level; a concurrent
+    # request lands here instead of double-queuing.
+    redirect_to my_data_exports_path, notice: "An export is already in progress. Please wait for it to complete."
   end
 
   def show

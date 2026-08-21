@@ -21,12 +21,16 @@ class User::DataExportJob < ApplicationJob
         write_readme(zip, user)
       end
 
+      # Attach first so a failed upload never leaves a completed export
+      # without a downloadable file.
+      File.open(temp_zip.path) do |file|
+        @data_export.zip_file.attach(
+          io: file,
+          filename: zip_filename,
+          content_type: "application/zip"
+        )
+      end
       @data_export.update!(status: "completed", zip_filename: zip_filename)
-      @data_export.zip_file.attach(
-        io: File.open(temp_zip.path),
-        filename: zip_filename,
-        content_type: "application/zip"
-      )
     rescue StandardError => e
       @data_export.update!(status: "failed", error_message: "#{e.class}: #{e.message}")
       raise e
@@ -56,8 +60,9 @@ class User::DataExportJob < ApplicationJob
 
   def write_projects(zip, user)
     user.projects.includes(:devlogs).find_each do |project|
-      safe_title = project.title.parameterize.presence || "project-#{project.id}"
-      project_dir = "projects/#{safe_title}"
+      safe_title = project.title.parameterize.presence || "project"
+      # ID suffix keeps directories unique when two projects share a title
+      project_dir = "projects/#{safe_title}-#{project.id}"
 
       project_data = {
         id: project.id,
@@ -98,12 +103,13 @@ class User::DataExportJob < ApplicationJob
     end
   end
 
+  # Streams the blob straight into the ZIP entry instead of loading the whole file into memory
   def download_attachment(zip, attachment, entry_name)
     blob = attachment.is_a?(ActiveStorage::Attached) ? attachment.blob : attachment
     return unless blob
 
     zip.put_next_entry(entry_name)
-    zip.write(blob.download)
+    blob.open { |file| IO.copy_stream(file, zip) }
   rescue StandardError => e
     Rails.logger.warn("DataExport: failed to download attachment #{blob&.filename}: #{e.message}")
   end
