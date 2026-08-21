@@ -42,4 +42,8 @@ class MyPolicy < ApplicationPolicy
   def download_data_export?
     signed_in_any?
   end
+
+  def destroy_data_export?
+    signed_in_any?
+  end
 end

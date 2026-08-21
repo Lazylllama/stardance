@@ -7,6 +7,7 @@
       <h1 class="data-exports-page__title">Export My Data</h1>
       <p class="data-exports-page__description">
         Download a ZIP file containing all your projects, devlogs, images, and profile data.
+        Exports are automatically deleted after 7 days.
       </p>
     </header>
 
@@ -25,6 +26,11 @@
               <span class="data-export-item__date">
                 <%= export.created_at.strftime("%b %d, %Y at %H:%M") %>
               </span>
+              <% if export.download_available? %>
+                <span class="data-export-item__expiry">
+                  Available until <%= export.expires_at.strftime("%b %d, %Y at %H:%M") %>
+                </span>
+              <% end %>
               <% if export.failed? && export.error_message.present? %>
                 <span class="data-export-item__error"><%= export.error_message %></span>
               <% end %>
@@ -38,6 +44,10 @@
               <% elsif export.pending? %>
                 <span class="data-export-item__processing">Queued&hellip;</span>
               <% end %>
+              <%= button_to "Delete", my_data_export_path(export),
+                            method: :delete,
+                            class: "action-btn action-btn--small action-btn--destructive",
+                            form: { data: { turbo_confirm: "Delete this export? This cannot be undone." } } %>
             </div>
           </div>
         <% end %>

@@ -3,6 +3,8 @@ require "zip"
 require "base64"
 
 class User::DataExportJobTest < ActiveJob::TestCase
+  self.fixture_table_names = []
+
   setup do
     @user = create_user(slack_id: "U_EXPORT", display_name: "exporter")
     @project = Project.create!(title: "My Cool Project", description: "desc")
@@ -95,6 +97,14 @@ class User::DataExportJobTest < ActiveJob::TestCase
     assert_equal "failed", @export.status
     assert_match(/attachment unavailable/, @export.error_message)
     refute @export.zip_file.attached?
+  end
+
+  test "does nothing when the user deleted the queued export" do
+    export_id = @export.id
+    @export.destroy!
+
+    assert_nothing_raised { User::DataExportJob.new.perform(export_id) }
+    refute User::DataExport.exists?(export_id)
   end
 
   private

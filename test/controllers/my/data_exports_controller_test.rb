@@ -1,6 +1,8 @@
 require "test_helper"
 
 class My::DataExportsControllerTest < ActionDispatch::IntegrationTest
+  self.fixture_table_names = []
+
   setup do
     @alice = create_user(slack_id: "U_ALICE", display_name: "alice")
     @bob = create_user(slack_id: "U_BOB", display_name: "bob")
@@ -74,6 +76,41 @@ class My::DataExportsControllerTest < ActionDispatch::IntegrationTest
 
     get my_data_export_path(export)
     assert_redirected_to my_data_exports_path
+  end
+
+  test "show refuses expired downloads" do
+    export = @alice.data_exports.create!(status: "completed", created_at: 8.days.ago)
+    export.zip_file.attach(
+      io: StringIO.new("fake zip"),
+      filename: "export.zip",
+      content_type: "application/zip"
+    )
+
+    get my_data_export_path(export)
+
+    assert_redirected_to my_data_exports_path
+    assert_equal "This export has expired and is no longer available.", flash[:alert]
+  end
+
+  test "destroy deletes the current user's export" do
+    export = @alice.data_exports.create!(status: "completed")
+
+    assert_difference -> { @alice.data_exports.count }, -1 do
+      delete my_data_export_path(export)
+    end
+
+    assert_redirected_to my_data_exports_path
+    assert_equal "Your data export has been deleted.", flash[:notice]
+  end
+
+  test "destroy cannot delete another user's export" do
+    export = @bob.data_exports.create!(status: "completed")
+
+    assert_no_difference -> { @bob.data_exports.count } do
+      delete my_data_export_path(export)
+    end
+
+    assert_response :not_found
   end
 
   test "show cannot download another user's export" do

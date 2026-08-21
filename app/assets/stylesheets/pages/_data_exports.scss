@@ -64,6 +64,7 @@
   &__info {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-s);
     min-width: 0;
   }
@@ -75,12 +76,20 @@
     font-size: var(--font-size-s);
   }
 
+  &__expiry {
+    color: var(--color-space-text-muted);
+    font-size: var(--font-size-xs);
+  }
+
   &__error {
     color: var(--color-brand-salmon);
     font-size: var(--font-size-xs);
   }
 
   &__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
     flex: 0 0 auto;
   }
 

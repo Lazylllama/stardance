@@ -25,16 +25,28 @@ class User::DataExportJob < ApplicationJob
 
       # Attach first so a failed upload never leaves a completed export
       # without a downloadable file.
-      File.open(temp_zip.path) do |file|
-        @data_export.zip_file.attach(
-          io: file,
-          filename: zip_filename,
-          content_type: "application/zip"
-        )
+      @data_export.with_lock do
+        # The user may delete an export while it is being generated.
+        return unless @data_export.processing?
+
+        File.open(temp_zip.path) do |file|
+          @data_export.zip_file.attach(
+            io: file,
+            filename: zip_filename,
+            content_type: "application/zip"
+          )
+        end
+        @data_export.update!(status: "completed", zip_filename: zip_filename)
       end
-      @data_export.update!(status: "completed", zip_filename: zip_filename)
+    rescue ActiveRecord::RecordNotFound
+      # The user deleted the export while it was being generated.
+      nil
     rescue StandardError => e
-      @data_export.update!(status: "failed", error_message: "#{e.class}: #{e.message}")
+      User::DataExport.where(id: @data_export.id).update_all(
+        status: "failed",
+        error_message: "#{e.class}: #{e.message}",
+        updated_at: Time.current
+      )
       raise
     ensure
       temp_zip&.close
