@@ -1,3 +1,25 @@
+# == Schema Information
+#
+# Table name: user_data_exports
+#
+#  id            :bigint           not null, primary key
+#  error_message :text
+#  status        :string           default("pending"), not null
+#  zip_filename  :string
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  user_id       :bigint           not null
+#
+# Indexes
+#
+#  index_user_data_exports_on_user_id             (user_id)
+#  index_user_data_exports_on_user_id_active      (user_id) UNIQUE WHERE (((status)::text = 'pending'::text) OR ((status)::text = 'processing'::text))
+#  index_user_data_exports_on_user_id_and_status  (user_id,status)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (user_id => users.id)
+#
 require "test_helper"
 
 class User::DataExportTest < ActiveSupport::TestCase
