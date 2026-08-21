@@ -34,7 +34,25 @@ class User::DataExportJobTest < ActiveJob::TestCase
     assert_includes entries, "README.md"
     assert_includes entries, "projects/my-cool-project-#{@project.id}/project.json"
     assert_includes entries, "projects/my-cool-project-#{@project.id}/devlogs/devlog-#{@devlog.id}.md"
-    assert_includes entries, "projects/my-cool-project-#{@project.id}/devlogs/attachments/1.png"
+    assert_includes entries, "projects/my-cool-project-#{@project.id}/devlogs/attachments/#{@devlog.id}-1.png"
+  end
+
+  test "keeps attachments from different devlogs in distinct entries" do
+    second_devlog = Post::Devlog.new(body: "Second devlog", duration_seconds: 1.hour)
+    second_devlog.attachments.attach(
+      io: StringIO.new(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")),
+      filename: "progress.png",
+      content_type: "image/png"
+    )
+    second_devlog.save!
+    Post.create!(project: @project, user: @user, postable: second_devlog)
+
+    User::DataExportJob.new.perform(@export.id)
+
+    entries = zip_entry_names(@export.reload)
+    devlog_dir = "projects/my-cool-project-#{@project.id}/devlogs"
+    assert_includes entries, "#{devlog_dir}/attachments/#{@devlog.id}-1.png"
+    assert_includes entries, "#{devlog_dir}/attachments/#{second_devlog.id}-1.png"
   end
 
   test "zip contents include user and project data" do

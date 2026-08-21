@@ -97,7 +97,7 @@ class User::DataExportJob < ApplicationJob
       if devlog.attachments.attached?
         devlog.attachments.each_with_index do |attachment, index|
           ext = File.extname(attachment.filename.to_s).presence || ".bin"
-          download_attachment(zip, attachment, "#{devlog_dir}/attachments/#{index + 1}#{ext}")
+          download_attachment(zip, attachment, "#{devlog_dir}/attachments/#{devlog.id}-#{index + 1}#{ext}")
         end
       end
     end
