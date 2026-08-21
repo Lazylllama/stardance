@@ -11,6 +11,12 @@ class My::DataExportsController < ApplicationController
   def create
     authorize :my, :create_data_export?
 
+    current_user.data_exports.stale_active.update_all(
+      status: "failed",
+      error_message: "Export generation timed out. Please request a new export.",
+      updated_at: Time.current
+    )
+
     active_export = current_user.data_exports.pending_or_processing.last
     if active_export
       redirect_to my_data_exports_path, notice: "An export is already in progress. Please wait for it to complete."
@@ -18,7 +24,14 @@ class My::DataExportsController < ApplicationController
     end
 
     data_export = current_user.data_exports.create!(status: "pending")
-    User::DataExportJob.perform_later(data_export.id)
+    unless User::DataExportJob.perform_later(data_export.id)
+      data_export.update!(
+        status: "failed",
+        error_message: "The export could not be queued. Please try again."
+      )
+      redirect_to my_data_exports_path, alert: "Your data export could not be queued. Please try again."
+      return
+    end
 
     redirect_to my_data_exports_path, notice: "Your data export has been queued. You'll be able to download it once it's ready."
   rescue ActiveRecord::RecordNotUnique

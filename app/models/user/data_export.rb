@@ -21,13 +21,17 @@
 #  fk_rails_...  (user_id => users.id)
 #
 class User::DataExport < ApplicationRecord
+  ACTIVE_STATUSES = %w[pending processing].freeze
+  STALE_AFTER = 6.hours
+
   belongs_to :user
   has_one_attached :zip_file
 
   validates :status, inclusion: { in: %w[pending processing completed failed] }
 
   scope :completed, -> { where(status: "completed") }
-  scope :pending_or_processing, -> { where(status: %w[pending processing]) }
+  scope :pending_or_processing, -> { where(status: ACTIVE_STATUSES) }
+  scope :stale_active, -> { pending_or_processing.where("updated_at < ?", STALE_AFTER.ago) }
 
   def download_available?
     completed? && zip_file.attached?

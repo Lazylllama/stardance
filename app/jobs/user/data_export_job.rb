@@ -7,14 +7,16 @@ class User::DataExportJob < ApplicationJob
     @data_export = User::DataExport.find_by(id: data_export_id)
     return unless @data_export
 
-    @data_export.update!(status: "processing")
-
-    user = @data_export.user
-    zip_filename = "stardance-export-#{user.display_name.parameterize}-#{Time.current.strftime("%Y%m%d%H%M%S")}.zip"
-
-    temp_zip = Tempfile.new([ "stardance_export", ".zip" ])
+    temp_zip = nil
 
     begin
+      @data_export.update!(status: "processing")
+
+      user = @data_export.user
+      zip_filename = "stardance-export-#{user.display_name.parameterize}-#{Time.current.strftime("%Y%m%d%H%M%S")}.zip"
+
+      temp_zip = Tempfile.new([ "stardance_export", ".zip" ])
+
       Zip::OutputStream.open(temp_zip.path) do |zip|
         write_profile(zip, user)
         write_projects(zip, user)
@@ -33,10 +35,10 @@ class User::DataExportJob < ApplicationJob
       @data_export.update!(status: "completed", zip_filename: zip_filename)
     rescue StandardError => e
       @data_export.update!(status: "failed", error_message: "#{e.class}: #{e.message}")
-      raise e
+      raise
     ensure
-      temp_zip.close
-      temp_zip.unlink
+      temp_zip&.close
+      temp_zip&.unlink
     end
   end
 

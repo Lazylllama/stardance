@@ -32,6 +32,30 @@ class My::DataExportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, @alice.data_exports.count
   end
 
+  test "create replaces a stale active export" do
+    stale_export = @alice.data_exports.create!(status: "processing")
+    stale_export.update_column(:updated_at, User::DataExport::STALE_AFTER.ago - 1.minute)
+
+    assert_enqueued_with job: User::DataExportJob do
+      post my_data_exports_path
+    end
+
+    assert_predicate stale_export.reload, :failed?
+    assert_equal 1, @alice.data_exports.pending_or_processing.count
+  end
+
+  test "create marks the export failed when enqueueing fails" do
+    User::DataExportJob.stub(:perform_later, false) do
+      post my_data_exports_path
+    end
+
+    export = @alice.data_exports.last
+    assert_predicate export, :failed?
+    assert_equal "The export could not be queued. Please try again.", export.error_message
+    assert_redirected_to my_data_exports_path
+    assert_equal "Your data export could not be queued. Please try again.", flash[:alert]
+  end
+
   test "show redirects to the zip when download is available" do
     export = @alice.data_exports.create!(status: "completed")
     export.zip_file.attach(
