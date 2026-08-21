@@ -60,15 +60,6 @@ class Admin::Shop::OrdersControllerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def group_order(body)
-    body.scan(/shop-orders__group-name">\s*<a[^>]*>([^<]+)</).flatten
-  end
-
-  def create_order(user, created_at)
-    order = user.shop_orders.new(shop_item: @item, quantity: 1)
-    order.aasm_state = "awaiting_periodical_fulfillment"
-    order.save!(validate: false)
-    order.update_column(:created_at, created_at)
   # Ids in the order the table rendered them.
   def rendered_order_ids
     css_select("tbody tr td:first-child").map { |cell| cell.text[/#(\d+)/, 1].to_i }
