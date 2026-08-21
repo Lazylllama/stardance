@@ -37,7 +37,10 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-gem "image_processing", "~> 1.2"
+# image_processing 2.x treats ruby-vips / mini_magick as soft dependencies.
+gem "image_processing", "~> 2.0"
+gem "ruby-vips"
+gem "mini_magick"
 
 # Certificate PDF downloads (wraps the vips-rendered certificate image)
 gem "prawn"
@@ -145,7 +148,7 @@ gem "query_count"
 # Rack Mini Profiler gem for performance monitoring
 gem "rack-mini-profiler"
 
-gem "redis", "~> 5.4"
+gem "redis", "~> 6.0"
 
 gem "ahoy_matey"
 

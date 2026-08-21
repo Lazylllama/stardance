@@ -262,14 +262,55 @@ module SemanticSearch
       results
     end
 
+    # redis-rb 6 speaks RESP3 by default. Wrapped commands (GET, SCAN, …) are
+    # reshaped back to the 5.x Ruby objects, but raw `call("FT.SEARCH", …)`
+    # returns the native protocol value: a flat Array under RESP2, a Hash
+    # under RESP3. Accept both so search keeps working after the client bump.
     def parse_redis_search(raw)
-      return [] unless raw.is_a?(Array)
+      case raw
+      when Hash
+        parse_resp3_search(raw)
+      when Array
+        parse_resp2_search(raw)
+      else
+        []
+      end
+    end
 
+    def parse_resp2_search(raw)
       raw.drop(1).each_slice(2).filter_map do |key, fields|
         next unless key.to_s.start_with?(DOC_PREFIX)
 
-        fields.each_slice(2).to_h
+        stringify_keys(fields_to_hash(fields))
       end
+    end
+
+    def parse_resp3_search(raw)
+      results = raw["results"] || raw[:results]
+      return [] unless results.is_a?(Array)
+
+      results.filter_map do |item|
+        next unless item.is_a?(Hash)
+
+        id = (item["id"] || item[:id]).to_s
+        next unless id.start_with?(DOC_PREFIX)
+
+        attrs = item["extra_attributes"] || item[:extra_attributes] ||
+                item["values"] || item[:values] || item
+        stringify_keys(fields_to_hash(attrs))
+      end
+    end
+
+    def fields_to_hash(fields)
+      case fields
+      when Hash then fields
+      when Array then fields.each_slice(2).to_h
+      else {}
+      end
+    end
+
+    def stringify_keys(hash)
+      hash.each_with_object({}) { |(key, value), out| out[key.to_s] = value }
     end
 
     def hydrate_projects(rows, limit, query = nil)

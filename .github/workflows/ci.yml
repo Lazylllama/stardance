@@ -50,7 +50,7 @@ jobs:
     name: ${{ matrix.name }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
 
       - name: Install system dependencies
         if: matrix.system_packages
@@ -68,7 +68,7 @@ jobs:
 
       - name: Set up Node.js
         if: matrix.needs_node
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7
         with:
           node-version-file: package.json
 
@@ -102,7 +102,7 @@ jobs:
       RAILS_ENV: test
       DATABASE_URL: postgresql://postgres:password@localhost:5432/stardance_test
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         timeout-minutes: 10
