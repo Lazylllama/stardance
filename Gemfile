@@ -37,10 +37,11 @@ gem "kamal", require: false
 gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
-# image_processing 2.x treats ruby-vips / mini_magick as soft dependencies.
+# image_processing 2.x treats these as soft deps. require: false so Bundler
+# does not load libvips at boot (db_checks / hosts without libvips).
 gem "image_processing", "~> 2.0"
-gem "ruby-vips"
-gem "mini_magick"
+gem "ruby-vips", require: false
+gem "mini_magick", require: false
 
 # Certificate PDF downloads (wraps the vips-rendered certificate image)
 gem "prawn"
