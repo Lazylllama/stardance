@@ -200,13 +200,13 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
       )
     end
 
-    orders = case params[:sort]
-    when "id_asc" then orders.order(id: :asc)
-    when "id_desc" then orders.order(id: :desc)
-    when "created_at_desc" then orders.order(created_at: :desc)
-    when "shells_asc" then orders.order(frozen_item_price: :asc)
-    when "shells_desc" then orders.order(frozen_item_price: :desc)
-    else orders.order(created_at: :asc)
+    sort_column, sort_direction = case params[:sort]
+    when "id_asc" then [ :id, :asc ]
+    when "id_desc" then [ :id, :desc ]
+    when "created_at_desc" then [ :created_at, :desc ]
+    when "shells_asc" then [ :frozen_item_price, :asc ]
+    when "shells_desc" then [ :frozen_item_price, :desc ]
+    else [ :created_at, :asc ]
     end
     orders = orders.order(sort_column => sort_direction)
 
