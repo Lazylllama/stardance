@@ -13,6 +13,7 @@
 # Indexes
 #
 #  index_user_data_exports_on_user_id             (user_id)
+#  index_user_data_exports_on_user_id_active      (user_id) UNIQUE WHERE (((status)::text = 'pending'::text) OR ((status)::text = 'processing'::text))
 #  index_user_data_exports_on_user_id_and_status  (user_id,status)
 #
 # Foreign Keys

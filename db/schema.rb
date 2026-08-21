@@ -1420,7 +1420,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_072613) do
     t.string "zip_filename"
     t.index ["user_id", "status"], name: "index_user_data_exports_on_user_id_and_status"
     t.index ["user_id"], name: "index_user_data_exports_on_user_id"
-    t.index ["user_id"], name: "index_user_data_exports_on_user_id_active", unique: true, where: "((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying])::text[]))"
+    t.index ["user_id"], name: "index_user_data_exports_on_user_id_active", unique: true, where: "(((status)::text = 'pending'::text) OR ((status)::text = 'processing'::text))"
   end
 
   create_table "user_hackatime_projects", force: :cascade do |t|
