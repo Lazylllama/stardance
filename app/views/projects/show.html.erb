@@ -510,6 +510,12 @@
                               } %>
                 <% end %>
 
+                <% if Flipper.enabled?(:hardware_flow, current_user) && @project.hardware? && !is_member && current_user&.can_review? %>
+                  <%= link_to "Review", admin_certification_hardware_review_path(@project),
+                              class: "project-show__pill project-show__pill--outline project-show__pill--review",
+                              data: { turbo_frame: "_top" } %>
+                <% end %>
+
                 <%= render "projects/report_button", project: @project, is_member: is_member %>
               </div>
             </div>
@@ -716,7 +722,9 @@
           <% else %>
             <%
               ship_disabled_message =
-                if @project.received_grant? && !@project.has_build_devlog_since_last_ship?
+                if (mission_review_message = @project.mission_review_blocker_message)
+                  mission_review_message
+                elsif @project.received_grant? && !@project.has_build_devlog_since_last_ship?
                   "Post at least one build devlog before you can ship!"
                 elsif !@project.has_devlog_since_last_ship?
                   "Post at least one devlog before shipping!"

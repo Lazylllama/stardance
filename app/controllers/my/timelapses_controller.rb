@@ -8,8 +8,13 @@ class My::TimelapsesController < ApplicationController
   def index
     @deadline = LookoutSession::FINALIZE_DEADLINE
     @window_open = Time.current <= @deadline
+    # Only sessions whose project still exists: Project's default_scope hides
+    # soft-deleted rows, so an orphaned session's `project` is nil and the view
+    # (and forward path) would blow up. A deleted project can't be recovered to
+    # anyway.
     @sessions = LookoutSession.where(user: current_user)
                               .recoverable
+                              .where(project_id: Project.select(:id))
                               .includes(:project)
                               .order(Arel.sql("COALESCE(started_at, created_at) DESC"))
     # Which sessions Hackatime already has, matched exactly by heartbeat entity

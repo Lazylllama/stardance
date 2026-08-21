@@ -125,13 +125,13 @@ gem "faraday-retry"
 gem "faker", "~> 3.6"
 gem "jsbundling-rails", "~> 1.3"
 gem "stackprof"
-gem "sentry-ruby", "~> 6.6"
-gem "sentry-rails", "~> 6.6"
+gem "sentry-ruby", "~> 6.7"
+gem "sentry-rails", "~> 6.7"
 
 # for pagination
 gem "pagy", "~> 43.5"
 gem "norairrecord"
-gem "anthropic", "~> 1.61"
+gem "anthropic", "~> 1.62"
 
 gem "awesome_print"
 gem "activeinsights"

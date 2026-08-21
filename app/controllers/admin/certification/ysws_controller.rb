@@ -134,6 +134,9 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     # banner and the per-devlog notes both disappear from a single check.
     @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
 
+    @lapse_timelapses = lapse_timelapses_for_ysws_review
+    @lookout_recordings = lookout_recordings_for_ysws_review
+
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
       load_commits_with_stats(
@@ -192,6 +195,24 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   private
+
+  RECORDINGS_CACHE_TTL = 1.minute
+
+  def lapse_timelapses_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lapse", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      owner = @review.project.memberships.owner.first&.user
+      LapseService.timelapses_for_project(
+        hackatime_user_id: owner&.hackatime_identity&.uid,
+        project_keys: @review.project.hackatime_keys
+      )
+    end
+  end
+
+  def lookout_recordings_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lookout", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      LookoutService.recordings_for_project(@review.project)
+    end
+  end
 
   def ysws_review_filters
     session[FILTER_SESSION_KEY].to_h.slice("project_type", "sort", "dir", "with_integrity")
@@ -359,6 +380,55 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       success: false,
       error: "Failed to complete review: #{e.message}. Let AVD know!"
     }, status: :unprocessable_entity
+  end
+
+  def resync
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review
+
+    unless @review.reviewed_at?
+      redirect_to admin_certification_ysws_review_path(@review), alert: "Cannot resync a review that hasn't been completed."
+      return
+    end
+
+    ::Certification::YswsAirtableSyncJob.perform_later(@review.id)
+    redirect_to admin_certification_ysws_review_path(@review), notice: "Airtable resync enqueued for review ##{@review.id}."
+  end
+
+  # Reverses a completed review: back to pending, Airtable submission record
+  # deleted. Admin-only, and never for returned reviews (see YswsPolicy#undo?).
+  # reset_devlogs=1 also takes every devlog verdict back to pending.
+  def undo
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review, :undo?
+
+    reset_devlogs = ActiveModel::Type::Boolean.new.cast(params[:reset_devlogs]).present?
+    result = ::Certification::YswsReviewUndoer.new(@review, reset_devlogs: reset_devlogs).call
+    unless result.undone
+      return redirect_to admin_certification_ysws_review_path(@review),
+                         alert: "That review can't be undone."
+    end
+
+    # PaperTrail carries the field-level diff but no whodunnit, so this line is
+    # the record of who reversed what — including the unified record id, which
+    # the reversal itself throws away.
+    Rails.logger.info "[YSWS#undo] user=#{current_user&.id} review=#{@review.id} " \
+                      "Reset to pending; airtable_record_deleted=#{result.airtable_record_deleted} " \
+                      "unified_record_id=#{result.unified_record_id} " \
+                      "devlog_reviews_reset=#{result.devlog_reviews_reset}"
+
+    # Back to the review itself, not the queue: #show re-claims it for the
+    # admin who just undid it, so they can pick the review straight back up.
+    notice = "Review ##{@review.id} reset to pending."
+    notice += " #{result.devlog_reviews_reset} devlog verdict(s) cleared." if result.devlog_reviews_reset.positive?
+    redirect_to admin_certification_ysws_review_path(@review), notice: notice
+  rescue Pundit::NotAuthorizedError
+    raise
+  rescue StandardError => e
+    Rails.logger.error "[YSWS#undo] user=#{current_user&.id} review=#{params[:id]} #{e.class}: #{e.message}"
+    Sentry.capture_exception(e, tags: { category: "certification.ysws" }, extra: { ysws_review_id: params[:id], user_id: current_user&.id })
+    redirect_to admin_certification_ysws_review_path(params[:id]),
+                alert: "Failed to undo review: #{e.message}"
   end
 
   def return_to_ship_cert

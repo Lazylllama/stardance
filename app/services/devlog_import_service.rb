@@ -10,6 +10,10 @@ class DevlogImportService
     v5.airtableusercontent.com
   ].freeze
 
+  ALLOWED_DOMAINS = %w[
+    .hackclub.com
+  ].freeze
+
   ALLOWED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/gif].freeze
   MAX_IMAGE_SIZE = 50.megabytes
 
@@ -66,7 +70,7 @@ class DevlogImportService
           @errors << "#{label}: invalid image URL"
         elsif !uri.is_a?(URI::HTTPS)
           @errors << "#{label}: image URL must be HTTPS"
-        elsif !ALLOWED_HOSTS.include?(uri.host)
+        elsif !allowed_host?(uri.host)
           @errors << "#{label}: image host '#{uri.host}' not in allowlist"
         end
       end
@@ -173,6 +177,10 @@ class DevlogImportService
     else
       response
     end
+  end
+
+  def allowed_host?(host)
+    ALLOWED_HOSTS.include?(host) || ALLOWED_DOMAINS.any? { |domain| host.end_with?(domain) }
   end
 
   def assert_public_host!(hostname)

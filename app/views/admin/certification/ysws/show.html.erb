@@ -52,10 +52,30 @@
           </div>
         <% end %>
 
+        <% if policy(@review).undo? %>
+          <% undo_warning = "It goes back to the pending queue and its Airtable submission record is deleted. " \
+                            "If it already reached the Unified YSWS base, that record will NOT be removed — remove it by hand." %>
+          <%= button_to "undo review",
+                        admin_certification_undo_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-undo",
+                        form: { class: "review-detail-header__undo-form",
+                                data: { turbo_confirm: "Undo this review? #{undo_warning} The devlog verdicts are kept." } } %>
+          <%= button_to "undo review + devlogs",
+                        admin_certification_undo_ysws_review_path(@review, reset_devlogs: 1),
+                        method: :post,
+                        class: "btn-action btn-undo",
+                        form: { class: "review-detail-header__undo-form",
+                                data: { turbo_confirm: "Undo this review AND reset all #{pluralize(@review.devlog_reviews.size, "devlog verdict")} to pending? " \
+                                                       "Their justifications and approved minutes are cleared, so the whole review has to be redone. #{undo_warning}" } } %>
+        <% end %>
+
         <% if @review.reviewed_at %>
-          <button class="btn-action btn-undo" disabled>
-            undo review
-          </button>
+          <%= button_to "Resync to Airtable",
+                        admin_certification_resync_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-resync",
+                        title: @review.airtable_synced_at ? "Last synced: #{@review.airtable_synced_at.strftime('%Y-%m-%d %H:%M UTC')}" : "Never synced" %>
         <% end %>
 
         <div class="review-detail-header__review-actions">
@@ -99,6 +119,12 @@
             <div class="placeholder-text">No review video recorded</div>
           </div>
         <% end %>
+      </section>
+
+      <!-- Lapse / Lookout Recordings -->
+      <section class="review-card recordings-card">
+        <%= render "admin/certification/funding_requests/recordings",
+              timelapses: @lapse_timelapses, recordings: @lookout_recordings %>
       </section>
 
       <% if @review.project.update_description.present? %>

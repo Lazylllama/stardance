@@ -104,6 +104,16 @@ class Mission::Submission < ApplicationRecord
   scope :in_review, -> { where.not(status: %w[approved rejected]) }
 
   scope :reviewable,  -> { pending }
+  # What the review overview queues. Hardware missions are reviewed as funding
+  # requests and ship certs on their projects instead, and an
+  # awaiting_certification submission has no pending_at because it has not
+  # entered the queue yet. `hardware` is nullable in practice despite the
+  # annotation, and a null mission is a software one.
+  scope :software_reviewable, -> {
+    joins(:mission)
+      .where(deleted_at: nil, missions: { enabled: true, hardware: [ false, nil ] })
+      .where.not(status: "awaiting_certification")
+  }
   scope :stale_pending, ->(days: 7) {
     pending.where("pending_at < ?", days.days.ago)
   }
