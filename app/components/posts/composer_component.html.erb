@@ -6,6 +6,8 @@
            data-composer-target="dropZone"
            data-composer-simple-mode-value="<%= simple_mode? %>"
            data-composer-max-files-value="<%= Post::Devlog::MAX_ATTACHMENTS %>"
+           data-composer-max-file-size-value="<%= Post::Devlog::ATTACHMENT_MAX_SIZE %>"
+           data-composer-body-max-length-value="<%= Post::Devlog::BODY_MAX_LENGTH %>"
            data-composer-preview-time-url-value="<%= preview_time_url %>"
            data-composer-hackatime-linked-value="<%= hackatime_linked? %>"
            data-action="<%= "drop->composer#drop dragover->composer#dragover dragleave->composer#dragleave" if show_attachments? %>">
@@ -58,6 +60,7 @@
                  role="textbox"
                  aria-label="<%= body_label %>"
                  data-placeholder="<%= placeholder %>"
+                 data-composer-target="editor"
                  data-emoji-picker-target="editor"
                  data-action="paste->textarea-hint#paste focus->composer#showInfo input->emoji-picker#editorInput blur->composer#collapseIfEmpty blur->emoji-picker#editorBlur keydown->emoji-picker#editorKeydown"></div>
 
@@ -102,6 +105,8 @@
 
           <div class="feed-composer__grid" data-composer-target="grid" data-count="0" hidden></div>
         <% end %>
+
+        <p class="feed-composer__error" data-composer-target="error" role="alert" hidden></p>
       </div>
 
       <div class="feed-composer__toolbar">
