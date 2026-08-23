@@ -1050,6 +1050,9 @@ Rails.application.routes.draw do
   # Project-side / reviewer-queue / admin-managed missions surfaces ship in later PRs.
   resources :missions, only: [ :index, :show ], param: :slug do
     resource :og_image, only: [ :show ], module: :missions, defaults: { format: :png }
+    collection do
+      get :search
+    end
     member do
       get :guide
       get :gallery
@@ -1061,9 +1064,6 @@ Rails.application.routes.draw do
     scope module: :workshops do
       resource :rsvp, only: [ :create, :destroy ]
       resource :attendance, only: [ :create ]
-    end
-    collection do
-      get :search
     end
   end
 
