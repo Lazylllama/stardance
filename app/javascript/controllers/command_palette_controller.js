@@ -200,13 +200,14 @@ export default class extends Controller {
   select(event) {
     const item = event.currentTarget;
     const { path, focus, method, adminPath } = item.dataset;
-    const effectivePath = event.shiftKey && adminPath ? adminPath : path;
+    const useAdminPath = event.shiftKey && adminPath;
+    const effectivePath = useAdminPath ? adminPath : path;
     if (!effectivePath && !focus) return;
 
     this.close();
-    if (focus && !event.shiftKey) {
+    if (focus && !useAdminPath) {
       document.querySelector(focus)?.focus();
-    } else if (method === "post" && !event.shiftKey) {
+    } else if (method === "post" && !useAdminPath) {
       this._postAction(effectivePath);
     } else {
       window.Turbo.visit(effectivePath);
@@ -313,13 +314,14 @@ export default class extends Controller {
   _activate(shiftKey = false) {
     const item = this.itemTargets[this._activeIndex];
     const { path, focus, method, adminPath } = item?.dataset ?? {};
-    const effectivePath = shiftKey && adminPath ? adminPath : path;
+    const useAdminPath = shiftKey && adminPath;
+    const effectivePath = useAdminPath ? adminPath : path;
     if (!effectivePath && !focus) return;
 
     this.close();
-    if (focus && !shiftKey) {
+    if (focus && !useAdminPath) {
       document.querySelector(focus)?.focus();
-    } else if (method === "post" && !shiftKey) {
+    } else if (method === "post" && !useAdminPath) {
       this._postAction(effectivePath);
     } else {
       window.Turbo.visit(effectivePath);
