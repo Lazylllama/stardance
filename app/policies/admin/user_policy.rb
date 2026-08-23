@@ -1,6 +1,6 @@
 class Admin::UserPolicy < ApplicationPolicy
   def index?
-    user&.admin? || user&.fraud_dept? || user&.helper?
+    user&.admin? || user&.fraud_dept? || user&.helper? || user&.nda_helper?
   end
 
   def show?
@@ -67,8 +67,9 @@ class Admin::UserPolicy < ApplicationPolicy
   end
 
   def view_votes?
-    user&.admin?
+    user&.admin? || user&.nda_helper?
   end
+
   def view_order_full_details?
     user&.admin? || user&.fraud_dept? || user&.fulfillment_person? || user&.shop_manager?
   end

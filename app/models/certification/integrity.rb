@@ -9,7 +9,7 @@
 #  flags                  :integer          default(0), not null
 #  fraud_detection_data   :jsonb
 #  reviewed_at            :datetime
-#  status                 :integer          default("auto_passed"), not null
+#  status                 :integer          default(0), not null
 #  created_at             :datetime         not null
 #  updated_at             :datetime         not null
 #  claimed_by_id          :bigint
@@ -39,6 +39,14 @@ module Certification
 
     delegate :project, to: :ship_event
 
+    # The project, including soft-deleted ones: banning a user soft-deletes their
+    # projects, and Post::ShipEvent#project is a has_one :through that applies
+    # Project's not_deleted default scope — so the plain delegate goes nil exactly
+    # when a fraud verdict lands on a banned user's work.
+    def project_including_deleted
+      Project.with_deleted.find_by(id: ship_event&.post&.project_id)
+    end
+
     # The user who shipped — author of the ship event's post.
     def user = ship_event&.post&.user
 
@@ -53,6 +61,22 @@ module Certification
     }, default: :auto_passed
 
     DECIDED_STATUSES = %w[banned deducted manually_passed].freeze
+
+    # Verdicts that describe the project as a whole rather than one ship's
+    # heartbeats, so they settle every still-pending check on the project.
+    # :deducted is deliberately absent — a deduction is specific to its ship event.
+    CASCADING_STATUSES = %w[banned manually_passed].freeze
+
+    # Display order for mixed-status listings (e.g. a user's integrity
+    # history): auto-passed, passed, rejected, deducted, then pending last.
+    STATUS_SORT_ORDER = %w[auto_passed manually_passed banned deducted pending].freeze
+
+    scope :by_status_priority, -> {
+      case_node = STATUS_SORT_ORDER.each_with_index.inject(Arel::Nodes::Case.new(arel_table[:status])) do |case_node, (status, priority)|
+        case_node.when(statuses[status]).then(priority)
+      end
+      order(case_node)
+    }
 
     # How long a reviewer's claim on a review holds before it's up for grabs
     # again. There's no separate expiry column — expiry is just claimed_at + TTL.
@@ -84,13 +108,15 @@ module Certification
     FLAG_NEURALNET         = 1 << 2
     FLAG_NO_HACKATIME_USER = 1 << 3
     FLAG_CHECK_FAILED      = 1 << 4
+    FLAG_ENTROPY_ANOMALY   = 1 << 5
 
     FLAGS_BY_BIT = {
       FLAG_UNKNOWN_FILE      => :unknown_file,
       FLAG_CURSOR_STRANGE    => :cursor_strange,
       FLAG_NEURALNET         => :neuralnet,
       FLAG_NO_HACKATIME_USER => :no_hackatime_user,
-      FLAG_CHECK_FAILED      => :check_failed
+      FLAG_CHECK_FAILED      => :check_failed,
+      FLAG_ENTROPY_ANOMALY   => :entropy_anomaly
     }.freeze
 
     validates :decision_justification, length: { maximum: 10_000 }, allow_blank: true
@@ -101,6 +127,14 @@ module Certification
 
     before_save :stamp_reviewed_at, if: -> {
       will_save_change_to_status? && status.in?(DECIDED_STATUSES) && reviewed_at.nil?
+    }
+
+    # Set on the rows a cascade writes: the originating decision already covered
+    # the whole project, so their own callbacks would only re-walk the same set.
+    attr_accessor :skip_decision_cascade
+
+    after_commit :apply_decision_to_project, if: -> {
+      !skip_decision_cascade && saved_change_to_status? && status.in?(CASCADING_STATUSES)
     }
 
     def claim_active?
@@ -118,6 +152,7 @@ module Certification
     def neuralnet? = flag?(FLAG_NEURALNET)
     def no_hackatime_user? = flag?(FLAG_NO_HACKATIME_USER)
     def check_failed? = flag?(FLAG_CHECK_FAILED)
+    def entropy_anomaly? = flag?(FLAG_ENTROPY_ANOMALY)
 
     def flag_names
       FLAGS_BY_BIT.filter_map { |bit, name| name if flag?(bit) }
@@ -127,6 +162,30 @@ module Certification
 
     def stamp_reviewed_at
       self.reviewed_at = Time.current
+    end
+
+    # Copies this verdict onto the project's other pending checks, then — for a
+    # fraud verdict — clears the project's YSWS queue. Order matters:
+    # YswsAirtableSyncJob reads each review's own ship event's integrity row, so
+    # every row has to carry the verdict before the rejections enqueue their syncs.
+    def apply_decision_to_project
+      decided_project = project_including_deleted
+      return if decided_project.blank?
+
+      cascade_to_pending_siblings(decided_project)
+      Certification::YswsReviewRejector.reject_pending_for_project!(decided_project) if banned?
+    end
+
+    def cascade_to_pending_siblings(decided_project)
+      decided_project.integrity_checks.pending.where.not(id: id).find_each do |sibling|
+        sibling.skip_decision_cascade = true
+        sibling.paper_trail_event = "cascaded_decision"
+        sibling.update!(
+          status: status,
+          reviewer_id: reviewer_id,
+          decision_justification: decision_justification
+        )
+      end
     end
   end
 end

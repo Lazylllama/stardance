@@ -2,6 +2,7 @@ class Projects::DevlogsController < ApplicationController
   TEST_TIME_SECONDS = 15.minutes.to_i
 
   before_action :set_project
+  before_action :set_devlog_including_deleted, only: %i[hackatime_breakdown]
   before_action :set_devlog, only: %i[edit update destroy versions]
   before_action :require_hackatime_project, only: %i[create]
   before_action :sync_hackatime_projects, only: %i[create]
@@ -39,7 +40,6 @@ class Projects::DevlogsController < ApplicationController
 
       if @devlog.save
         Post.create!(project: @project, user: current_user, postable: @devlog)
-        attach_lookout_sessions(@devlog)
         session.delete(test_time_session_key) if test_time_granted?
         track_event "devlog_posted", { project_id: @project.id, devlog_id: @devlog.id, duration_seconds: @devlog.duration_seconds }
         flash[:notice] = "Devlog created successfully"
@@ -155,6 +155,12 @@ class Projects::DevlogsController < ApplicationController
     @versions = @devlog.versions.order(version_number: :desc)
   end
 
+  def hackatime_breakdown
+    authorize @devlog
+    @breakdown = @devlog.hackatime_project_breakdown
+    render layout: false
+  end
+
   private
 
   # Match the variant the originating feed rendered so the panel's images hit
@@ -189,6 +195,24 @@ class Projects::DevlogsController < ApplicationController
                       .postable
   end
 
+  # Post::Devlog has its own default_scope (SoftDeletable) — .postable on a
+  # deleted devlog's Post would otherwise silently return nil (default_scope
+  # applies to the preloader/association fetch regardless of the Post row
+  # itself being found), which then blows up `authorize` with
+  # Pundit::NotDefinedError for nil. Only used by hackatime_breakdown, which
+  # is already admin-only (Post::DevlogPolicy#hackatime_breakdown?) — unlike
+  # set_devlog's other callers (show, edit, ...), whose policies don't check
+  # deleted status themselves and rely on set_devlog silently failing to find
+  # deleted records as their only protection.
+  def set_devlog_including_deleted
+    @devlog = Post::Devlog.unscoped do
+      @project.posts
+              .where(postable_type: "Post::Devlog")
+              .find_by!(postable_id: params[:id])
+              .postable
+    end
+  end
+
   def require_hackatime_project
     return if test_time_granted?
 
@@ -209,14 +233,6 @@ class Projects::DevlogsController < ApplicationController
 
   def devlog_params
     params.require(:post_devlog).permit(:body, attachments: [])
-  end
-
-  def attach_lookout_sessions(devlog)
-    ids = Array(params.dig(:post_devlog, :lookout_session_ids)).reject(&:blank?)
-    return if ids.empty?
-
-    @project.lookout_sessions.where(user: current_user, id: ids, devlog_id: nil)
-      .update_all(devlog_id: devlog.id)
   end
 
   def update_devlog_params

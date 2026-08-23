@@ -85,4 +85,6 @@
 #  fk_rails_...  (user_id => users.id)
 #
 class ShopItem::LetterMail < ShopItem
+  THESEUS_QUEUE = "stardance-orders".freeze
+  MAX_ITEMS_PER_LETTER = 10
 end

@@ -208,6 +208,31 @@ turbo-frame#project_hero {
   }
 }
 
+.project-show__admin-link {
+  font-size: 0.85em;
+  text-decoration: none;
+  opacity: 0.85;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// Admin-editing-someone-else's-project notice. Sits inside an admin_tool
+// dashed box, so it only needs its own text color, not the full pill/border
+// treatment. Unlike the profile page's equivalent, this doesn't need a
+// .profile--editing-style CSS reveal — the whole edit form is only rendered
+// server-side when actually in edit mode, so there's no "empty box" case.
+.project-show__admin-edit-notice {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.85rem;
+  color: var(--color-brand-orange);
+
+  strong {
+    font-weight: 700;
+  }
+}
+
 .project-show__title-input {
   padding: 0;
   border: 0;
@@ -592,19 +617,6 @@ turbo-frame#project_hero {
   background: transparent;
 }
 
-.project-show__help {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  font-size: 0.5rem;
-  font-weight: 700;
-  opacity: 0.4;
-  vertical-align: middle;
-}
-
 .project-show__panel-actions {
   display: flex;
   justify-content: flex-end;
@@ -695,6 +707,19 @@ turbo-frame#project_hero {
 
 .project-show__pill--danger {
   gap: 6px;
+}
+
+.project-show__pill--review {
+  border-color: var(--color-brand-orange);
+  color: var(--color-brand-orange);
+
+  &:hover:not(:disabled):not([aria-disabled="true"]),
+  &:focus-visible:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-brand-orange-soft);
+    border-color: var(--color-brand-orange);
+    color: var(--color-brand-orange);
+    outline: none;
+  }
 }
 
 .project-show__pill-icon {
@@ -1120,6 +1145,24 @@ turbo-frame#project_hero {
   &--clickable {
     font: inherit;
     cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  &--info {
+    cursor: help;
+
+    &:focus-visible {
+      outline: 2px solid var(--badge-accent, var(--color-brand-mint));
+      outline-offset: 2px;
+    }
+  }
+
+  &--clickable,
+  &--info {
     transition:
       background 120ms ease,
       border-color 120ms ease;
@@ -1136,7 +1179,6 @@ turbo-frame#project_hero {
         var(--badge-accent, var(--color-brand-salmon)) 65%,
         transparent
       );
-      outline: none;
     }
   }
 }
@@ -1157,12 +1199,20 @@ turbo-frame#project_hero {
   }
 }
 
+// Fix the shipped card overflow bug on mobile ( issue #1099 )
 .project-show__latest-ship-stats {
   list-style: none;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-l);
   opacity: 0.75;
+}
+
+@media (max-width: 720px) {
+  .project-show__latest-ship-stats {
+    gap: var(--space-s);
+  }
 }
 
 .project-show__latest-ship-media {
@@ -1787,7 +1837,6 @@ turbo-frame#project_hero {
   .feed-composer__chips,
   .feed-composer__grid,
   .feed-composer__attach-wrap,
-  .feed-composer__info-wrap,
   .feed-composer__toolbar {
     flex-shrink: 0;
   }

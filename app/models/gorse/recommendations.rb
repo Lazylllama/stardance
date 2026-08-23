@@ -3,6 +3,7 @@
 class Gorse::Recommendations
   DEFAULT_LIMIT = 6
   CACHE_TTL = 2.minutes
+  GUEST_RECOMMENDER = "trending_recent"
 
   def initialize(user:, client: Gorse::Client.new)
     @user = user
@@ -10,7 +11,7 @@ class Gorse::Recommendations
   end
 
   def posts(limit: DEFAULT_LIMIT)
-    if enabled?(:gorse_personalized_feed)
+    if post_recommendations_enabled?
       recommended_posts(limit)
     else
       []
@@ -32,19 +33,48 @@ class Gorse::Recommendations
       user.present? && Gorse.enabled? && Flipper.enabled?(flag, user)
     end
 
-    def recommended_posts(limit)
-      ids = recommendation_ids(category: "feed", count: limit * 3)
-      posts = posts_from_ids(ids)
-      if posts.size >= limit
-        posts.first(limit)
+    def post_recommendations_enabled?
+      return false unless Gorse.enabled?
+
+      if user.present?
+        Flipper.enabled?(:gorse_personalized_feed, user)
       else
-        posts
+        Flipper.enabled?(:gorse_personalized_feed)
       end
+    end
+
+    def recommended_posts(limit)
+      ids =
+        if user.present?
+          recommendation_ids(category: "feed", count: limit * 3)
+        else
+          guest_recommendation_ids(category: "feed", count: limit * 3)
+        end
+      posts = posts_from_ids(ids)
+      diversify_posts(posts, limit:)
+    end
+
+    def diversify_posts(posts, limit:)
+      selected = []
+      seen_user_ids = Set.new
+      seen_project_ids = Set.new
+
+      posts.each do |post|
+        next if post.user_id.present? && seen_user_ids.include?(post.user_id)
+        next if post.project_id.present? && seen_project_ids.include?(post.project_id)
+
+        selected << post
+        seen_user_ids << post.user_id if post.user_id.present?
+        seen_project_ids << post.project_id if post.project_id.present?
+        break if selected.size >= limit
+      end
+
+      selected
     end
 
     def posts_from_ids(ids)
       post_ids = ids.filter_map { |id| Gorse::Ids.post_id(id) }
-      posts = Gorse::PostPayload.feed_scope(user)
+      posts = Gorse::PostPayload.recommendable_feed_scope(user)
                                 .where(id: post_ids)
                                 .includes(:user, :project, :postable)
                                 .index_by(&:id)
@@ -68,6 +98,15 @@ class Gorse::Recommendations
         expires_in: CACHE_TTL
       ) do
         client.recommend(Gorse::Ids.user(user), category: category, count: count)
+      end
+    end
+
+    def guest_recommendation_ids(category:, count:)
+      Rails.cache.fetch(
+        [ "gorse", "recommendations", "guest", GUEST_RECOMMENDER, category, count ],
+        expires_in: CACHE_TTL
+      ) do
+        client.non_personalized(GUEST_RECOMMENDER, category:, count:)
       end
     end
 

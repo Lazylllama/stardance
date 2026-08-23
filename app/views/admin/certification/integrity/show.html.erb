@@ -30,7 +30,7 @@
         <dl class="integrity-review__list">
           <div class="integrity-review__row">
             <dt class="integrity-review__term">Title</dt>
-            <dd class="integrity-review__value"><%= link_to project.title, project_path(project) %></dd>
+            <dd class="integrity-review__value"><%= link_to project.title, admin_project_path(project) %></dd>
           </div>
           <div class="integrity-review__row">
             <dt class="integrity-review__term">Project ID</dt>
@@ -95,7 +95,7 @@
             <dt class="integrity-review__term">Name</dt>
             <dd class="integrity-review__value">
               <% if shipper.display_name.present? %>
-                <%= link_to shipper.display_name, profile_path(shipper.display_name) %>
+                <%= link_to shipper.display_name, admin_user_path(shipper) %>
               <% else %>
                 <%= dash %>
               <% end %>
@@ -140,7 +140,10 @@
         </dl>
 
         <div class="integrity-review__tools">
-          <%= link_to "Joe ↗", "https://joe.fraud.hackclub.com/profile/#{shipper.slack_id}", target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
+          <% hackatime_uid = shipper.identities.find { |i| i.provider == "hackatime" }&.uid %>
+          <% if hackatime_uid.present? %>
+            <%= link_to "Telescreen ↗", telescreen_hackatime_overview_url(hackatime_uid), target: "_blank", rel: "noopener noreferrer", class: "integrity-review__tool-btn" %>
+          <% end %>
         </div>
       <% else %>
         <p class="integrity-review__placeholder">User record is unavailable.</p>
@@ -201,10 +204,24 @@
   </section>
 
   <% if @review.pending? && @review.claimed_by?(current_user) %>
-    <div class="integrity-review__actions" role="group" aria-label="Review decision">
-      <button type="button" class="integrity-review__action integrity-review__action--pass" disabled>Not Fraudulent</button>
-      <button type="button" class="integrity-review__action integrity-review__action--fraud" disabled>Fraudulent</button>
-      <button type="button" class="integrity-review__action integrity-review__action--deduct" disabled>Deducted hours</button>
-    </div>
+    <%= form_with url: admin_certification_integrity_review_path(@review), method: :patch, class: "integrity-review__decision" do %>
+      <div class="integrity-review__decision-fields">
+        <div class="integrity-review__decision-field">
+          <%= label_tag :deduction_hours, "Hours to deduct", class: "integrity-review__decision-label" %>
+          <%= number_field_tag :deduction_hours, params[:deduction_hours], step: 0.1, min: 0, inputmode: "decimal", autocomplete: "off", class: "integrity-review__decision-input", aria: { describedby: "integrity-review-deduct-help" } %>
+          <p class="integrity-review__decision-help" id="integrity-review-deduct-help">Only used by the "Deduct hours" verdict.</p>
+        </div>
+        <div class="integrity-review__decision-field integrity-review__decision-field--wide">
+          <%= label_tag :decision_justification, "Justification (optional)", class: "integrity-review__decision-label" %>
+          <%= text_area_tag :decision_justification, params[:decision_justification], rows: 3, class: "integrity-review__decision-textarea" %>
+        </div>
+      </div>
+
+      <div class="integrity-review__actions" role="group" aria-label="Review decision">
+        <%= button_tag "Not Fraudulent", type: :submit, name: "decision", value: "pass", class: "integrity-review__action integrity-review__action--pass" %>
+        <%= button_tag "Fraudulent", type: :submit, name: "decision", value: "fraud", class: "integrity-review__action integrity-review__action--fraud", data: { turbo_confirm: "Mark this project as fraudulent?" } %>
+        <%= button_tag "Deduct hours", type: :submit, name: "decision", value: "deduct", class: "integrity-review__action integrity-review__action--deduct" %>
+      </div>
+    <% end %>
   <% end %>
 </main>

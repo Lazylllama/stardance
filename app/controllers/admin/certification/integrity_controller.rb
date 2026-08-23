@@ -5,8 +5,9 @@ class Admin::Certification::IntegrityController < Admin::Certification::Applicat
     reviews = ::Certification::Integrity
       .pending
       .unclaimed_or_claimed_by(current_user)
+      .joins(ship_event: :project)
       .includes(ship_event: [ :project, { post: :user } ])
-      .order(created_at: :asc)
+      .order("projects.id ASC")
       .to_a
 
     @total_pending = reviews.size
@@ -51,5 +52,56 @@ class Admin::Certification::IntegrityController < Admin::Certification::Applicat
     end
 
     @shop_orders = @review.user&.shop_orders&.includes(:shop_item)&.order(created_at: :desc) || ShopOrder.none
+  end
+
+  # Records a reviewer's verdict on a pending review. Only the admin currently
+  # holding the claim can decide it, so two reviewers can't clobber each other.
+  # PaperTrail (whodunnit set in Admin::ApplicationController) captures the audit
+  # trail for the status change.
+  def update
+    @review = ::Certification::Integrity.find(params[:id])
+    authorize @review, policy_class: Admin::Certification::IntegrityPolicy
+
+    unless @review.pending? && @review.claimed_by?(current_user)
+      redirect_to admin_certification_integrity_reviews_path,
+                  alert: "This review can no longer be decided — it may have been claimed by another admin or already resolved."
+      return
+    end
+
+    case params[:decision]
+    when "pass"
+      @review.assign_attributes(status: :manually_passed, deduction_minutes: nil)
+    when "fraud"
+      @review.assign_attributes(status: :banned, deduction_minutes: nil)
+    when "deduct"
+      @review.assign_attributes(status: :deducted, deduction_minutes: deduction_minutes_param)
+    else
+      redirect_to admin_certification_integrity_review_path(@review), alert: "Unknown decision."
+      return
+    end
+
+    @review.reviewer = current_user
+    @review.decision_justification = params[:decision_justification].presence
+
+    if @review.save
+      redirect_to admin_certification_integrity_reviews_path,
+                  notice: "Recorded decision for review ##{@review.id}."
+    else
+      @shop_orders = @review.user&.shop_orders&.includes(:shop_item)&.order(created_at: :desc) || ShopOrder.none
+      flash.now[:alert] = @review.errors.full_messages.to_sentence
+      render :show, status: :unprocessable_entity
+    end
+  end
+
+  private
+
+  # The "Deducted hours" verdict is entered in hours for the reviewer but stored
+  # as whole minutes. Blank stays nil so the model's presence validation surfaces
+  # the error instead of silently deducting zero.
+  def deduction_minutes_param
+    hours = params[:deduction_hours]
+    return nil if hours.blank?
+
+    (hours.to_f * 60).round
   end
 end

@@ -19,11 +19,21 @@
 // each cell's data-label attribute.
 
 .ysws-queue {
+  // Queue total on the left, integrity toggle pushed out to the right so it
+  // lines up with the trailing edge of the table below.
   & &__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs) var(--space-m);
+    margin-bottom: var(--space-l);
+  }
+
+  & &__summary-total {
     display: flex;
     align-items: baseline;
     gap: var(--space-xs);
-    margin-bottom: var(--space-l);
   }
 
   & &__summary-label {
@@ -62,6 +72,25 @@
     }
   }
 
+  // Checkbox filters read as a single row rather than the stacked
+  // label-over-control layout the dropdown filters use.
+  & &__filter--toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  & &__checkbox {
+    accent-color: var(--color-brand-highlight);
+    width: 1rem;
+    height: 1rem;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-brand-highlight);
+      outline-offset: 2px;
+    }
+  }
+
   & &__select {
     background: var(--color-set-1-bg);
     color: var(--color-space-text);
@@ -77,17 +106,69 @@
     }
   }
 
-  // Per-reviewer goal widget, sits beside the project-type dropdown and counts
-  // down the reviews remaining until the devlog-review goal is reached.
+  // The project-type select stands in for its column title, so it drops the
+  // boxed-control chrome and borrows the surrounding th's type instead.
+  & &__select--header {
+    max-width: 12rem;
+    padding: var(--space-xxs) var(--space-xs);
+    background: transparent;
+    border-color: transparent;
+    // Sit in the header row as the column title: same muted uppercase type as
+    // the plain th labels, with only a hover border hinting it's interactive.
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-set-1-fg-secondary);
+      color: var(--color-brand-highlight);
+    }
+
+    // The popup list isn't painted by the header, so it needs its own surface.
+    option {
+      background: var(--color-set-1-bg);
+      color: var(--color-space-text);
+      text-transform: none;
+    }
+  }
+
+  // Per-reviewer pace widget, sits beside the queue filters and shows the
+  // running devlogs-per-day average for this review week plus the catch-up count.
+  // Superseded by the dashboard's progress panel when that flag is on.
   & &__goal {
     display: flex;
-    align-items: baseline;
+    flex-direction: column;
+    align-items: flex-start;
     align-self: flex-end;
-    gap: var(--space-xs);
+    gap: var(--space-xxxs);
     padding: var(--space-xs) var(--space-s);
     background: var(--color-set-1-bg);
     border: 2px solid var(--color-set-1-fg-secondary);
     border-radius: var(--profile-radius);
+  }
+
+  & &__goal-primary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+  }
+
+  & &__goal-note {
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  // Hitting the daily average earns the same top-spot gradient the #1 leaderboard
+  // row wears. It's a light surface, so every label inside flips to the dark
+  // set-1 background colour to stay legible.
+  & &__goal--on-pace {
+    background: var(--gradient-extra-highlight) center / cover no-repeat;
+
+    .ysws-queue__goal-count,
+    .ysws-queue__goal-label,
+    .ysws-queue__goal-note {
+      color: var(--color-set-1-bg);
+    }
   }
 
   & &__goal-count {
@@ -102,6 +183,28 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  & &__reset-filters {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-end;
+    min-height: 3rem;
+    padding-inline: var(--space-s);
+    background: var(--color-set-1-bg);
+    border: 2px solid var(--color-set-1-fg-secondary);
+    border-radius: var(--profile-radius);
+    color: var(--color-space-text);
+    font-size: var(--font-size-s);
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--color-brand-highlight);
+      color: var(--color-brand-highlight);
+      text-decoration: none;
+    }
   }
 
   // Sortable column header: the title doubles as a sort toggle, with an arrow
@@ -271,28 +374,32 @@
     background: var(--color-brand-salmon-soft);
     color: var(--color-brand-salmon);
   }
-
-  // Small action primary, dark-bg variant (branding §4.2): highlight fill,
-  // dark text, no border, 16px bold, 16px/3px padding, fully rounded.
+  // Small action primary, dark-bg variant with extra contrast for claimed rows.
   & &__view-btn {
     display: inline-block;
     padding: 3px 16px;
+    border: 2px solid var(--color-brand-mint);
     border-radius: 999px;
-    background: var(--color-brand-highlight);
-    color: var(--color-set-1-bg);
+    background: var(--color-brand-blue);
+    color: #000;
     font-size: var(--font-size-m);
     font-weight: 700;
     text-decoration: none;
     white-space: nowrap;
+    box-shadow: 0 0 0 2px var(--color-set-1-bg);
+
+    &:visited,
+    &:hover {
+      color: #000;
+    }
 
     &:hover {
-      background: var(--color-brand-highlight-secondary);
-      color: var(--color-set-1-bg);
+      background: var(--color-brand-blue);
       text-decoration: none;
     }
 
     &:active {
-      background: var(--color-space-text);
+      background: var(--color-brand-highlight-secondary);
     }
 
     &:focus-visible {
@@ -390,6 +497,12 @@ body:has(.certification-ysws) {
         font-size: var(--font-size-l);
       }
     }
+  }
+
+  .recordings-card .ship-review__panel {
+    padding: 0;
+    background: none;
+    border: none;
   }
 
   .detail-value {
@@ -712,6 +825,38 @@ body:has(.certification-ysws) {
       flex-wrap: wrap;
     }
 
+    &__review-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-s);
+    }
+
+    &__undo-form {
+      margin: 0;
+    }
+
+    &__unclaim-form {
+      margin: 0;
+
+      .btn-secondary {
+        background: rgba(129, 255, 255, 0.08);
+        border: 2px solid var(--color-brand-mint);
+        border-radius: var(--profile-radius);
+        color: var(--color-brand-mint);
+        font-size: var(--font-size-s);
+        font-weight: 700;
+        box-shadow: none;
+
+        &:hover {
+          background: rgba(129, 255, 255, 0.16);
+          color: var(--color-brand-mint);
+          box-shadow: 0 4px 12px rgba(129, 255, 255, 0.25);
+          transform: translateY(-2px);
+        }
+      }
+    }
+
     // Title row carries the page heading plus the shared Super Star (magic)
     // controls partial (app/views/projects/_fire_controls.html.erb). That
     // partial ships .project-show__* classes that only live in the project-show
@@ -906,6 +1051,18 @@ body:has(.certification-ysws) {
         box-shadow: 0 4px 12px rgba(255, 141, 157, 0.3);
       }
     }
+
+    &.btn-resync {
+      background: rgba(149, 219, 255, 0.1);
+      color: var(--color-brand-blue);
+      border-color: var(--color-brand-blue);
+
+      &:hover:not(:disabled) {
+        background: rgba(149, 219, 255, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(149, 219, 255, 0.3);
+      }
+    }
   }
 
   // Main Grid Layout
@@ -934,6 +1091,13 @@ body:has(.certification-ysws) {
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
+    }
+
+    // Repo already submitted to another YSWS — outline the whole sidebar.
+    &--double-dipped {
+      outline: 3px solid var(--color-brand-yellow);
+      outline-offset: var(--space-xs);
+      border-radius: var(--profile-radius);
     }
 
     // Popup mode - triggered when boss note is visible
@@ -1264,6 +1428,10 @@ body:has(.certification-ysws) {
       padding-bottom: var(--space-xl);
       border-bottom: 1px solid var(--color-space-border);
 
+      // Anchor target for the MAC banner's recommendation rows — keeps the card's
+      // header clear of the top of the viewport when jumped to.
+      scroll-margin-top: var(--space-xxl);
+
       &:last-child {
         border-bottom: none;
         padding-bottom: 0;
@@ -1303,6 +1471,12 @@ body:has(.certification-ysws) {
       font-size: var(--font-size-l);
       font-weight: 700;
       font-family: var(--font-family-sans);
+    }
+
+    .devlog-date {
+      color: var(--color-set-1-fg-secondary);
+      font-size: var(--font-size-s);
+      font-weight: 600;
     }
 
     .devlog-status {
@@ -1355,11 +1529,28 @@ body:has(.certification-ysws) {
         letter-spacing: 0.05em;
       }
 
+      // Thumbnails share a row with the MAC pre-screen note (.mac-hint--aside),
+      // which wraps below them on narrow viewports.
+      .media-row {
+        align-items: flex-start;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-s);
+
+        // Sized to its thumbnails so the note can take the width left over
+        // after the last one; shrinks (re-wrapping the grid) when space is tight.
+        &__media {
+          flex: 0 1 auto;
+          min-width: 0;
+        }
+      }
+
+      // No margin-top: the label sits above .media-row, so the thumbnails must
+      // line up with the top of the note beside them.
       .media-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: var(--space-s);
-        margin-top: var(--space-s);
       }
 
       .media-item {
@@ -1568,8 +1759,14 @@ body:has(.certification-ysws) {
 
     .quick-adjust-buttons {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: var(--space-xxs);
+
+      &__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-xxs);
+      }
     }
 
     .adjust-btn {
@@ -1889,6 +2086,30 @@ body:has(.certification-ysws) {
           background: rgba(255, 255, 255, 0.05);
         }
       }
+    }
+  }
+
+  // Double-dip warning (sidebar, under the repo / demo / readme links)
+  .double-dip-warning {
+    margin-top: var(--space-m);
+    padding: var(--space-s) var(--space-m);
+    background: rgba(255, 229, 100, 0.15);
+    border: 2px solid var(--color-brand-yellow);
+    border-radius: var(--profile-radius);
+    font-family: var(--font-family-sans);
+
+    &__title {
+      margin: 0;
+      color: var(--color-brand-yellow);
+      font-size: var(--font-size-s);
+      font-weight: 700;
+    }
+
+    &__detail {
+      margin: var(--space-xxs) 0 0;
+      color: var(--color-space-text-muted);
+      font-size: var(--font-size-xs);
+      line-height: 1.5;
     }
   }
 
@@ -2474,9 +2695,186 @@ body:has(.certification-ysws) {
     font-variant-numeric: tabular-nums;
   }
 
+  // Reviewers meeting the daily average wear the leaderboard top-spot gradient.
+  // It's a light surface, so cell text flips to the dark navy set-1 background
+  // colour instead of the pale yellow the admin link/table styles use.
+  //
+  // The selector is deliberately heavy: the global admin table styles in
+  // admin.scss set a background on both `tbody tr:nth-child(odd)` and
+  // `tbody tr:hover`, and a colour on `td`. Those out-specify a lone modifier
+  // class, so without repeating the row class against each state the gradient
+  // vanishes on hover and on every odd row.
+  & &__table tbody tr.ysws-dashboard__row--on-pace {
+    // Lifted so the glow spills over the neighbouring rows' backgrounds instead
+    // of being painted over by them.
+    position: relative;
+
+    &,
+    &:nth-child(odd),
+    &:hover {
+      background: var(--gradient-extra-highlight) center / cover no-repeat;
+      // Two stacked soft lilacs: a tight one to feather the row's hard edge and
+      // a wider one to bleed the glow into the rows above and below.
+      box-shadow:
+        0 0 var(--space-xs) var(--color-brand-lilac-soft),
+        0 0 var(--space-l) var(--color-brand-lilac-soft);
+    }
+
+    td {
+      color: var(--color-set-1-bg);
+    }
+  }
+
+  // Opted out of the global admin link colour in admin.scss so the reviewer name
+  // stays dark navy on the gradient rather than turning yellow.
+  &__reviewer-link--on-pace {
+    color: var(--color-set-1-bg);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--color-set-1-bg);
+      text-decoration: underline;
+    }
+  }
+
   &__chart {
     position: relative;
     height: 280px;
+  }
+
+  // "See your progress" — the reviewer's own numbers, sitting under the crew-wide
+  // chart in the same panel. Ruled off from the canvas so the two read as
+  // separate ideas rather than one long block.
+  &__progress {
+    margin-block-start: var(--space-m);
+    padding-block-start: var(--space-m);
+    border-block-start: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  &__progress-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xxxs);
+    padding: var(--space-xs) var(--space-s);
+    background: var(--color-set-1-bg);
+    border: 2px solid var(--color-set-1-fg-secondary);
+    border-radius: var(--profile-radius);
+  }
+
+  // Hitting the daily average earns the same top-spot gradient the #1 leaderboard
+  // row wears — the one loud surface on this panel. It's a light background, so
+  // every label inside flips to the dark set-1 colour to stay legible.
+  &__progress-hero--on-pace {
+    background: var(--gradient-extra-highlight) center / cover no-repeat;
+    border-color: transparent;
+
+    .ysws-dashboard__progress-count,
+    .ysws-dashboard__progress-label,
+    .ysws-dashboard__progress-note {
+      color: var(--color-set-1-bg);
+    }
+  }
+
+  &__progress-primary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    margin: 0;
+  }
+
+  &__progress-count {
+    color: var(--color-brand-highlight);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__progress-label {
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__progress-note {
+    margin: 0;
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  &__progress-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-s);
+    margin-block: var(--space-m) 0;
+
+    @media (max-width: 1200px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__progress-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xxxs);
+  }
+
+  &__progress-stat-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__progress-stat-value {
+    margin: 0;
+    color: var(--color-brand-off-white);
+    font-size: var(--font-size-l);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__progress-stat-note {
+    margin: 0;
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  &__progress-tier {
+    margin-block-start: var(--space-m);
+  }
+
+  &__progress-tier-note {
+    margin: 0 0 var(--space-xxs);
+    color: var(--color-set-1-fg-secondary);
+    font-size: var(--font-size-xs);
+
+    strong {
+      color: var(--color-brand-off-white);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  // Fill percentage arrives as the --tier-fill custom property so the only
+  // inline value is the number itself; all styling stays here.
+  &__progress-tier-track {
+    height: var(--space-xxs);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--space-xxs);
+    overflow: hidden;
+  }
+
+  &__progress-tier-fill {
+    width: var(--tier-fill, 0%);
+    height: 100%;
+    background: var(--color-brand-lilac);
+    border-radius: inherit;
   }
 
   &__empty,

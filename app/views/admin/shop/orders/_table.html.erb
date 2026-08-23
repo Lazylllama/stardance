@@ -22,8 +22,14 @@
       <tbody>
         <% orders.each do |order| %>
           <% can_see = order.can_view_address?(current_user) %>
-          <tr>
-            <td>#<%= order.id %></td>
+          <% auto_approvable = @auto_approvable_ids&.include?(order.id) %>
+          <tr class="<%= "shop-orders__row--auto-approvable" if auto_approvable %>">
+            <td>
+              #<%= order.id %>
+              <% if auto_approvable %>
+                <br><small class="shop-orders__auto-approve-tag" title="Meets the auto-approval bar: every earlier ship passed integrity and the order is under the dollar ceiling">auto-approvable</small>
+              <% end %>
+            </td>
             <td>
               <% if order.user %>
                 <%= link_to order.user.display_name || "Unknown", admin_user_path(order.user) %><br>
@@ -135,7 +141,10 @@
               <% end %>
             </td>
             <td>
-              <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+              <div class="shop-orders__row-actions">
+                <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+                <%= render "approve_button", order: order %>
+              </div>
             </td>
           </tr>
         <% end %>

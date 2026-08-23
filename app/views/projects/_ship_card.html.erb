@@ -15,6 +15,22 @@
   payout_review    = local_assigns[:payout_review]
   media_variant    = local_assigns.fetch(:media_variant, :large)
   lazy_media       = local_assigns.fetch(:lazy_media, false)
+  blessing_badge = case ship.payout_blessing
+  when "blessed"
+    {
+      modifier: "approved",
+      label: "✨ Blessed",
+      title: "Blessed",
+      message: "A blessing for thoughtful voting — this ship's Stardust includes a 20% bonus."
+    }
+  when "cursed"
+    {
+      modifier: "returned",
+      label: "💀 Cursed",
+      title: "Cursed",
+      message: "A curse for rushed voting — this ship's Stardust was halved."
+    }
+  end
   engagement_data = if track_engagement
     {
       controller: "feed-engagement",
@@ -66,17 +82,24 @@
         <% else %>
           <span class="project-show__latest-ship-status project-show__latest-ship-status--returned">Mission returned</span>
         <% end %>
-      <% elsif mission_sub&.approved? && mission_sub.shop_order_id.nil? && mission_sub.mission.prizes_count > 0 %>
+      <% elsif mission_sub&.approved? && (unclaimed_prizes = mission_sub.unredeemed_prizes.count) > 0 %>
         <%= link_to redeem_mission_submission_path(mission_sub),
                     class: "project-show__latest-ship-status project-show__latest-ship-status--approved project-show__latest-ship-status--clickable" do %>
-          Claim prize ↗
+          <%= "Claim #{"prize".pluralize(unclaimed_prizes)} ↗" %>
         <% end %>
       <% end %>
     <% end %>
-    <% if ship.payout_blessing == "blessed" %>
-      <span class="project-show__latest-ship-status project-show__latest-ship-status--approved" title="Blessed (+20% bonus)">✨ Blessed</span>
-    <% elsif ship.payout_blessing == "cursed" %>
-      <span class="project-show__latest-ship-status project-show__latest-ship-status--returned" title="Cursed (-50% reduction)">💀 Cursed</span>
+    <% if blessing_badge %>
+      <%= tag.span blessing_badge[:label],
+            class: "project-show__latest-ship-status project-show__latest-ship-status--#{blessing_badge[:modifier]} project-show__latest-ship-status--info",
+            tabindex: 0,
+            aria: { label: "#{blessing_badge[:title]}: #{blessing_badge[:message]}" },
+            data: {
+              controller: "tooltip",
+              tooltip_title_value: blessing_badge[:title],
+              tooltip_message_value: blessing_badge[:message],
+              tooltip_position_value: "bottom"
+            } %>
     <% end %>
   </div>
 
@@ -94,10 +117,8 @@
     <div class="feed-post-card__meta">
       <p class="feed-post-card__byline">
         <% if author %>
-          <%= link_to "@#{author.display_name}",
-                      profile_path(author.display_name),
-                      class: "feed-post-card__author",
-                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %><%= render StreakBadgeComponent.new(user: author) %><%= " ⚡" if author.admin? %>
+          <%= render "shared/username_link", user: author, link_class: "feed-post-card__author",
+                      data: { turbo_frame: "_top", turbo_prefetch: "true" } %>
         <% end %>
         <span class="feed-post-card__context">on</span>
         <%= link_to project.title, project_path(project), class: "feed-post-card__project", data: { turbo_frame: "_top" } %>
@@ -108,7 +129,7 @@
 
       <% if ship_text.present? %>
         <div class="feed-post-card__body feed-post-card__body--inline project-show__latest-ship-text">
-          <%= simple_format(ship_text, {}, sanitize: true) %>
+          <%= md(ship_text, allow_images: false) %>
         </div>
       <% end %>
     </div>
