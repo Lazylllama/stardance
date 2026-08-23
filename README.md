@@ -35,7 +35,7 @@ me and the homies love docker, and it makes it stupid simple, so its highly reco
 
 5. pull out some instant ramen
 
-**random commands you might need**
+#### random commands you might need
 
 if you just need to run a command once (eg test migrations or whatever) here is how
 
@@ -49,13 +49,11 @@ if its giving you a file not found error and you are on windows, try running the
 
 This will reset all your code!
 
-```
+```sh
 git config --local core.autocrlf false
 git rm --cached -r .   
 git reset --hard
 ```
-
-
 
 ## i hate docker
 
@@ -83,13 +81,15 @@ We deploy to Coolify using Docker. Both the web and worker services use the same
 ### web service
 
 Just run it-- the entrypoint should trigger
-```
+
+```sh
 ./bin/thrust ./bin/rails server
 ```
 
 ### worker service
 
 In the worker resource's **General** tab, add this to **Custom Docker Options**:
-```
+
+```sh
 --entrypoint "./bin/rails solid_queue:start"
 ```
