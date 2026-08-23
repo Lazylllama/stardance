@@ -7,7 +7,8 @@
     active   = @sort == col
     next_dir = (active && @dir == "desc") ? "asc" : "desc"
     arrow    = active ? (@dir == "asc" ? "▲" : "▼") : "▾"
-    link_to admin_certification_ysws_reviews_path(project_type: @project_type, sort: col, dir: next_dir),
+    link_to admin_certification_ysws_reviews_path(project_type: @project_type, sort: col, dir: next_dir,
+                                                  with_integrity: @with_integrity ? nil : "0"),
             class: "ysws-queue__sort#{' ysws-queue__sort--active' if active}" do
       safe_join([ label, content_tag(:span, arrow, class: "ysws-queue__sort-arrow", "aria-hidden": true) ], " ")
     end
@@ -21,53 +22,83 @@
     <p class="ysws-dashboard__loading">Loading reviewer stats…</p>
   <% end %>
 
-  <%= form_with url: admin_certification_ysws_reviews_path, method: :get, class: "ysws-queue__filters" do %>
+  <%# The project-type select and the integrity toggle live outside this form —
+      in the table header and the summary row respectively — and associate back
+      to it via their form="ysws-queue-filters" attribute. %>
+  <%= form_with url: admin_certification_ysws_reviews_path, method: :get,
+                id: "ysws-queue-filters", class: "ysws-queue__filters" do %>
     <% if @sort %>
       <%= hidden_field_tag :sort, @sort %>
       <%= hidden_field_tag :dir, @dir %>
     <% end %>
-    <div class="ysws-queue__filter">
-      <label for="filter-type">Project type</label>
-      <%
-        type_total   = @type_counts.values.sum
-        unclassified = @type_counts[nil].to_i
-        type_options = @type_counts.keys.compact.sort.map { |t| [ "#{t} (#{@type_counts[t]})", t ] }
-        type_options << [ "Unclassified (#{unclassified})", "unclassified" ] if unclassified.positive?
-      %>
-      <%= select_tag :project_type,
-            options_for_select(type_options, @project_type),
-            include_blank: "All types (#{type_total})", id: "filter-type",
-            class: "ysws-queue__select", onchange: "this.form.requestSubmit()" %>
-    </div>
 
-    <div class="ysws-queue__goal" role="status" aria-live="polite">
-      <% if @devlog_remaining.positive? %>
-        <span class="ysws-queue__goal-count"><%= @devlog_remaining %></span>
-        <span class="ysws-queue__goal-label">devlogs left until goal reached</span>
-      <% else %>
-        <span class="ysws-queue__goal-label">Goal of <%= @devlog_goal %> devlogs reached</span>
+    <% if @devlog_pace %>
+      <% on_pace = @devlog_pace[:needed_today].zero? %>
+      <%= tag.div class: [ "ysws-queue__goal", ("ysws-queue__goal--on-pace" if on_pace) ],
+                  role: "status", aria: { live: "polite" } do %>
+        <div class="ysws-queue__goal-primary">
+          <span class="ysws-queue__goal-count">
+            <%= number_with_precision @devlog_pace[:daily_average], precision: 1, strip_insignificant_zeros: true %>
+          </span>
+          <span class="ysws-queue__goal-label">devlogs / day this week</span>
+        </div>
+
+        <% if on_pace %>
+          <span class="ysws-queue__goal-note">
+            On pace — <%= ::Certification::Ysws::DEVLOG_REVIEW_GOAL_PER_DAY %>/day average met
+          </span>
+        <% else %>
+          <span class="ysws-queue__goal-note">
+            <%= @devlog_pace[:needed_today] %> more needed today to reach your goal!
+          </span>
+        <% end %>
       <% end %>
-    </div>
-
-    <% if @project_type.present? || @sort.present? %>
-      <%= link_to "Reset filters",
-                  admin_certification_ysws_reviews_path(reset_filters: 1),
-                  class: "btn-secondary slim ysws-queue__reset-filters" %>
     <% end %>
+
+    <%# Reset filters, hidden from the UI for now. %>
+    <%# if @project_type.present? || @sort.present? || !@with_integrity %>
+    <%#   link_to "Reset filters", admin_certification_ysws_reviews_path(reset_filters: 1), class: "btn-secondary slim ysws-queue__reset-filters" %>
+    <%# end %>
   <% end %>
 
   <% if @reviews.any? %>
     <div class="ysws-queue__summary" role="status" aria-live="polite">
-      <span class="ysws-queue__summary-label">Pending reviews</span>
-      <span class="ysws-queue__summary-count"><%= @reviews.count %></span>
+      <div class="ysws-queue__summary-total">
+        <span class="ysws-queue__summary-label">Pending reviews</span>
+        <span class="ysws-queue__summary-count"><%= @reviews.count %></span>
+      </div>
+
+      <div class="ysws-queue__filter ysws-queue__filter--toggle">
+        <%= hidden_field_tag :with_integrity, "0", id: nil, form: "ysws-queue-filters" %>
+        <%= check_box_tag :with_integrity, "1", @with_integrity, id: "filter-with-integrity",
+              class: "ysws-queue__checkbox", form: "ysws-queue-filters",
+              onchange: "this.form.requestSubmit()" %>
+        <label for="filter-with-integrity">Only with certification integrity</label>
+      </div>
     </div>
+
+    <%
+      type_total   = @type_counts.values.sum
+      unclassified = @type_counts[nil].to_i
+      type_options = @type_counts.keys.compact.sort.map { |t| [ "#{t} (#{@type_counts[t]})", t ] }
+      type_options << [ "Unclassified (#{unclassified})", "unclassified" ] if unclassified.positive?
+    %>
 
     <div class="ysws-queue__table-container">
       <table>
         <thead>
           <tr>
             <th>Review ID</th>
-            <th>Project Type</th>
+            <th>Certification Integrity</th>
+            <th>
+              <%# Doubles as the column title: the blank option reads "All types (N)". %>
+              <%= select_tag :project_type,
+                    options_for_select(type_options, @project_type),
+                    include_blank: "All types (#{type_total})", id: "filter-type",
+                    class: "ysws-queue__select ysws-queue__select--header",
+                    form: "ysws-queue-filters", aria: { label: "Filter by project type" },
+                    onchange: "this.form.requestSubmit()" %>
+            </th>
             <th>Project Name</th>
             <th>User</th>
             <th><%= sort_link.call("length", "Length (hours)") %></th>
@@ -80,6 +111,14 @@
           <% @reviews.each do |review| %>
             <tr class="<%= "ysws-queue__row--claimed" if review.claimed_by?(current_user) %>">
               <td data-label="ID">#<%= review.id %></td>
+              <td data-label="Integrity">
+                <% if review.integrity_check %>
+                  <%= link_to review.integrity_check.status.humanize,
+                              admin_certification_integrity_review_path(review.integrity_check) %>
+                <% else %>
+                  <span class="ysws-queue__placeholder">—</span>
+                <% end %>
+              </td>
               <td data-label="Type">
                 <%= review.project&.project_type.presence || tag.span("—", class: "ysws-queue__placeholder") %>
               </td>
@@ -123,6 +162,14 @@
   <% else %>
     <div class="ysws-queue__empty" role="status">
       <p>No pending reviews. Great job!</p>
+
+      <%# The type filter lives in the table header, which isn't rendered when the
+          queue is empty — so an emptied-out filter needs its own way back. %>
+      <% if @project_type.present? %>
+        <%= link_to "Show all types",
+                    admin_certification_ysws_reviews_path(project_type: "", sort: @sort, dir: @dir,
+                                                          with_integrity: @with_integrity ? nil : "0") %>
+      <% end %>
     </div>
   <% end %>
 </main>

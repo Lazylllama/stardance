@@ -46,10 +46,21 @@ class Project::MissionAttachment < ApplicationRecord
 
   def detach!
     return if detached_at.present?
-    update!(detached_at: Time.current)
+
+    transaction do
+      update!(detached_at: Time.current)
+      discard_rejected_submissions
+    end
   end
 
   private
+
+  # Leaving a mission also clears the reviews it failed: the rejected
+  # submissions come off their ships, so those ships stop blocking the next
+  # one (see Project#blocking_mission_submission) and read as plain ships.
+  def discard_rejected_submissions
+    project.mission_submissions.rejected.where(mission_id: mission_id).find_each(&:soft_delete!)
+  end
 
   def default_attached_at
     self.attached_at ||= Time.current

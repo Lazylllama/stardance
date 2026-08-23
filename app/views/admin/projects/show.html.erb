@@ -69,8 +69,8 @@
               <%= link_to u.display_name, admin_user_path(u) %>
               <% if u.slack_id.present? %>
                 <span class="admin-project__fraud-links">
-                  <%= link_to "Billy ↗", "https://billy.3kh0.net/?u=#{u.slack_id}", target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
-                  <%= link_to "Joe ↗", "https://joe.fraud.hackclub.com/profile/#{u.slack_id}", target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
+                  <%= link_to "Hackatime ↗", telescreen_hackatime_url(slack_id: u.slack_id), target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
+                  <%= link_to "Telescreen ↗", telescreen_subject_url(u.slack_id), target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
                 </span>
               <% end %>
             </li>
@@ -80,25 +80,23 @@
         <p class="admin-user-show__muted">No members.</p>
       <% end %>
 
-      <% if policy(current_user).view_order_full_details? %>
-        <h2 class="admin-user-show__section-title" style="margin-top: var(--space-m);">Hackatime Keys</h2>
-        <% if @project.hackatime_projects.any? %>
-          <ul>
-            <% @project.hackatime_projects.each do |hp| %>
-              <li class="admin-project__member">
-                <code><%= hp.name %></code>
-                <small class="admin-user-show__muted">(<%= link_to hp.user.display_name, admin_user_path(hp.user) %>)</small>
-                <% if (hackatime_uid = hp.user.identities.find { |i| i.provider == "hackatime" }&.uid) %>
-                  <%= link_to "Joe ↗",
-                        "https://joe.fraud.hackclub.com/billy/overview?u=#{hackatime_uid}&d=#{@project.created_at.strftime("%Y-%m-%d")}&projects=#{ERB::Util.url_encode(hp.name)}",
-                        target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
-                <% end %>
-              </li>
-            <% end %>
-          </ul>
-        <% else %>
-          <p class="admin-user-show__muted">No hackatime keys linked.</p>
-        <% end %>
+      <h2 class="admin-user-show__section-title" style="margin-top: var(--space-m);">Hackatime Keys</h2>
+      <% if @project.hackatime_projects.any? %>
+        <ul>
+          <% @project.hackatime_projects.each do |hp| %>
+            <li class="admin-project__member">
+              <code><%= hp.name %></code>
+              <small class="admin-user-show__muted">(<%= link_to hp.user.display_name, admin_user_path(hp.user) %>)</small>
+              <% if (hackatime_uid = hp.user.identities.find { |i| i.provider == "hackatime" }&.uid) %>
+                <%= link_to "Telescreen ↗",
+                      telescreen_hackatime_overview_url(hackatime_uid, project: hp.name),
+                      target: "_blank", rel: "noopener noreferrer", class: "admin-fraud-link" %>
+              <% end %>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p class="admin-user-show__muted">No hackatime keys linked.</p>
       <% end %>
     </div>
   </div>

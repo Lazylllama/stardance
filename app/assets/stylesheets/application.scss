@@ -24,6 +24,7 @@
 @use "components/dropdown";
 @use "components/shop-item-card";
 @use "components/admin-banner";
+@use "components/mac_banner";
 @use "components/space_table";
 @use "components/top_banner";
 @use "components/tooltip";
@@ -39,6 +40,7 @@
 @use "components/certificate_widget";
 @use "components/mission_panel";
 @use "components/status_pill";
+@use "components/review_history";
 @use "components/feed";
 @use "components/mentions";
 @use "components/star_border";
@@ -62,9 +64,10 @@
 @use "pages/project_setup";
 @use "pages/projects/show";
 @use "pages/projects/readme";
-@use "pages/projects/lookout_recorder";
+@use "pages/projects/hardware_update";
+@use "pages/projects/lookout_finalize";
+@use "pages/my/timelapses";
 @use "pages/hardware_funding";
-@use "components/hardware_outpost_modal";
 @use "pages/votes";
 @use "pages/workshops";
 @use "pages/achievements/index" as achievements_index;
@@ -101,5 +104,6 @@
 @use "pages/raffle";
 @use "pages/notifications" as notifications_page;
 @use "pages/notification_settings" as notification_settings_page;
+@use "pages/data_exports" as data_exports_page;
 @use "pages/rng";
 @use "landing/landing_footer";

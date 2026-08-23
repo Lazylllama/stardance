@@ -1,6 +1,8 @@
 <% content_for :title, "YSWS Review ##{@review.id}" %>
 
 <main class="certification-ysws" role="main" data-controller="certification--ysws--review-sidebar certification--ysws--fraud-report certification--ysws--media-viewer certification--ysws--complete-review certification--ysws--return-to-ship-cert" data-certification--ysws--fraud-report-review-id-value="<%= @review.id %>" data-certification--ysws--complete-review-review-id-value="<%= @review.id %>" data-certification--ysws--return-to-ship-cert-review-id-value="<%= @review.id %>">
+  <%= render Admin::Certification::MACAnalysisBannerComponent.new(analysis: @mac_analysis, repo_url: @review.project&.repo_url, total_minutes: @review.original_minutes) %>
+
   <!-- Header Section -->
   <div class="review-detail-header">
     <%= link_to "← back", admin_certification_ysws_reviews_path, class: "btn-secondary slim", "aria-label": "Back to review queue" %>
@@ -50,10 +52,30 @@
           </div>
         <% end %>
 
+        <% if policy(@review).undo? %>
+          <% undo_warning = "It goes back to the pending queue and its Airtable submission record is deleted. " \
+                            "If it already reached the Unified YSWS base, that record will NOT be removed — remove it by hand." %>
+          <%= button_to "undo review",
+                        admin_certification_undo_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-undo",
+                        form: { class: "review-detail-header__undo-form",
+                                data: { turbo_confirm: "Undo this review? #{undo_warning} The devlog verdicts are kept." } } %>
+          <%= button_to "undo review + devlogs",
+                        admin_certification_undo_ysws_review_path(@review, reset_devlogs: 1),
+                        method: :post,
+                        class: "btn-action btn-undo",
+                        form: { class: "review-detail-header__undo-form",
+                                data: { turbo_confirm: "Undo this review AND reset all #{pluralize(@review.devlog_reviews.size, "devlog verdict")} to pending? " \
+                                                       "Their justifications and approved minutes are cleared, so the whole review has to be redone. #{undo_warning}" } } %>
+        <% end %>
+
         <% if @review.reviewed_at %>
-          <button class="btn-action btn-undo" disabled>
-            undo review
-          </button>
+          <%= button_to "Resync to Airtable",
+                        admin_certification_resync_ysws_review_path(@review),
+                        method: :post,
+                        class: "btn-action btn-resync",
+                        title: @review.airtable_synced_at ? "Last synced: #{@review.airtable_synced_at.strftime('%Y-%m-%d %H:%M UTC')}" : "Never synced" %>
         <% end %>
 
         <div class="review-detail-header__review-actions">
@@ -97,6 +119,12 @@
             <div class="placeholder-text">No review video recorded</div>
           </div>
         <% end %>
+      </section>
+
+      <!-- Lapse / Lookout Recordings -->
+      <section class="review-card recordings-card">
+        <%= render "admin/certification/funding_requests/recordings",
+              timelapses: @lapse_timelapses, recordings: @lookout_recordings %>
       </section>
 
       <% if @review.project.update_description.present? %>
@@ -177,7 +205,11 @@
     </div>
 
     <!-- Right Column -->
-    <div class="review-detail-right" data-certification--ysws--review-sidebar-target="sidebar">
+    <div class="review-detail-right"
+         data-certification--ysws--review-sidebar-target="sidebar"
+         data-controller="certification--ysws--double-dip"
+         data-certification--ysws--double-dip-url-value="<%= admin_certification_ysws_double_dip_path(@review) %>"
+         data-certification--ysws--double-dip-outline-class="review-detail-right--double-dipped">
       <!-- Details Card -->
       <section class="review-card details-card">
         <div class="details-list">
@@ -192,10 +224,12 @@
             <span class="detail-key">Submitter:</span>
             <span class="detail-value" style="display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap;">
               <span><%= @review.user.display_name || "Unknown User" %></span>
-              <span class="fraud-links" style="display: inline-flex; gap: var(--space-xxs);">
-                <a href="https://billy.3kh0.net/?u=<%= @review.user.slack_id %>" class="fraud-link" target="_blank">Billy</a>
-                <a href="https://joe.fraud.hackclub.com/profile/<%= @review.user.slack_id %>" class="fraud-link" target="_blank">Joe</a>
-              </span>
+              <% if @review.user.slack_id.present? %>
+                <span class="fraud-links" style="display: inline-flex; gap: var(--space-xxs);">
+                  <%= link_to "Hackatime", telescreen_hackatime_url(slack_id: @review.user.slack_id), class: "fraud-link", target: "_blank", rel: "noopener noreferrer" %>
+                  <%= link_to "Telescreen", telescreen_subject_url(@review.user.slack_id), class: "fraud-link", target: "_blank", rel: "noopener noreferrer" %>
+                </span>
+              <% end %>
             </span>
           </div>
 
@@ -270,6 +304,16 @@
             <span class="detail-link-btn disabled" title="No readme URL available">Readme</span>
           <% end %>
         </div>
+
+        <%# Revealed by the double-dip controller once the unified DB responds %>
+        <div class="double-dip-warning" role="alert" hidden
+             data-certification--ysws--double-dip-target="warning">
+          <p class="double-dip-warning__title">This project may have been double dipped</p>
+          <p class="double-dip-warning__detail">
+            This repo is already in the unified DB under
+            <span data-certification--ysws--double-dip-target="programs">another YSWS</span>.
+          </p>
+        </div>
       </section>
 
       <!-- Description Card -->
@@ -305,7 +349,7 @@
               <span class="devlog-review-group__meta">shipped <%= prior_review.created_at.to_date %> · read-only</span>
             </div>
             <% prior_review.devlog_reviews.each do |devlog_review| %>
-              <%= render "devlog_review", devlog_review: devlog_review, frozen: true %>
+              <%= render "devlog_review", devlog_review: devlog_review, frozen: true, mac_recommendation: nil %>
             <% end %>
           </div>
         <% end %>
@@ -317,7 +361,8 @@
             </div>
           <% end %>
           <% @review.devlog_reviews.each_with_index do |devlog_review, index| %>
-            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0 %>
+            <%= render "devlog_review", devlog_review: devlog_review, frozen: false, sidebar_trigger: index == 0,
+                  mac_recommendation: @mac_analysis&.recommendation_for(devlog_review.id) %>
           <% end %>
         </div>
       </div>

@@ -109,6 +109,8 @@
   border-radius: var(--profile-radius, var(--border-radius));
   background: rgba(5, 4, 24, 0.35);
   color: var(--color-space-text);
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .empty-project-banner {
@@ -227,6 +229,7 @@
     text-decoration: none;
     line-height: 1;
     white-space: nowrap;
+    max-width: 100%;
 
     &:hover,
     &:focus-visible,
@@ -450,10 +453,22 @@
     }
   }
 
-  &__tools {
+  &__controls,
+  &__assist {
     display: flex;
     align-items: center;
+    min-width: 0;
+  }
+
+  &__controls {
     gap: var(--space-xxs);
+  }
+
+  &__assist {
+    gap: var(--space-xxs);
+    // Let the tools side (which holds the time-status text) shrink and wrap
+    // instead of overrunning the submit group in a narrow composer/modal.
+    min-width: 0;
   }
 
   // Unverified `!` warning sits just left of the Post button.
@@ -461,6 +476,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-xs);
+    // Keep the Post button + IDV badge at full size; the tools side gives first.
+    flex-shrink: 0;
   }
 
   &__tool-btn {
@@ -573,6 +590,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-xs);
+    // Allow the status/warning line to wrap within the shrunk tools side
+    // rather than pushing the toolbar wider than its container.
+    min-width: 0;
 
     &[hidden] {
       display: none;
@@ -582,9 +602,74 @@
   &__info-text {
     font-size: calc(var(--font-size-s) * 1.2);
     color: var(--color-space-text-muted);
+    overflow-wrap: anywhere;
 
     &--warn {
       color: var(--color-brand-salmon);
+    }
+  }
+
+  @media (max-width: 640px) {
+    &__toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "assist assist"
+        "tabs submit";
+      align-items: center;
+      column-gap: var(--space-xs);
+      row-gap: var(--space-xs);
+      margin-left: 0;
+    }
+
+    &__controls {
+      display: contents;
+    }
+
+    &__tabs {
+      grid-area: tabs;
+      justify-self: start;
+    }
+
+    &__assist {
+      grid-area: assist;
+      min-width: 0;
+    }
+
+    &__info,
+    &__info-wrap,
+    &__info-text {
+      min-width: 0;
+    }
+
+    &__info-text {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    &__submit-group {
+      grid-area: submit;
+      justify-self: end;
+    }
+  }
+
+  @media (min-width: 641px) {
+    &__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-left: calc(var(--feed-content-offset) - 8px);
+    }
+
+    &__controls {
+      display: flex;
+    }
+
+    &__tabs,
+    &__assist,
+    &__submit-group {
+      grid-area: auto;
+      justify-self: auto;
     }
   }
 
@@ -1177,10 +1262,12 @@
     }
   }
 
+  // Opens upward: feed cards carry content-visibility, whose paint containment
+  // clips anything hanging below the card.
   &__repost-panel {
     position: absolute;
     z-index: 5;
-    top: calc(100% + var(--space-xs));
+    bottom: calc(100% + var(--space-xs));
     left: 50%;
     width: max-content;
     min-width: 128px;
@@ -2258,5 +2345,130 @@
       border-radius: 3px;
       font-size: 0.9em;
     }
+  }
+}
+
+// Funding request on the project timeline. Short by design: the amount and,
+// once decided, the verdict. Mirrors .ship-decision-card so the two review
+// outcomes read as the same kind of event.
+.funding-request-card {
+  // Same border as a ship post, so a funding request reads as part of the same
+  // project story. Only a returned request breaks out of it.
+  --funding-accent: var(--color-brand-highlight);
+
+  background: var(--color-set-4-bg);
+  border-color: var(--funding-accent);
+  gap: var(--space-xxs);
+
+  &--returned {
+    --funding-accent: var(--color-brand-salmon);
+  }
+
+  // The byline is a single line but the avatar is 39px, so the shared
+  // flex-start header would leave a dead strip under it before the body.
+  &__header {
+    align-items: center;
+  }
+
+  &__amount {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--funding-accent);
+  }
+
+  &__tier {
+    font-size: var(--font-size-s);
+    font-weight: 500;
+    color: var(--color-space-text-muted);
+  }
+
+  &__message {
+    color: var(--color-space-text);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
+    p {
+      margin: 0;
+    }
+
+    p + p {
+      margin-top: var(--space-xs);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    justify-content: flex-start;
+  }
+}
+
+// A reviewer's "wrong queue?" question. Peach rather than salmon: the builder
+// hasn't done anything wrong, they just have to answer before anything moves.
+.queue-mismatch-card {
+  --queue-mismatch-accent: var(--color-brand-peach);
+
+  background: var(--color-set-4-bg);
+  border-color: var(--queue-mismatch-accent);
+  gap: var(--space-xs);
+
+  &__header {
+    align-items: center;
+  }
+
+  &__badge {
+    margin-left: auto;
+    padding: var(--space-xxs) var(--space-xs);
+    border: 1px solid var(--queue-mismatch-accent);
+    border-radius: 999px;
+    font-size: var(--font-size-s);
+    font-weight: 600;
+    color: var(--queue-mismatch-accent);
+    white-space: nowrap;
+  }
+
+  &__heading {
+    margin: 0 0 var(--space-xxs);
+    font-size: var(--font-size-m);
+    font-weight: 700;
+    color: var(--color-brand-cream);
+  }
+
+  &__body {
+    color: var(--color-space-text);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
+    p {
+      margin: 0;
+    }
+
+    p + p {
+      margin-top: var(--space-xs);
+    }
+  }
+
+  &__reason {
+    margin: var(--space-xs) 0;
+    padding-left: var(--space-s);
+    border-left: 2px solid var(--queue-mismatch-accent);
+    color: var(--color-space-text-muted);
+  }
+
+  &__note {
+    color: var(--color-space-text-muted);
+    font-size: var(--font-size-s);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    justify-content: flex-start;
   }
 }

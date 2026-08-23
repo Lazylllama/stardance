@@ -36,11 +36,20 @@ class Gorse::Client
 
   def recommend(user_id, category:, count:)
     response = get("api/recommend/#{CGI.escape(user_id)}", category: category, n: count)
-    Array(response).map { |item| item.is_a?(Hash) ? item["Id"] : item }.compact
+    item_ids(response)
+  end
+
+  def non_personalized(name, category:, count:)
+    response = get("api/non-personalized/#{CGI.escape(name)}", category: category, n: count)
+    item_ids(response)
   end
 
   private
     attr_reader :config
+
+    def item_ids(response)
+      Array(response).map { |item| item.is_a?(Hash) ? item["Id"] : item }.compact
+    end
 
     def get(path, params = {})
       request(:get, path, params)
