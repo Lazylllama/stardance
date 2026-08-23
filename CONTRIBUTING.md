@@ -2,15 +2,37 @@
 
 Heidi, we're ready for launch! 🚀
 
-You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encourage using a Unix-based system (Linux or macOS). If you're on Windows, check out [GitHub Codespaces](https://github.com/codespaces)!
+For development, you have two options:
+
+1. Use the Dev Container
+2. Run Docker locally
+
+For most cases, the dev container is recommended, and will get you set up in no time. If you cannot use the dev container, follow the local docker guide.
+
+## Dev Container
+
+### GitHub Codespaces
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/hackclub/stardance?quickstart=1)
+
+### Visual Studio Code
+
+1. Press `CTRL` + `SHIFT` + `P`
+2. Type `Dev Containers: Reopen in Container`
+
+---
+
+Once you've setup your Dev Container, continue to the Setup Continuation section.
+
+## Local Docker
+
+You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encourage using a Unix-based system (Linux or macOS). If you're on Windows, you should use the Dev Container setup instead.
 
 1. Clone this repo!
 
     ```sh
     git clone https://github.com/hackclub/stardance
     ```
-
-    (this will already be done for you if you use *GitHub Codespaces!*)
 
 2. Set up a PostgreSQL database.
 
@@ -36,7 +58,9 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
     cp example.env .env
     ```
 
-6. Create an app on Hack Club Auth (HCA) Staging. Go to <https://hca.dinosaurbbq.org/developer/apps>, and click the `app me up!` button.
+## Setup Continuation
+
+1. Create an app on Hack Club Auth (HCA) Staging. Go to <https://hca.dinosaurbbq.org/developer/apps>, and click the `app me up!` button.
 
     - redirect URI: `http://localhost:3000/oauth/callback`
     - select *ALL THE SCOPES!!!!*
@@ -55,7 +79,7 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
 
     This is only an issue in development environments.
 
-7. Generate Rails credentials.
+2. Generate Rails credentials.
 
     ```sh
     EDITOR="nano" bin/rails credentials:edit --environment=development
@@ -93,7 +117,8 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
 
     If you're using `nano`, press `CTRL` + `S` to save, then `CTRL` + `X` to exit.
 
-8. Prepare the database and seed initial data.
+3. Prepare the database and seed initial data.
+    (This is already done if you're using a Dev Container and is not required.)
 
     ```sh
     bin/rails db:migrate
@@ -108,11 +133,27 @@ You'll need Docker Compose, Ruby, and Rails to run Stardance. We strongly encour
 
     See [`docs/development-seeds.md`](/docs/development-seeds.md) for more details.
 
-9. It's time to launch! Run `bin/dev`!
+4. It's time to launch! Run `bin/dev`!
 
-## Starting the development environment back up again
+## Restarting the Development Environment
 
 If you already did all of the steps above previously, but e.g. your PC or Codespace restarted, you only need to do a subset of the steps above.
+
+### Dev Container
+
+1. Review the bundle dependencies
+
+    ```sh
+    bundle install
+    ```
+
+2. Start the dev server
+
+    ```sh
+    bin/dev
+    ```
+
+### Local Docker
 
 1. Set up a PostgreSQL database.
 
