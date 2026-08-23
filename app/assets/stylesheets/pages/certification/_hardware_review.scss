@@ -285,6 +285,49 @@
     display: grid;
     gap: var(--space-s);
   }
+
+  &__mismatch {
+    display: grid;
+    gap: var(--space-xs);
+  }
+
+  // Lifted out of "More context", so it needs to hold its own in the column.
+  &__history-panel {
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+
+  &__history-item--bounced {
+    border-color: var(--color-brand-peach);
+  }
+
+  &__history-feedback--internal {
+    color: var(--color-space-text-muted);
+    font-style: italic;
+  }
+
+  // Salmon, not peach: this one is a consequence, not a prompt.
+  &__mismatch-warning {
+    margin: 0;
+    padding: var(--space-xs);
+    border-left: 2px solid var(--color-brand-salmon);
+    background: var(--color-set-2-bg);
+    color: var(--color-space-text);
+    font-size: var(--font-size-s);
+    line-height: 1.4;
+  }
+
+  &__mismatch-reason {
+    width: 100%;
+    padding: var(--space-xs);
+    background: var(--color-set-2-bg);
+    border: 1px solid var(--color-brand-peach);
+    border-radius: var(--profile-radius);
+    color: var(--color-space-text);
+    font-family: inherit;
+    font-size: var(--font-size-s);
+    resize: vertical;
+  }
 }
 
 // Reviewer's own hardware numbers, shown in place on the queue rather than

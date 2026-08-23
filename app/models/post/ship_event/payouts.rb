@@ -308,8 +308,26 @@ module Post::ShipEvent::Payouts
       payout_basis_locked_at: nil,
       payout_curve_version: nil,
       payout_blessing: nil,
-      payout_basis_vote_ids: []
+      payout_basis_vote_ids: [],
+      voting_completed_at: nil
     )
+  end
+
+  def sync_voting_completion!
+    return if hardware_payout? || payout.present?
+
+    required = Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT
+    counted_votes = votes.payout_countable.order(:created_at, :id).limit(required).to_a
+    if counted_votes.size >= required
+      return if voting_completed_at.present?
+
+      update!(
+        voting_completed_at: counted_votes.last.created_at,
+        lifecycle_data_quality: lifecycle_data_quality || "live"
+      )
+    elsif voting_completed_at.present?
+      payout_basis_locked_at? ? clear_payout_review : update!(voting_completed_at: nil)
+    end
   end
 
   private
@@ -329,6 +347,8 @@ module Post::ShipEvent::Payouts
 
     def lock_payout_basis
       self.payout_basis_vote_ids = payout_counted_vote_ids
+      self.voting_completed_at = votes.where(id: payout_basis_vote_ids).maximum(:created_at)
+      self.lifecycle_data_quality ||= "live"
       refresh_payout_score! if overall_percentile.nil?
 
       self.multiplier = payout_multiplier

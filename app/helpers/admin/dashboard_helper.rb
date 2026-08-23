@@ -1,8 +1,11 @@
 module Admin
   module DashboardHelper
-    def admin_page_button(label, path, enabled:, count: nil)
+    # `featured` gives a button the filled treatment, for the one destination
+    # on the page that aggregates the others.
+    def admin_page_button(label, path, enabled:, count: nil, featured: false)
       link_to path,
         class: class_names("btn-secondary admin-dashboard__button",
+                           "admin-dashboard__button--featured" => featured,
                            "disabled" => !enabled) do
         if count
           safe_join([ label, turbo_frame_tag("admin_count_#{count}",

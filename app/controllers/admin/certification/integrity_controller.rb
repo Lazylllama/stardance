@@ -5,8 +5,9 @@ class Admin::Certification::IntegrityController < Admin::Certification::Applicat
     reviews = ::Certification::Integrity
       .pending
       .unclaimed_or_claimed_by(current_user)
+      .joins(ship_event: :project)
       .includes(ship_event: [ :project, { post: :user } ])
-      .order(created_at: :asc)
+      .order("projects.id ASC")
       .to_a
 
     @total_pending = reviews.size

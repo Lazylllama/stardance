@@ -35,7 +35,10 @@ class Airtable::UserSyncJob < Airtable::BaseSyncJob
       "synced_at" => Time.now,
       "is_banned" => user.banned,
       "star_id" => user.id.to_s,
-      "ref" => user.ref
+      "ref" => user.ref,
+      # Comma-separated promo week numbers (e.g. "1,3"), blank for users who
+      # earned none, so the Loops property clears rather than going stale.
+      "Loops - stardanceWeeklyStickerEmail" => user.free_sticker_weeks.join(",")
     }
 
     if address.present?

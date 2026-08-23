@@ -3,7 +3,7 @@
 # Table name: mission_prizes
 #
 #  id           :bigint           not null, primary key
-#  category     :integer          default("after_shipping"), not null
+#  category     :integer          default(0), not null
 #  deleted_at   :datetime
 #  position     :integer          default(0), not null
 #  created_at   :datetime         not null

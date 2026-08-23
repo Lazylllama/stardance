@@ -316,4 +316,33 @@ class ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "button", text: /Record a timelapse/, count: 0
   end
+
+  test "review shortcut shows for a project certifier and no one else" do
+    @project.update!(hardware_stage: "design")
+
+    sign_in certifier
+    get project_path(@project)
+    assert_response :success
+    assert_select "a.project-show__pill--review[href=?]",
+                  admin_certification_hardware_review_path(@project),
+                  text: "Review"
+
+    sign_in @viewer
+    get project_path(@project)
+    assert_select "a.project-show__pill--review", 0
+  end
+
+  private
+
+  def certifier
+    @certifier ||= begin
+      user = User.create!(
+        slack_id: "U_PROJECT_CERTIFIER",
+        display_name: "certifier",
+        email: "certifier@example.test"
+      )
+      user.grant_role!(:project_certifier)
+      user
+    end
+  end
 end

@@ -25,6 +25,7 @@ module Notifications
       Notifications::ShopOrders::StatusChanged
       Notifications::Hardware::FundingRequestReviewed
       Notifications::Hardware::BuildReviewed
+      Notifications::Hardware::ReviewQueueMismatch
       Notifications::Workshops::StartingSoon
     ].freeze
 

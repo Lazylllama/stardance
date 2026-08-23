@@ -144,11 +144,11 @@
           <tbody>
             <% @review_items.each do |item| %>
               <% wait_days = ((Time.current - item[:submitted_at]) / 1.day).floor %>
-              <tr class="ship-queue__row ship-queue__row--link"
-                  onclick="window.location = <%= hardware_review_path(item[:project]).to_json %>">
+              <tr class="ship-queue__row ship-queue__row--anchored">
                 <td class="ship-queue__cell-project">
                   <div class="ship-queue__project-head">
-                    <span class="ship-queue__project-title"><%= item[:project].title %></span>
+                    <%= link_to item[:project].title, hardware_review_path(item[:project]),
+                          class: "ship-queue__project-title ship-queue__row-link" %>
                     <span class="ship-queue__project-id">#<%= item[:project].id %></span>
                     <%= render "admin/certification/hardware_reviews/hackpad_tag", project: item[:project], hackpad_project_ids: @hackpad_project_ids %>
                   </div>

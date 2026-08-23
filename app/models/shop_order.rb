@@ -64,6 +64,7 @@ class ShopOrder < ApplicationRecord
   include AASM
   include Ledgerable
   include FunnelResyncTrigger
+  include Shop::AutoApprovable
 
   belongs_to :user
   belongs_to :shop_item
@@ -309,6 +310,10 @@ class ShopOrder < ApplicationRecord
     high_value? && reviews.count < 2
   end
 
+  def approvable?
+    (pending? || awaiting_verification_call?) && !requires_additional_review?
+  end
+
   # States that still need a fraud/shop-manager verdict, mirroring the
   # Certification::Ship review queue for the fraud dashboard overview.
   REVIEW_QUEUE_STATES = %w[pending awaiting_verification awaiting_verification_call on_hold].freeze
@@ -365,6 +370,9 @@ class ShopOrder < ApplicationRecord
     scope = PaperTrail::Version
               .where(item_type: "ShopOrder")
               .where.not(whodunnit: nil)
+              # Unattended approvals stamp a class name rather than a user id;
+              # they belong in the audit log, not in a ranking of reviewers.
+              .where("whodunnit ~ '^[0-9]+$'")
               .where("object_changes -> 'aasm_state' ->> 1 IN (?)", DECISION_TARGET_STATES)
 
     case period.to_sym

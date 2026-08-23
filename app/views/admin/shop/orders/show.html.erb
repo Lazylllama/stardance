@@ -209,8 +209,8 @@
               <% if current_user.admin? || current_user.fraud_dept? %>
                 <div class="aorder__fraud-tools">
                   <% if hackatime_identity %>
-                    <%= link_to "Billy", "https://billy.3kh0.net/?u=#{hackatime_identity.uid}", target: "_blank", class: "aorder__fraud-btn" %>
-                    <%= link_to "Joe", "https://joe.fraud.hackclub.com/profile/#{hackatime_identity.uid}", target: "_blank", class: "aorder__fraud-btn" %>
+                    <%= link_to "Hackatime", telescreen_hackatime_overview_url(hackatime_identity.uid), target: "_blank", rel: "noopener noreferrer", class: "aorder__fraud-btn" %>
+                    <%= link_to "Telescreen", telescreen_subject_url(hackatime_identity.uid), target: "_blank", rel: "noopener noreferrer", class: "aorder__fraud-btn" %>
                   <% end %>
                 </div>
               <% end %>
@@ -261,7 +261,7 @@
           </details>
         <% end %>
         <% if @user_projects.present? %>
-          <% joe_hackatime = @order.user.identities.find { |i| i.provider == "hackatime" } %>
+          <% telescreen_hackatime = @order.user.identities.find { |i| i.provider == "hackatime" } %>
           <details style="margin-top: var(--space-s);">
             <summary style="cursor:pointer; font-size: var(--font-size-xs); color: var(--color-space-text-muted); font-family: var(--font-family-text);">▸ Projects (<%= @user_projects.size %>)</summary>
             <div style="margin-top: var(--space-xs);">
@@ -271,9 +271,9 @@
                   <% if project.deleted? %>
                     <span style="font-size:10px; color: var(--color-space-text-muted);">(deleted)</span>
                   <% end %>
-                  <% if joe_hackatime %>
+                  <% if telescreen_hackatime %>
                     <% project.hackatime_projects.select { |hp| hp.user_id == @order.user.id }.each do |hp| %>
-                      <%= link_to "Joe (#{hp.name})", "https://joe.fraud.hackclub.com/billy/overview?u=#{joe_hackatime.uid}&project=#{CGI.escape(hp.name)}", target: "_blank", class: "aorder__fraud-btn" %>
+                      <%= link_to "Telescreen (#{hp.name})", telescreen_hackatime_overview_url(telescreen_hackatime.uid, project: hp.name), target: "_blank", rel: "noopener noreferrer", class: "aorder__fraud-btn" %>
                     <% end %>
                   <% end %>
                 </div>
@@ -548,12 +548,13 @@
       <% end %>
       <% if @order.joe_case_url.present? %>
         <div class="aorder__row">
-          <span class="aorder__row-label">Joe case</span>
+          <span class="aorder__row-label">Telescreen case</span>
           <span class="aorder__row-value">
+            <% case_url = displayed_telescreen_url(@order.joe_case_url) %>
             <% begin %>
-              <% uri = URI.parse(@order.joe_case_url.to_s) %>
+              <% uri = URI.parse(case_url.to_s) %>
               <% if uri.is_a?(URI::HTTP) && uri.host.present? %>
-                <%= link_to @order.joe_case_url, uri.to_s, target: "_blank", rel: "noopener" %>
+                <%= link_to case_url, uri.to_s, target: "_blank", rel: "noopener noreferrer" %>
               <% else %>
                 <%= @order.joe_case_url %>
               <% end %>
@@ -690,7 +691,7 @@
             <%= hidden_field_tag :return_status, params[:return_status] if params[:return_status].present? %>
             <button type="submit"
               class="aorder__btn aorder__btn--approve"
-              <% unless (@order.pending? || @order.awaiting_verification_call?) && !@order.requires_additional_review? %> disabled<% end %>
+              <% unless @order.approvable? %> disabled<% end %>
               onclick="return confirm('Approve this order for fulfillment?')">✓ Approve</button>
           </form>
 
