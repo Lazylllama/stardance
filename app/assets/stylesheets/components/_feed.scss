@@ -109,6 +109,8 @@
   border-radius: var(--profile-radius, var(--border-radius));
   background: rgba(5, 4, 24, 0.35);
   color: var(--color-space-text);
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .empty-project-banner {
@@ -227,6 +229,7 @@
     text-decoration: none;
     line-height: 1;
     white-space: nowrap;
+    max-width: 100%;
 
     &:hover,
     &:focus-visible,
@@ -645,9 +648,8 @@
     }
 
     &__info-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     &__submit-group {
