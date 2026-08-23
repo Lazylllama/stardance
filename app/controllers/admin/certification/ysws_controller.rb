@@ -1,22 +1,101 @@
 class Admin::Certification::YswsController < Admin::Certification::ApplicationController
+  FILTER_SESSION_KEY = :admin_ysws_review_filters
+
   def index
     authorize ::Certification::Ysws
+    if params[:reset_filters].present?
+      session.delete(FILTER_SESSION_KEY)
+      redirect_to admin_certification_ysws_reviews_path
+      return
+    end
 
-    @reviews = ::Certification::Ysws
-      .where(reviewed_at: nil, returned_at: nil)
-      .includes(:project, :user)
-      .order(created_at: :asc)
+    filters = ysws_review_filter_params? ? {} : ysws_review_filters
+    if params.key?(:project_type)
+      if params[:project_type].present?
+        filters["project_type"] = params[:project_type]
+      else
+        filters.delete("project_type")
+      end
+    end
+    # Only the opt-out is worth persisting — an absent key means the default
+    # "integrity checks only" view.
+    if params.key?(:with_integrity)
+      if params[:with_integrity] == "0"
+        filters["with_integrity"] = "0"
+      else
+        filters.delete("with_integrity")
+      end
+    end
+    if params.key?(:sort)
+      sort = params[:sort].presence_in(%w[length todo])
+      if sort
+        filters["sort"] = sort
+        filters["dir"] = params[:dir] == "asc" ? "asc" : "desc"
+      else
+        filters.delete("sort")
+        filters.delete("dir")
+      end
+    end
+    session[FILTER_SESSION_KEY] = filters
+
+    @project_type   = filters["project_type"].presence
+    @sort           = filters["sort"].presence_in(%w[length todo])
+    @dir            = filters["dir"] == "asc" ? "asc" : "desc"
+    @with_integrity = filters["with_integrity"] != "0"
+
+    scope = ::Certification::Ysws.pending.unclaimed_or_claimed_by(current_user)
+    scope = scope.with_integrity_check if @with_integrity
+
+    # Type filter options are whatever project types are actually present in the
+    # pending queue (plus an "unclassified" bucket) — never hardcoded.
+    @type_counts = scope.joins(:project).group("projects.project_type").count
+
+    scope = scope.by_project_type(@project_type) if @project_type
+
+    scope = scope.with_todo_devlog_count.includes(:project, :user, :integrity_check)
+
+    scope =
+      case @sort
+      when "length" then scope.order(Arel.sql("certification_ysws_reviews.original_minutes #{@dir}"))
+      when "todo"   then scope.order(Arel.sql("todo_devlog_count #{@dir}"))
+      else               scope.order(created_at: :asc)
+      end
+
+    # Loaded eagerly so the view can count the collection without re-running the
+    # custom-select query as a COUNT(*), which the aliased column would break.
+    @reviews = scope.to_a
+
+    # Per-reviewer pace against the daily devlog-review goal, averaged across the
+    # current review week (Wednesday 4pm to the following Wednesday 4pm). Left nil
+    # when the flag is off so the queue skips both the query and the widget — and
+    # when the progress panel is on, since that panel leads with the same figure.
+    @devlog_pace = ::Certification::Ysws.reviewer_devlog_pace(current_user.id) if
+      Flipper.enabled?(:devlog_review_pace, current_user) &&
+      !Flipper.enabled?(:reviewer_progress_panel, current_user)
   end
 
   def show
     @review = ::Certification::Ysws
-      .includes(:project, :user, :reviewer, devlog_reviews: { post_devlog: :attachments_attachments })
+      .includes(:project, :user, :reviewer, :mac_analysis, devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .find(params[:id])
     authorize @review
 
     if @review.project.nil?
       redirect_to admin_certification_ysws_reviews_path, alert: "Review ##{@review.id} has no associated project."
       return
+    end
+
+    # Claim this review for the current admin so it drops off everyone else's
+    # queue. Already-decided reviews (reached via "prior reviews" history
+    # links) are read-only and aren't claimed.
+    if @review.pending?
+      claimed = ::Certification::Ysws.atomic_claim!(@review.id, current_user)
+      if claimed.nil?
+        redirect_to admin_certification_ysws_reviews_path, alert: "This review is currently claimed by another admin."
+        return
+      end
+      @review.claimed_by_id = claimed.claimed_by_id
+      @review.claimed_at = claimed.claimed_at
     end
 
     # Check if review is already in unified DB
@@ -28,7 +107,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     @prior_reviews = ::Certification::Ysws
       .where(project_id: @review.project_id)
       .where("id < ?", @review.id)
-      .includes(devlog_reviews: { post_devlog: :attachments_attachments })
+      .includes(devlog_reviews: { post_devlog: [ :post, :attachments_attachments ] })
       .order(:id)
 
     # Prior (frozen) + current devlogs, in display order, counted together in
@@ -51,6 +130,13 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       @contribution_data = ::Certification::YswsService.fetch_contributions(platform, username)
     end
 
+    # The MAC pre-screen is flagged per reviewer: left nil when it's off so the
+    # banner and the per-devlog notes both disappear from a single check.
+    @mac_analysis = @review.mac_analysis if Flipper.enabled?(:mac_analysis, current_user)
+
+    @lapse_timelapses = lapse_timelapses_for_ysws_review
+    @lookout_recordings = lookout_recordings_for_ysws_review
+
     @devlog_windows = devlog_windows_for_review(@review)
     @devlog_commits = begin
       load_commits_with_stats(
@@ -63,6 +149,22 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       Rails.logger.error("CommitGraph load failed: #{e.message}")
       {}
     end
+  end
+
+  # Whether this repo is already in the unified DB under another YSWS program.
+  # Fetched from the sidebar after page load rather than during #show — the
+  # Airtable round trip is far too slow to hold the review page on.
+  def double_dip
+    @review = ::Certification::Ysws.includes(:project).find(params[:id])
+    authorize @review, :show?
+
+    submissions = ::Certification::UnifiedYswsService.double_dip_submissions(@review.project&.repo_url)
+    programs = submissions.filter_map(&:program_name).uniq
+
+    render json: {
+      double_dipped: submissions.any?,
+      programs_label: programs.any? ? programs.to_sentence : "another YSWS"
+    }
   end
 
   def commits
@@ -93,6 +195,33 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   private
+
+  RECORDINGS_CACHE_TTL = 1.minute
+
+  def lapse_timelapses_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lapse", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      owner = @review.project.memberships.owner.first&.user
+      LapseService.timelapses_for_project(
+        hackatime_user_id: owner&.hackatime_identity&.uid,
+        project_keys: @review.project.hackatime_keys
+      )
+    end
+  end
+
+  def lookout_recordings_for_ysws_review
+    Rails.cache.fetch([ "ysws_review_recordings", "lookout", @review.project_id ], expires_in: RECORDINGS_CACHE_TTL) do
+      LookoutService.recordings_for_project(@review.project)
+    end
+  end
+
+  def ysws_review_filters
+    session[FILTER_SESSION_KEY].to_h.slice("project_type", "sort", "dir", "with_integrity")
+  end
+
+  def ysws_review_filter_params?
+    params.key?(:project_type) || params.key?(:sort) || params.key?(:dir) ||
+      params.key?(:with_integrity)
+  end
 
 
   # Fetches all commits in the review period and buckets them by devlog ID.
@@ -185,6 +314,20 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     end
   end
 
+  def unclaim
+    @review = ::Certification::Ysws.includes(:project).find(params[:id])
+    authorize @review, :unclaim?
+
+    if @review.release_claim!
+      Rails.logger.info "[YSWS#unclaim] user=#{current_user.id} review=#{@review.id} Released claim"
+      redirect_to admin_certification_ysws_reviews_path,
+                  notice: "Unclaimed review for “#{@review.project&.title || "Review ##{@review.id}"}.”"
+    else
+      redirect_to admin_certification_ysws_reviews_path,
+                  alert: "That review can no longer be unclaimed."
+    end
+  end
+
   def complete
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Starting complete action"
 
@@ -198,13 +341,27 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
       return render json: { success: false, error: "This review is already in the unified DB" }, status: :unprocessable_entity
     end
 
-    incomplete = @review.devlog_reviews.select { |dr| dr.pending? || dr.justification.blank? }
-    if incomplete.any?
-      Rails.logger.warn "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Blocked: #{incomplete.count} incomplete devlog(s): #{incomplete.map(&:id).inspect}"
-      return render json: { success: false, error: "Fill in all devlogs" }, status: :unprocessable_entity
+    devlog_reviews = @review.devlog_reviews
+    pending = devlog_reviews.select(&:pending?)
+    if pending.any?
+      Rails.logger.warn "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Blocked: #{pending.count} unreviewed devlog(s): #{pending.map(&:id).inspect}"
+      return render json: { success: false, error: "Review all devlogs before completing." }, status: :unprocessable_entity
+    end
+
+    approved = devlog_reviews.select(&:approved?)
+    if approved.any? && approved.none? { |dr| dr.justification.present? }
+      Rails.logger.warn "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Blocked: no justification on any of #{approved.count} approved devlog(s)"
+      return render json: { success: false, error: "Add a justification to at least one approved devlog." }, status: :unprocessable_entity
+    end
+
+    unjustified_rejections = devlog_reviews.select { |dr| dr.rejected? && dr.justification.blank? }
+    if unjustified_rejections.any?
+      Rails.logger.warn "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Blocked: #{unjustified_rejections.count} rejected devlog(s) missing justification: #{unjustified_rejections.map(&:id).inspect}"
+      return render json: { success: false, error: "Add a justification to every rejected devlog." }, status: :unprocessable_entity
     end
 
     @review.update_columns(reviewer_id: current_user.id, reviewed_at: Time.current)
+    @review.touch
     Rails.logger.info "[YSWS#complete] user=#{current_user&.id} review=#{params[:id]} Marked reviewed_at=#{@review.reviewed_at}; enqueuing AirtableSyncJob"
 
     ::Certification::YswsAirtableSyncJob.perform_later(@review.id)
@@ -225,28 +382,86 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
     }, status: :unprocessable_entity
   end
 
+  def resync
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review
+
+    unless @review.reviewed_at?
+      redirect_to admin_certification_ysws_review_path(@review), alert: "Cannot resync a review that hasn't been completed."
+      return
+    end
+
+    ::Certification::YswsAirtableSyncJob.perform_later(@review.id)
+    redirect_to admin_certification_ysws_review_path(@review), notice: "Airtable resync enqueued for review ##{@review.id}."
+  end
+
+  # Reverses a completed review: back to pending, Airtable submission record
+  # deleted. Admin-only, and never for returned reviews (see YswsPolicy#undo?).
+  # reset_devlogs=1 also takes every devlog verdict back to pending.
+  def undo
+    @review = ::Certification::Ysws.find(params[:id])
+    authorize @review, :undo?
+
+    reset_devlogs = ActiveModel::Type::Boolean.new.cast(params[:reset_devlogs]).present?
+    result = ::Certification::YswsReviewUndoer.new(@review, reset_devlogs: reset_devlogs).call
+    unless result.undone
+      return redirect_to admin_certification_ysws_review_path(@review),
+                         alert: "That review can't be undone."
+    end
+
+    # PaperTrail carries the field-level diff but no whodunnit, so this line is
+    # the record of who reversed what — including the unified record id, which
+    # the reversal itself throws away.
+    Rails.logger.info "[YSWS#undo] user=#{current_user&.id} review=#{@review.id} " \
+                      "Reset to pending; airtable_record_deleted=#{result.airtable_record_deleted} " \
+                      "unified_record_id=#{result.unified_record_id} " \
+                      "devlog_reviews_reset=#{result.devlog_reviews_reset}"
+
+    # Back to the review itself, not the queue: #show re-claims it for the
+    # admin who just undid it, so they can pick the review straight back up.
+    notice = "Review ##{@review.id} reset to pending."
+    notice += " #{result.devlog_reviews_reset} devlog verdict(s) cleared." if result.devlog_reviews_reset.positive?
+    redirect_to admin_certification_ysws_review_path(@review), notice: notice
+  rescue Pundit::NotAuthorizedError
+    raise
+  rescue StandardError => e
+    Rails.logger.error "[YSWS#undo] user=#{current_user&.id} review=#{params[:id]} #{e.class}: #{e.message}"
+    Sentry.capture_exception(e, tags: { category: "certification.ysws" }, extra: { ysws_review_id: params[:id], user_id: current_user&.id })
+    redirect_to admin_certification_ysws_review_path(params[:id]),
+                alert: "Failed to undo review: #{e.message}"
+  end
+
   def return_to_ship_cert
     @review = ::Certification::Ysws.find(params[:id])
     authorize @review, :update?
 
-    recert_reason = params[:recert_reason].to_s.strip
+    recert_reason = params[:recert_reason].to_s.strip.truncate(::Post::ShipEvent::RETURN_REASON_MAX_LENGTH, omission: "")
     if recert_reason.blank?
       return render json: { success: false, error: "A reason is required." }, status: :unprocessable_entity
     end
 
     if ::Certification::Ship.pending.exists?(project_id: @review.project_id)
-      if @review.project.last_ship_event&.id == @review.post_ship_event_id
-        return render json: { success: false, error: "This project already has a pending ship certification." }, status: :unprocessable_entity
-      end
+      return render json: { success: false, error: "This project already has a pending ship certification." }, status: :unprocessable_entity
     end
 
     ActiveRecord::Base.transaction do
-      ::Certification::Ship.create!(
+      approved_certs = ::Certification::Ship
+        .where(project_id: @review.project_id, status: :approved)
+        .lock
+      approved_cert = approved_certs.find_by(id: @review.ship_cert_id) ||
+                      approved_certs.find_by(post_ship_event_id: @review.post_ship_event_id)
+
+      new_cert = ::Certification::Ship.create!(
         project_id: @review.project_id,
+        post_ship_event_id: @review.post_ship_event_id,
         recert_reason: recert_reason, # codeql[rb/cleartext-storage-sensitive-data]
         returned_by_id: current_user.id
       )
       @review.update!(returned_at: Time.current)
+
+      if approved_cert&.transfer_external_certification_id_to!(new_cert)
+        ::ExternalDashboard::CertReturnJob.perform_later(new_cert.id)
+      end
     end
 
     render json: {

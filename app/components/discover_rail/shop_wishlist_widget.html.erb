@@ -1,14 +1,19 @@
-<section class="discover-rail__section discover-rail__section--wishlist" aria-label="Wishlist">
-  <h3 class="discover-rail__heading">WISHLIST</h3>
+<section id="shop-wishlist-widget" class="discover-rail__section discover-rail__section--wishlist" aria-label="Wishlist">
+  <div class="discover-rail__heading-row">
+    <h3 class="discover-rail__heading">WISHLIST</h3>
+    <% if helpers.current_user && Flipper.enabled?(:shop_suggestions, helpers.current_user) %>
+      <%= helpers.link_to "Suggest an item →", helpers.shop_suggestions_path, class: "discover-rail__heading-link" %>
+    <% end %>
+  </div>
   <% if wishlisted_items.any? %>
     <div class="shop-goals__container">
       <div class="shop-goals__items">
         <% wishlisted_items.each do |item| %>
           <div class="shop-goals__item">
-            <%= button_to shop_wishlist_path(item.id), method: :delete, class: "shop-goals__remove", title: "Remove from wishlist" do %>
+            <%= button_to shop_wishlist_path(item.id), method: :delete, class: "shop-goals__remove", title: "Remove from wishlist", data: { turbo_stream: true } do %>
               &times;
             <% end %>
-            <%= link_to shop_item_path(item), class: "shop-goals__link" do %>
+            <%= link_to shop_item_path(item), class: "shop-goals__link", data: { turbo_frame: "_top" } do %>
               <%= image_tag item.image.variant(:carousel_sm), alt: item.name, class: "shop-goals__image" %>
               <div class="shop-goals__info">
                 <span class="shop-goals__name"><%= item.name %></span>

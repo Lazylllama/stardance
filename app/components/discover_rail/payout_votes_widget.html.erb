@@ -1,4 +1,6 @@
-<section class="payout-checklist" aria-label="Payout progress">
+<section id="payout-review"
+         class="payout-checklist <%= 'payout-checklist--admin' if votes[:admin_view] %>"
+         aria-label="Payout progress">
   <h3 class="payout-checklist__title">Payout progress</h3>
 
   <% if votes[:static_prize] %>
@@ -20,17 +22,13 @@
     </ol>
   <% else %>
     <ol class="payout-checklist__steps">
-      <% ratings_done = votes[:ratings_given] >= votes[:ratings_total] %>
+      <% ratings_done = votes[:ratings_remaining] <= 0 %>
       <li class="payout-checklist__step <%= 'payout-checklist__step--done' if ratings_done %>">
         <span class="payout-checklist__icon"><%= ratings_done ? '✓' : '1' %></span>
         <div class="payout-checklist__body">
-          <span class="payout-checklist__label">Rate <%= votes[:ratings_total] %> projects</span>
-          <div class="payout-checklist__progress-row">
-            <progress class="payout-checklist__bar"
-                      value="<%= votes[:ratings_given] %>"
-                      max="<%= votes[:ratings_total] %>"></progress>
-            <span class="payout-checklist__count"><%= votes[:ratings_given] %>/<%= votes[:ratings_total] %></span>
-          </div>
+          <span class="payout-checklist__label">
+            <%= ratings_done ? "Voting requirement complete" : "Rate #{pluralize(votes[:ratings_remaining], "more project")}" %>
+          </span>
           <% unless ratings_done %>
             <%= link_to "Go rate →", helpers.new_vote_path,
                         class: "payout-checklist__action",
@@ -59,10 +57,28 @@
       <li class="payout-checklist__step">
         <span class="payout-checklist__icon">3</span>
         <div class="payout-checklist__body">
-          <span class="payout-checklist__label">Get stardust!</span>
-          <span class="payout-checklist__hint">Payouts will open soon. Once they do, you'll get stardust paid out!</span>
+          <% if votes[:review_open] %>
+            <span class="payout-checklist__label">Payout locked</span>
+            <span class="payout-checklist__estimate"><%= votes[:estimated_payout].to_i %> stardust estimated</span>
+            <span class="payout-checklist__hint">
+              Automatic payout in
+              <strong data-controller="countdown"
+                      data-countdown-reset-at-value="<%= votes[:review_deadline].iso8601 %>"
+                      data-countdown-expired-text-value="processing">calculating…</strong>
+              (<%= helpers.l(votes[:review_deadline], format: :short) %>).
+            </span>
+            <span class="payout-checklist__hint">Review ratings from the latest ship.</span>
+          <% else %>
+            <span class="payout-checklist__label">Get stardust!</span>
+            <% if votes[:review_deadline] %>
+              <span class="payout-checklist__hint">Review closed. Your automatic payout is processing.</span>
+            <% else %>
+              <span class="payout-checklist__hint">Payouts will open soon. Once they do, you'll get stardust paid out!</span>
+            <% end %>
+          <% end %>
         </div>
       </li>
     </ol>
+
   <% end %>
 </section>

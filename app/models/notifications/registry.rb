@@ -17,11 +17,16 @@ module Notifications
       Notifications::Missions::SubmissionRejected
       Notifications::Missions::SubmissionPendingForReviewer
       Notifications::Projects::SuperStar
+      Notifications::Projects::DevlogCapApproaching
       Notifications::AchievementEarned
       Notifications::StardustBalanceChanged
       Notifications::Payouts::ShipEventIssued
       Notifications::Payouts::VoteDeficitBlocked
       Notifications::ShopOrders::StatusChanged
+      Notifications::Hardware::FundingRequestReviewed
+      Notifications::Hardware::BuildReviewed
+      Notifications::Hardware::ReviewQueueMismatch
+      Notifications::Workshops::StartingSoon
     ].freeze
 
     module_function

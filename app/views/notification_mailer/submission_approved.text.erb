@@ -9,6 +9,6 @@ Nice work. <% if mission_name && project_title %>Your submission for "<%= missio
 Stardust is on the way to your balance. Cast any pending votes to unlock it.
 
 <% if @record %>
-View submission: <%= mission_submission_url(@record) %>
+View project: <%= @record.ship_event&.post&.project ? project_url(@record.ship_event.post.project) : root_url %>
 View balance: <%= my_balance_url %>
 <% end %>

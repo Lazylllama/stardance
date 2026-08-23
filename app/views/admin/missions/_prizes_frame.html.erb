@@ -18,7 +18,13 @@
     <ul class="admin-mission-edit__prizes">
       <% prizes.each do |prize| %>
         <li class="admin-mission-edit__prize">
-          <%= prize.shop_item.name %>
+          <span class="admin-mission-edit__prize-name"><%= prize.shop_item.name %></span>
+          <%= form_with url: admin_mission_prize_path(mission.slug, prize), method: :patch, class: "admin-mission-edit__prize-category" do %>
+            <%= select_tag "mission_prize[category]",
+                  options_for_select(Mission::Prize::CATEGORY_LABELS.map { |value, label| [ label, value ] }, prize.category),
+                  aria: { label: "Prize category" } %>
+            <%= submit_tag "Save", class: "action-btn action-btn--small action-btn--secondary" %>
+          <% end %>
           <%= button_to "Remove",
                         admin_mission_prize_path(mission.slug, prize),
                         method: :delete,
@@ -31,11 +37,25 @@
           method: :post, class: "admin-mission-edit__form" do %>
       <h3>Add prize</h3>
       <label>Shop item
+        <small class="admin-mission-edit__hint">
+          Builders claim this item for free when their submission is approved.
+          Any shop item works — regular items stay purchasable in the shop for
+          everyone else.
+        </small>
         <%= select_tag "mission_prize[shop_item_id]",
-              options_from_collection_for_select(
-                ShopItem.where(mission_prize_only: true).order(:name), :id, :name
-              ),
-              prompt: "Select a mission-prize-only shop item" %>
+              grouped_options_for_select([
+                [ "Mission-prize-only items", ShopItem.where(mission_prize_only: true).order(:name).pluck(:name, :id) ],
+                [ "Shop items", ShopItem.where(mission_prize_only: false, enabled: true).order(:name).pluck(:name, :id) ]
+              ]),
+              prompt: "Select a shop item" %>
+      </label>
+      <label>Category
+        <small class="admin-mission-edit__hint">
+          "After design" prizes (kits) are claimed when a funding request is approved.
+          "After shipping" prizes are claimed once a ship is approved.
+        </small>
+        <%= select_tag "mission_prize[category]",
+              options_for_select(Mission::Prize::CATEGORY_LABELS.map { |value, label| [ label, value ] }, "after_shipping") %>
       </label>
       <%= submit_tag "Add prize", class: "action-btn action-btn--large action-btn--primary" %>
     <% end %>

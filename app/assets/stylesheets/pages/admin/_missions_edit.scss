@@ -125,6 +125,17 @@
   gap: var(--space-xxs);
 }
 
+.admin-mission-edit__prize-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-mission-edit__prize-category {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+}
+
 .admin-mission-edit__guide-editor {
   display: grid;
   grid-template-columns: 1fr;

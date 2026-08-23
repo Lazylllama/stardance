@@ -61,6 +61,58 @@ class VotesControllerTest < ActionDispatch::IntegrationTest
       assert submitted.properties.key?("score_average")
     end
 
+    test "voter can bank votes up to the future ship credit limit" do
+      @voter.update!(vote_balance: Vote::MAX_BANKED_VOTES - 1)
+
+      get new_rate_url
+      assignment = current_assignment
+      assert_not_nil assignment
+
+      post votes_path, params: {
+        vote_assignment_id: assignment.id,
+        vote: valid_scores.merge(reason: VotesControllerTest::VALID_REASON)
+      }
+
+      assert_redirected_to new_rate_path
+      assert_equal Vote::MAX_BANKED_VOTES, @voter.reload.vote_balance
+    end
+
+    test "voter cannot exceed the future ship credit limit" do
+      @voter.update!(vote_balance: Vote::MAX_BANKED_VOTES)
+
+      assert_no_difference -> { @voter.vote_assignments.count } do
+        get new_rate_url
+      end
+
+      assert_response :success
+      assert_includes response.body, "banked #{Vote::MAX_BANKED_VOTES} votes"
+    end
+
+    test "submitting a vote stores readable telemetry on the vote" do
+      get new_rate_url
+      assignment = current_assignment
+      assignment.update_columns(first_viewed_at: 75.seconds.ago, last_viewed_at: 10.seconds.ago)
+      assignment.ship_event.project.update_columns(
+        demo_url: "https://demo.example.com",
+        repo_url: "https://github.com/acme/widget"
+      )
+
+      get demo_votes_assignment_path(assignment)
+      get repo_votes_assignment_path(assignment)
+
+      assert_difference -> { Vote.count }, 1 do
+        post votes_path, params: {
+          vote_assignment_id: assignment.id,
+          vote: valid_scores.merge(reason: VotesControllerTest::VALID_REASON)
+        }
+      end
+
+      vote = Vote.order(:created_at).last
+      assert_operator vote.time_taken_to_vote_in_seconds, :>=, 75
+      assert_predicate vote, :demo_opened?
+      assert_predicate vote, :repo_opened?
+    end
+
     test "skipping records a skip event and timestamp" do
       get new_rate_url
       assignment = current_assignment

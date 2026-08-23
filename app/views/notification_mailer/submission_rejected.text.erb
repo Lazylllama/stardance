@@ -21,5 +21,5 @@ Reviewer feedback:
 Address the feedback above and re-submit when you're ready.
 
 <% if @record %>
-View submission: <%= mission_submission_url(@record) %>
+View project: <%= @record.ship_event&.post&.project ? project_url(@record.ship_event.post.project) : root_url %>
 <% end %>

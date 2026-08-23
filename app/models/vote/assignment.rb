@@ -71,10 +71,16 @@ class Vote::Assignment < ApplicationRecord
   end
 
   def refresh(matchmaker = Vote::Matchmaker.new(user))
-    if ship_event.certification_status == "rejected"
+    # Hardware left the rating pool, but assignments handed out before that
+    # would keep being served: the branches below only swap a ship out once it's
+    # rejected or already paid.
+    if ship_event.project&.hardware?
       replace_with(matchmaker.next_ship_event)
-    # we don't have the countable scope... yet!
-    elsif ship_event.payout.present? || ship_event.votes_count >= Post::ShipEvent::VOTES_TO_LEAVE_POOL
+    elsif !ship_event.voting_links_present?
+      replace_with(matchmaker.next_ship_event)
+    elsif ship_event.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
+      replace_with(matchmaker.next_ship_event)
+    elsif ship_event.payout.present? || ship_event.votes.payout_countable.count >= Post::ShipEvent::VOTES_TO_LEAVE_POOL
       if replacement = matchmaker.next_unpaid_ship_event
         replace_with(replacement)
       else
@@ -86,7 +92,11 @@ class Vote::Assignment < ApplicationRecord
   end
 
   def submit_vote(attributes)
-    vote = build_vote(attributes.merge(user: user, ship_event: ship_event, project: ship_event.project))
+    vote = build_vote(attributes.merge(
+      user: user,
+      ship_event: ship_event,
+      project: ship_event.project
+    ).merge(readable_telemetry_attributes))
 
     transaction do
       vote.save!
@@ -116,6 +126,14 @@ class Vote::Assignment < ApplicationRecord
     )
   end
 
+  def readable_telemetry_attributes(now: Time.current)
+    {
+      time_taken_to_vote_in_seconds: first_viewed_at && (now - first_viewed_at).round,
+      demo_opened: events.of_type("vote_demo_opened").exists?,
+      repo_opened: events.of_type("vote_repo_opened").exists?
+    }
+  end
+
   private
     def self.assign_new_to(user, matchmaker)
       if ship_event = matchmaker.next_ship_event
@@ -143,6 +161,10 @@ class Vote::Assignment < ApplicationRecord
     def ship_event_can_be_assigned
       unless ship_event&.certification_status == "approved"
         errors.add(:ship_event, "must be approved")
+      end
+
+      unless ship_event&.voting_links_present?
+        errors.add(:ship_event, "must have both a demo and repository link")
       end
     end
 

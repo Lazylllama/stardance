@@ -40,15 +40,27 @@ class Project::MissionAttachment < ApplicationRecord
 
   validate :project_unshipped_or_follow_up, on: :create
   validate :no_other_active_attachment, on: :create
+  validate :hardware_mission_takes_hardware_project, on: :create
 
   before_validation :default_attached_at, on: :create
 
   def detach!
     return if detached_at.present?
-    update!(detached_at: Time.current)
+
+    transaction do
+      update!(detached_at: Time.current)
+      discard_rejected_submissions
+    end
   end
 
   private
+
+  # Leaving a mission also clears the reviews it failed: the rejected
+  # submissions come off their ships, so those ships stop blocking the next
+  # one (see Project#blocking_mission_submission) and read as plain ships.
+  def discard_rejected_submissions
+    project.mission_submissions.rejected.where(mission_id: mission_id).find_each(&:soft_delete!)
+  end
 
   def default_attached_at
     self.attached_at ||= Time.current
@@ -75,5 +87,14 @@ class Project::MissionAttachment < ApplicationRecord
     return if project.may_swap_mission_to?(mission)
 
     errors.add(:base, "Can't attach a mission to a project that has already shipped")
+  end
+
+  # Hardware missions only accept hardware projects (Mission#hardware?). The
+  # builder switches their project to hardware on the project page first.
+  def hardware_mission_takes_hardware_project
+    return unless project && mission&.hardware?
+    return if project.hardware?
+
+    errors.add(:base, "#{mission.name} is a hardware mission — switch your project to hardware before attaching.")
   end
 end

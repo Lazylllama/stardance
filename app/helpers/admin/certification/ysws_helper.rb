@@ -15,6 +15,15 @@ module Admin::Certification::YswsHelper
     )
   end
 
+  # The devlog pre-screen hint borrows the banner's severity tones: a suggested
+  # time cut reads the same as a yellow banner flag, while a recommendation with
+  # nothing to compare against stays neutral blue. The "deduction" key is set by
+  # Certification::MACAnalysis#recommendation_for.
+  def mac_hint_classes(recommendation)
+    [ "mac-hint", "mac-hint--aside", ("mac-hint--deduction" if recommendation["deduction"]) ]
+      .compact.join(" ")
+  end
+
   def parse_repo_info(repo_url)
     return nil if repo_url.blank?
 

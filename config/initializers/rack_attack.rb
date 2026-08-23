@@ -2,86 +2,107 @@ require "rack/attack"
 
 Rack::Attack.cache.store = Rails.cache
 
-Rack::Attack.throttled_responder = lambda do |req|
-  match_data = req.env["rack.attack.match_data"]
-  period     = match_data[:period]
-  epoch_time = match_data[:epoch_time] || Time.now.to_i
-  reset_in   = period - (epoch_time % period)
-  time_label = reset_in >= 60 ? "#{(reset_in / 60.0).ceil} minutes" : "#{reset_in} seconds"
-  message    = "You're doing that too fast. Try again in #{time_label}."
+module RackAttackClient
+  STATIC_PATHS = %r{\A/(assets|favicon\.ico|robots\.txt|manifest\.json|apple-touch-icon)}.freeze
+  AUTH_PATHS = %r{\A/(auth/[^/]+/callback|oauth/callback|auth/failure)\z}.freeze
+  ADMIN_PATHS = %r{\A/admin(/|\z)}.freeze
 
-  accept = req.env["HTTP_ACCEPT"].to_s
+  def self.ip(request)
+    request.get_header("HTTP_CF_CONNECTING_IP").presence || request.ip
+  end
 
-  if accept.include?("text/vnd.turbo-stream.html")
-    turbo_html = <<~HTML
-      <turbo-stream action="prepend" target="flash-region">
-        <template>
-          <div class="flash-container">
-            <div class="alert alert-error" role="alert" aria-live="assertive" data-controller="flash" data-flash-timeout-value="5000">
-              <div class="alert__content">#{message}</div>
-              <button type="button" class="alert__close" aria-label="Close" title="Close" data-action="click->flash#close">&times;</button>
-            </div>
-          </div>
-        </template>
-      </turbo-stream>
-    HTML
+  def self.user_or_ip(request)
+    request.env["warden"]&.user(:user)&.id&.to_s || ip(request)
+  end
 
-    [ 429, { "Content-Type" => "text/vnd.turbo-stream.html; charset=utf-8", "Retry-After" => reset_in.to_s }, [ turbo_html ] ]
+  def self.static_request?(request)
+    request.path.match?(STATIC_PATHS)
+  end
 
-  elsif accept.include?("application/json")
-    body = { error: "rate_limited", message: message }.to_json
+  def self.health_check?(request)
+    request.path == "/up"
+  end
 
-    [ 429, { "Content-Type" => "application/json", "Retry-After" => reset_in.to_s }, [ body ] ]
+  def self.auth_request?(request)
+    request.path.match?(AUTH_PATHS)
+  end
 
-  else
-    referer = req.env["HTTP_REFERER"] || "/"
-    html = <<~HTML
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8">
-          <title>Too many requests</title>
-          <style>
-            body { background: #08061E; color: #FFF8D5; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .box { text-align: center; }
-            p { color: #EBB7FF; margin: 0.5rem 0 1.5rem; }
-            a { color: #81FFFF; }
-          </style>
-        </head>
-        <body>
-          <div class="box">
-            <h1>Slow down!</h1>
-            <p>#{message}</p>
-            <a href="#{referer}">&larr; Go back</a>
-          </div>
-        </body>
-      </html>
-    HTML
-
-    [ 429, { "Content-Type" => "text/html; charset=utf-8", "Retry-After" => reset_in.to_s }, [ html ] ]
+  def self.admin_request?(request)
+    request.path.match?(ADMIN_PATHS)
   end
 end
 
-# authenticated user ID via warden, falls back to IP
-
-user_id = ->(req) { req.env["warden"]&.user(:user)&.id&.to_s || req.ip }
-
-Rack::Attack.throttle("user_follows", limit: 10, period: 60) do |req|
-  user_id.call(req) if req.post? && req.path.match?(%r{^/users/\d+/follow$})
+Rack::Attack.safelist("allow health checks") do |req|
+  RackAttackClient.health_check?(req)
 end
 
-Rack::Attack.throttle("project_follows", limit: 10, period: 60) do |req|
-  user_id.call(req) if req.post? && req.path.match?(%r{^/projects/[^/]+/follow$})
+Rack::Attack.safelist("allow static assets") do |req|
+  RackAttackClient.static_request?(req)
 end
 
-Rack::Attack.throttle("devlog_likes", limit: 30, period: 60) do |req|
-  user_id.call(req) if req.post? && req.path.match?(%r{^/devlogs/\d+/like$})
+Rack::Attack.throttle("requests/ip", limit: 600, period: 5.minutes) do |req|
+  RackAttackClient.ip(req) unless RackAttackClient.admin_request?(req)
 end
 
-Rack::Attack.throttle("devlog_comments", limit: 5, period: 60) do |req|
-  user_id.call(req) if req.post? && req.path.match?(%r{^/devlogs/\d+/comments$})
+Rack::Attack.throttle("request bursts/ip", limit: 120, period: 1.minute) do |req|
+  RackAttackClient.ip(req) unless RackAttackClient.admin_request?(req)
 end
 
-Rack::Attack.throttle("devlog_reposts", limit: 10, period: 60) do |req|
-  user_id.call(req) if req.post? && req.path.match?(%r{^/devlogs/\d+/repost$})
+Rack::Attack.throttle("state-changing requests/ip", limit: 60, period: 1.minute) do |req|
+  RackAttackClient.ip(req) if !(req.get? || req.head? || req.options?) && !RackAttackClient.admin_request?(req)
+end
+
+Rack::Attack.throttle("admin requests/ip", limit: 1500, period: 5.minutes) do |req|
+  RackAttackClient.ip(req) if RackAttackClient.admin_request?(req)
+end
+
+Rack::Attack.throttle("admin request bursts/ip", limit: 300, period: 1.minute) do |req|
+  RackAttackClient.ip(req) if RackAttackClient.admin_request?(req)
+end
+
+Rack::Attack.throttle("admin state-changing requests/ip", limit: 180, period: 1.minute) do |req|
+  RackAttackClient.ip(req) if RackAttackClient.admin_request?(req) && !(req.get? || req.head? || req.options?)
+end
+
+Rack::Attack.throttle("auth callbacks/ip", limit: 20, period: 5.minutes) do |req|
+  RackAttackClient.ip(req) if RackAttackClient.auth_request?(req)
+end
+
+Rack::Attack.throttle("user follows", limit: 10, period: 1.minute) do |req|
+  RackAttackClient.user_or_ip(req) if req.post? && req.path.match?(%r{\A/users/[^/]+/follow\z})
+end
+
+Rack::Attack.throttle("project follows", limit: 10, period: 1.minute) do |req|
+  RackAttackClient.user_or_ip(req) if req.post? && req.path.match?(%r{\A/projects/[^/]+/follow\z})
+end
+
+Rack::Attack.throttle("devlog likes", limit: 30, period: 1.minute) do |req|
+  RackAttackClient.user_or_ip(req) if req.post? && req.path.match?(%r{\A/devlogs/[^/]+/like\z})
+end
+
+Rack::Attack.throttle("devlog comments", limit: 5, period: 1.minute) do |req|
+  RackAttackClient.user_or_ip(req) if req.post? && req.path.match?(%r{\A/devlogs/[^/]+/comments\z})
+end
+
+Rack::Attack.throttle("post reposts", limit: 10, period: 1.minute) do |req|
+  RackAttackClient.user_or_ip(req) if req.post? && req.path.match?(%r{\A/posts/[^/]+/repost\z})
+end
+
+Rack::Attack.throttled_responder = lambda do |req|
+  match_data = req.env["rack.attack.match_data"] || {}
+  retry_after = match_data.fetch(:period, 60).to_s
+
+  body = {
+    error: "rate_limited",
+    message: "Too many requests. Please slow down."
+  }.to_json
+
+  [
+    429,
+    {
+      "Content-Type" => "application/json",
+      "Retry-After" => retry_after
+    },
+    [ body ]
+  ]
 end

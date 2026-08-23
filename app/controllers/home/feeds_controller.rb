@@ -1,9 +1,12 @@
 class Home::FeedsController < ApplicationController
   include OnboardingResumable
 
-  FEED_LIMIT = 20
+  FEED_LIMIT = 10
+  FIRST_PAGE_LIMIT = 3
   RECOMMENDATION_POOL = 100 # after this, we fallback to SQL
-  TABS = %w[for_you following popular newest].freeze
+  BACKFILL_OVERSAMPLE = 10
+  GORSE_TIMEOUT = 0.75
+  TABS = %w[for_you following popular newest new_builders].freeze
   FeedPage = Struct.new(:page, :limit, :offset, :next, keyword_init: true)
 
   skip_before_action :remember_page
@@ -22,10 +25,11 @@ class Home::FeedsController < ApplicationController
 
   def load_feed
     case @current_tab
-    when "following"  then load_following_feed
-    when "popular"    then paginate_and_filter(popular_scope, "popular")
-    when "newest"     then paginate_and_filter(newest_scope, "newest")
-    else                   load_for_you_feed
+    when "following"     then load_following_feed
+    when "popular"       then paginate_and_filter(popular_scope, "popular")
+    when "newest"        then paginate_and_filter(newest_scope, "newest")
+    when "new_builders"  then paginate_and_filter(new_builders_scope, "new_builders")
+    else                      load_for_you_feed
     end
 
     @liked_devlog_ids = liked_devlog_ids_for(@feed_posts)
@@ -35,13 +39,23 @@ class Home::FeedsController < ApplicationController
 
   def load_for_you_feed
     recommended = recommended_posts
-    backfill = feed_scope.where.not(id: recommended.map(&:id))
+    backfill = filtered_feed_scope(Gorse::PostPayload.recommendable_feed_scope(current_user))
+      .where.not(id: recommended.map(&:id))
 
     @pagy = feed_pagy
     @feed_posts, @feed_post_sources, has_next = compose_feed(recommended, backfill, @pagy)
     @pagy.next = @pagy.page + 1 if has_next
 
     preload_feed_associations(@feed_posts)
+  end
+
+  def filtered_feed_scope(scope)
+    scope
+      .joins("LEFT JOIN users feed_authors ON feed_authors.id = posts.user_id")
+      .joins("LEFT JOIN projects feed_projects ON feed_projects.id = posts.project_id")
+      .where("feed_projects.id IS NULL OR feed_projects.description IS NOT NULL")
+      .where("feed_authors.banned = FALSE")
+      .order(Arel.sql(quality_latest_order_sql))
   end
 
   def load_following_feed
@@ -93,6 +107,26 @@ class Home::FeedsController < ApplicationController
     feed_scope.reorder(created_at: :desc)
   end
 
+  def new_builders_scope
+    first_devlog_ids = Post.where(postable_type: "Post::Devlog")
+      .joins("INNER JOIN post_devlogs ON post_devlogs.id = posts.postable_id")
+      .where(post_devlogs: { deleted_at: nil })
+      .group(:user_id)
+      .select("MIN(posts.id)")
+
+    feed_scope
+      .where(postable_type: "Post::Devlog")
+      .joins("INNER JOIN post_devlogs ON post_devlogs.id = posts.postable_id")
+      .where(id: first_devlog_ids)
+      .where(post_devlogs: { deleted_at: nil })
+      .where("post_devlogs.duration_seconds > 0")
+      .where("posts.created_at >= ?", 7.days.ago)
+      .reorder(Arel.sql(<<~SQL.squish))
+        (post_devlogs.likes_count + post_devlogs.comments_count) ASC,
+        posts.created_at DESC
+      SQL
+  end
+
   def visible_post?(post)
     return false unless post.postable.present?
     return true unless post.repost?
@@ -101,12 +135,14 @@ class Home::FeedsController < ApplicationController
   end
 
   def recommended_posts
-    Gorse::Recommendations.new(user: current_user).posts(limit: RECOMMENDATION_POOL)
+    recommendations.posts(limit: RECOMMENDATION_POOL)
   end
 
   def feed_pagy
     page = [ params[:page].to_i, 1 ].max
-    FeedPage.new(page: page, limit: FEED_LIMIT, offset: (page - 1) * FEED_LIMIT)
+    limit = page == 1 ? FIRST_PAGE_LIMIT : FEED_LIMIT
+    offset = page == 1 ? 0 : FIRST_PAGE_LIMIT + (page - 2) * FEED_LIMIT
+    FeedPage.new(page: page, limit: limit, offset: offset)
   end
 
   def compose_feed(recommended, backfill, pagy)
@@ -117,7 +153,12 @@ class Home::FeedsController < ApplicationController
     remaining = page_candidate_limit - rec_slice.size
     if remaining.positive?
       sql_offset = [ pagy.offset - recommended.size, 0 ].max
-      backfill.offset(sql_offset).limit(remaining).each do |post|
+      backfill_posts = backfill.offset(sql_offset).limit(remaining * BACKFILL_OVERSAMPLE).to_a
+      # Batch-load postables up front: the visibility filter below reads
+      # `post.postable` on every candidate, which would otherwise fire one
+      # query per post. preload_feed_associations later deep-loads from here.
+      preload(backfill_posts, :postable)
+      backfill_posts.each do |post|
         next unless post.postable.present?
         next if post.repost? && !post.visible_repost_original_for?(current_user)
 
@@ -125,24 +166,31 @@ class Home::FeedsController < ApplicationController
       end
     end
 
-    posts, sources = dedupe_by_content(candidates.first(pagy.limit))
-    [ posts, sources, candidates.size > pagy.limit ]
+    diverse_posts, sources = select_diverse_candidates(candidates, limit: page_candidate_limit)
+    posts = diverse_posts.first(pagy.limit)
+    [ posts, sources.slice(*posts), diverse_posts.size > pagy.limit ]
   end
 
-  # don't want to show dupe reposts
-  def dedupe_by_content(candidates)
+  def select_diverse_candidates(candidates, limit:)
     origins = repost_original_ids(candidates.map(&:first))
     posts = []
     sources = {}
-    seen = Set.new
+    seen_content_ids = Set.new
+    seen_user_ids = Set.new
+    seen_project_ids = Set.new
 
     candidates.each do |post, source|
-      key = post.repost? ? origins[post.postable_id] : post.id
-      next if key.nil? || seen.include?(key)
+      content_id = post.repost? ? origins[post.postable_id] : post.id
+      next if content_id.nil? || seen_content_ids.include?(content_id)
+      next if post.user_id.present? && seen_user_ids.include?(post.user_id)
+      next if post.project_id.present? && seen_project_ids.include?(post.project_id)
 
-      seen << key
+      seen_content_ids << content_id
+      seen_user_ids << post.user_id if post.user_id.present?
+      seen_project_ids << post.project_id if post.project_id.present?
       posts << post
       sources[post] = source
+      break if posts.size >= limit
     end
 
     [ posts, sources ]
@@ -156,12 +204,7 @@ class Home::FeedsController < ApplicationController
   end
 
   def feed_scope
-    Gorse::PostPayload.feed_scope(current_user)
-      .joins("LEFT JOIN users feed_authors ON feed_authors.id = posts.user_id")
-      .joins("LEFT JOIN projects feed_projects ON feed_projects.id = posts.project_id")
-      .where("feed_projects.id IS NULL OR feed_projects.description IS NOT NULL")
-      .where("feed_authors.banned = FALSE")
-      .order(Arel.sql(quality_latest_order_sql))
+    filtered_feed_scope(Gorse::PostPayload.feed_scope(current_user))
   end
 
   def quality_latest_order_sql
@@ -231,7 +274,6 @@ class Home::FeedsController < ApplicationController
   end
 
   def load_recommended_projects
-    recommendations = Gorse::Recommendations.new(user: current_user)
     projects = recommendations.projects(limit: 6)
 
     @recommended_projects =
@@ -246,5 +288,12 @@ class Home::FeedsController < ApplicationController
 
   def first_page?
     @pagy.nil? || @pagy.page == 1
+  end
+
+  def recommendations
+    @recommendations ||= Gorse::Recommendations.new(
+      user: current_user,
+      client: Gorse::Client.new(timeout_seconds: GORSE_TIMEOUT)
+    )
   end
 end

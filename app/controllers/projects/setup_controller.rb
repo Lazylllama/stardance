@@ -6,7 +6,7 @@ class Projects::SetupController < ApplicationController
   before_action :load_setup_project_for_prefill, only: %i[name missions]
   before_action :load_setup_project, only: %i[link_account welcome]
 
-  DEFAULT_PROJECT_TITLE = "Untitled project".freeze
+  DEFAULT_PROJECT_TITLE = Project::SETUP_DEFAULT_TITLE
 
   EXPERIENCE_TO_DIFFICULTIES = {
     "none"        => %w[beginner],
@@ -93,13 +93,22 @@ class Projects::SetupController < ApplicationController
 
     is_first_attach = !project.mission_attachments.exists?(mission_id: mission.id)
 
-    project.attach_mission!(mission)
+    # A project created for a hardware mission is born hardware (design stage,
+    # the entry point of the hardware flow) so it satisfies the mission's
+    # hardware-only requirement instead of being turned away on attach.
+    project.update!(hardware_stage: "design") if mission.hardware? && !project.hardware?
+
+    begin
+      project.attach_mission!(mission)
+    rescue ActiveRecord::RecordInvalid => e
+      redirect_to mission_path(mission.slug), alert: e.record.errors.full_messages.to_sentence and return
+    end
 
     # Authored defaults apply only on first attach — never overwrite a
     # builder's edits on re-attach.
     if is_first_attach
       attrs = {}
-      if project.title.blank? || project.title == DEFAULT_PROJECT_TITLE
+      if project.placeholder_title?
         attrs[:title] = mission.default_project_title.presence || mission.name
       end
       if project.description.blank? && mission.default_project_description.present?

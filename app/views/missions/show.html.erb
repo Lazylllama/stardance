@@ -13,6 +13,10 @@
             <span class="mission-home__crumb-dot" aria-hidden="true">·</span>
             <%= link_to "Manage", edit_admin_mission_path(@mission.slug), class: "mission-home__crumb-link" %>
           <% end %>
+          <% if policy(@mission).review_queue? %>
+            <span class="mission-home__crumb-dot" aria-hidden="true">·</span>
+            <%= link_to "Review", admin_mission_submissions_path(@mission.slug), class: "mission-home__crumb-link" %>
+          <% end %>
         </span>
       </p>
 
@@ -56,6 +60,9 @@
               <li class="mission-home__hero-chip mission-home__hero-chip--status mission-home__hero-chip--status-<%= @progress_state.to_s.dasherize %>">
                 <span class="mission-home__hero-chip-dot" aria-hidden="true"><%= status_glyph %></span> <%= status_label %>
               </li>
+              <% if @mission.hardware? %>
+                <li class="mission-home__hero-chip mission-home__hero-chip--hardware">hardware</li>
+              <% end %>
               <% if @mission.difficulty.present? %>
                 <li class="mission-home__hero-chip mission-home__hero-chip--difficulty mission-home__hero-chip--difficulty-<%= @mission.difficulty %>">
                   <%= @mission.difficulty %>
@@ -108,13 +115,33 @@
                 Continue project
               </button>
             <% end %>
-            <%= button_to "Create a project",
-                          projects_setup_submit_mission_path,
-                          method: :post,
-                          params: { mission_slug: @mission.slug },
-                          data: { turbo: false },
-                          form: { class: "mission-home__cta-form" },
-                          class: "action-btn action-btn--large #{continue_flow ? "action-btn--secondary" : "action-btn--primary"}" %>
+            <%# Onboarded builders (HCA-linked with a project) would be bounced
+                back to an existing draft by the setup flow's redirect_if_setup_complete
+                guard, so they create through the standard projects#create path —
+                which attaches the mission and applies hardware conversion. New
+                builders still funnel through the onboarding setup step. %>
+            <% onboarded = current_user&.hca_linked? && current_user.projects.exists? %>
+            <% create_cta_class = "action-btn action-btn--large #{continue_flow ? "action-btn--secondary" : "action-btn--primary"}" %>
+            <% if onboarded %>
+              <%# Named up front via the same prompt as /projects/new. New builders
+                  skip it: the setup wizard has its own naming step. %>
+              <%= form_with url: projects_path, method: :post, data: { turbo: false }, class: "mission-home__cta-form" do %>
+                <%= hidden_field_tag :mission_slug, @mission.slug %>
+                <button type="button" class="<%= create_cta_class %>"
+                        onclick="openNamePrompt(this, 'name-prompt-mission-cta')">
+                  Create a project
+                </button>
+                <%= render "projects/name_prompt", id: "name-prompt-mission-cta" %>
+              <% end %>
+            <% else %>
+              <%= button_to "Create a project",
+                            projects_setup_submit_mission_path,
+                            method: :post,
+                            params: { mission_slug: @mission.slug },
+                            data: { turbo: false },
+                            form: { class: "mission-home__cta-form" },
+                            class: create_cta_class %>
+            <% end %>
             <% if !continue_flow && has_attach_choices %>
               <button type="button"
                       class="action-btn action-btn--large action-btn--secondary"
@@ -146,17 +173,33 @@
           </section>
         <% end %>
 
-        <%# Prizes card %>
+        <%# Prizes card — always shown so every mission surfaces its rating status %>
         <% has_stardust = @mission.fixed_stardust_payout&.positive? %>
-        <% if @ordered_prizes.any? || has_stardust || @unlocked_missions.any? %>
-          <section class="mission-home__card mission-home__rewards"
-                   aria-labelledby="mission-home-rewards">
+        <section class="mission-home__card mission-home__rewards"
+                 aria-labelledby="mission-home-rewards">
             <h2 id="mission-home-rewards" class="mission-home__card-title">
               <em class="mission-home__card-title-accent">Prizes</em>
             </h2>
             <ul class="mission-home__prize-list">
               <% tones = %w[yellow lilac peach mint] %>
               <% tone_idx = 0 %>
+              <%# The kit is claimed at design approval; the voting/stardust reward
+                  and any after-ship prizes come after building. Only a mission with
+                  a design kit is split into labelled sections. %>
+              <% design_prizes = @ordered_prizes.select(&:after_design?) %>
+              <% building_prizes = @ordered_prizes.reject(&:after_design?) %>
+              <% split_sections = design_prizes.any? %>
+
+              <% if split_sections %>
+                <li class="mission-home__prize-group-label">After design</li>
+                <% design_prizes.each do |prize| %>
+                  <%= render "missions/prize_tile", prize: prize, tone: tones[tone_idx % tones.length] %>
+                  <% tone_idx += 1 %>
+                <% end %>
+                <li class="mission-home__prize-group-label">After building</li>
+              <% end %>
+
+              <%= render "missions/rating_status", mission: @mission %>
               <% if has_stardust %>
                 <li class="mission-home__prize mission-home__prize--<%= tones[tone_idx % tones.length] %>">
                   <div class="mission-home__prize-tile">
@@ -169,12 +212,16 @@
                 </li>
                 <% tone_idx += 1 %>
               <% end %>
-              <% @ordered_prizes.each_with_index do |prize, idx| %>
+              <% building_prizes.each do |prize| %>
+                <%= render "missions/prize_tile", prize: prize, tone: tones[tone_idx % tones.length] %>
+                <% tone_idx += 1 %>
+              <% end %>
+              <% @shop_unlocks.each_with_index do |shop_unlock, idx| %>
                 <% tone = tones[(tone_idx + idx) % tones.length] %>
                 <li class="mission-home__prize mission-home__prize--<%= tone %>">
                   <div class="mission-home__prize-tile">
-                    <% if prize.shop_item.respond_to?(:image) && prize.shop_item.image.respond_to?(:attached?) && prize.shop_item.image.attached? %>
-                      <%= image_tag prize.shop_item.image, alt: "", class: "mission-home__prize-img" %>
+                    <% if shop_unlock.shop_item.respond_to?(:image) && shop_unlock.shop_item.image.respond_to?(:attached?) && shop_unlock.shop_item.image.attached? %>
+                      <%= image_tag shop_unlock.shop_item.image, alt: "", class: "mission-home__prize-img" %>
                     <% else %>
                       <svg viewBox="0 0 24 24" width="28" height="28" class="mission-home__prize-glyph" aria-hidden="true">
                         <path d="M12 1.5 13.6 10.4 22.5 12 13.6 13.6 12 22.5 10.4 13.6 1.5 12 10.4 10.4Z" />
@@ -182,15 +229,13 @@
                     <% end %>
                   </div>
                   <div class="mission-home__prize-body">
-                    <p class="mission-home__prize-title"><%= prize.shop_item.name %></p>
-                    <% if prize.shop_item.description.present? %>
-                      <p class="mission-home__prize-blurb"><%= prize.shop_item.description %></p>
-                    <% end %>
+                    <p class="mission-home__prize-title">Unlocks <%= link_to shop_unlock.shop_item.name, shop_item_path(shop_unlock.shop_item) %></p>
+                    <p class="mission-home__prize-blurb">Allows you to get <%= shop_unlock.shop_item.name %> from the shop!</p>
                   </div>
                 </li>
               <% end %>
               <% @unlocked_missions.each_with_index do |unlocked, idx| %>
-                <% tone = tones[(tone_idx + @ordered_prizes.size + idx) % tones.length] %>
+                <% tone = tones[(tone_idx + @shop_unlocks.size + idx) % tones.length] %>
                 <li class="mission-home__prize mission-home__prize--<%= tone %>">
                   <div class="mission-home__prize-tile">
                     <% if unlocked.icon.attached? %>
@@ -208,8 +253,7 @@
                 </li>
               <% end %>
             </ul>
-          </section>
-        <% end %>
+        </section>
       </div>
 
       <% if @gallery_projects.any? %>
