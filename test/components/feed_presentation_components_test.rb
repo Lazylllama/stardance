@@ -20,6 +20,10 @@ class FeedPresentationComponentsTest < ViewComponent::TestCase
     assert_text "What are you working on?"
     assert_selector "form[action='#{project_devlogs_path(@project)}']"
     assert_link @project.title
+    assert_selector ".feed-composer[data-composer-body-max-length-value='#{Post::Devlog::BODY_MAX_LENGTH}']"
+    assert_selector ".feed-composer[data-composer-max-file-size-value='#{Post::Devlog::ATTACHMENT_MAX_SIZE}']"
+    assert_selector ".feed-composer__textarea[data-composer-target='editor']"
+    assert_selector ".feed-composer__error[data-composer-target='error'][role='alert']", visible: :all
   end
 
   test "home composer (show_record) renders the record-a-timelapse button for a hardware project" do

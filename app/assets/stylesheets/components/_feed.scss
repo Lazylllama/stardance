@@ -369,6 +369,21 @@
     display: none;
   }
 
+  &__error {
+    margin: var(--space-xs) 0 0 var(--feed-content-offset);
+    color: var(--color-brand-salmon);
+    font-size: var(--font-size-s);
+    line-height: 1.3;
+
+    &[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      margin-left: 0;
+    }
+  }
+
   // The post being quoted, shown below the text box while composing a quote
   // repost (reuses .feed-post-card__repost-preview for the timeline look).
   // Non-interactivity comes from the `inert` attribute on the element.
