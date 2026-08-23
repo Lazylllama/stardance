@@ -4,17 +4,15 @@ export default class extends Controller {
   static targets = ["card"];
 
   close() {
-    this.element.remove();
+    this.element.close();
   }
 
   connect() {
-    showModal()
+    if (!this.element.open) this.element.showModal();
   }
 
   backdropClose(event) {
     if (this.hasCardTarget && this.cardTarget.contains(event.target)) return;
     this.close();
   }
-
-  
 }
