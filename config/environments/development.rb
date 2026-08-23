@@ -76,6 +76,7 @@ Rails.application.configure do
   config.hosts << "raffle.localhost"
   config.hosts << ".loca.lt"
   config.hosts << ".ngrok-free.app"
+  config.hosts << ".app.github.dev"
 
   # Highlight code that triggered database queries in logs.
   config.active_record.verbose_query_logs = true
