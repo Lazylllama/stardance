@@ -259,11 +259,11 @@
               </div>
               <div>
                 <%= label_tag :fraud_related_project_id, "Related Project ID (required)" %>
-                <%= number_field_tag :fraud_related_project_id, nil, placeholder: "e.g. 1234", required: true %>
+                <%= number_field_tag :fraud_related_project_id, nil, placeholder: "e.g. 1234", required: true, autocomplete: "off" %>
               </div>
               <div>
                 <%= label_tag :joe_case_url, "Telescreen case URL (optional)" %>
-                <%= url_field_tag :joe_case_url, nil, placeholder: "https://telescreen.hackclub.com/cases/..." %>
+                <%= url_field_tag :joe_case_url, nil, placeholder: "https://telescreen.hackclub.com/cases/...", autocomplete: "off" %>
               </div>
               <div>
                 <button type="submit">Confirm Reject</button>
