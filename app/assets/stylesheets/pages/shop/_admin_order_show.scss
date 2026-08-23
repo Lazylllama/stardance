@@ -892,43 +892,6 @@
   }
 }
 
-// ── Fraud payout scope toggle ───────────────────────────────────────────
-.fraud-scope-toggle {
-  display: flex;
-  gap: var(--space-xs);
-  padding: var(--space-s) var(--space-m);
-  border-bottom: 1px solid var(--color-space-border);
-  background: rgba(255, 255, 255, 0.01);
-
-  &__btn {
-    padding: var(--space-xxs) var(--space-m);
-    border-radius: 20px;
-    border: 1px solid var(--color-space-border);
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--color-space-text-muted);
-    font-family: var(--font-family-text);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 100ms ease;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.07);
-      color: var(--color-space-text);
-    }
-
-    &--active {
-      color: var(--color-space-bg);
-      border-color: var(--color-brand-blue);
-      background: var(--color-brand-blue);
-
-      &:hover {
-        background: var(--color-brand-blue);
-      }
-    }
-  }
-}
-
 // ── Audit log (shared partial) ────────────────────────────────────────
 .audit-log {
   background: var(--color-space-card);

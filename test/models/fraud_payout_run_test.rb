@@ -16,14 +16,13 @@ require "test_helper"
 #  approved_by_user_id :bigint
 #
 class FraudPayoutRunTest < ActiveSupport::TestCase
-  def create_review_version(whodunnit:, to_state:, created_at: Time.current)
+  def create_review_version(whodunnit:, to_state:)
     ::PaperTrail::Version.create!(
       item_type: "ShopOrder",
       item_id: SecureRandom.random_number(1_000_000).to_s,
       event: "update",
       whodunnit: whodunnit,
-      object_changes: { aasm_state: [ "awaiting_verification", to_state ] },
-      created_at: created_at
+      object_changes: { aasm_state: [ "awaiting_verification", to_state ] }
     )
   end
 
@@ -33,15 +32,6 @@ class FraudPayoutRunTest < ActiveSupport::TestCase
     ::PaperTrail::Version.create!(item_type: "ShopOrder", item_id: "999", event: "update", whodunnit: "1", object_changes: { tracking_number: [ nil, "abc" ] }.to_json)
 
     assert_equal [ review.id ], FraudPayoutRun.reviewer_versions.pluck(:id)
-  end
-
-  test "reviewer_versions since: excludes versions recorded before the cutoff" do
-    old = create_review_version(whodunnit: "1", to_state: "rejected", created_at: 2.months.ago)
-    recent = create_review_version(whodunnit: "1", to_state: "rejected", created_at: 1.day.ago)
-
-    ids = FraudPayoutRun.reviewer_versions(since: 1.week.ago).pluck(:id)
-    assert_includes ids, recent.id
-    refute_includes ids, old.id
   end
 
   test "reviewer_from_version returns the whodunnit as an integer for review-state transitions" do
