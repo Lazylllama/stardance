@@ -7,8 +7,14 @@ export default class extends Controller {
     this.element.remove();
   }
 
+  connect() {
+    showModal()
+  }
+
   backdropClose(event) {
     if (this.hasCardTarget && this.cardTarget.contains(event.target)) return;
     this.close();
   }
+
+  
 }
