@@ -172,7 +172,7 @@ class ApplicationController < ActionController::Base
     if current_user.guest?
       store_return_to
       respond_to do |format|
-        format.turbo_stream { render "onboarding/upgrade_prompt", status: :ok }
+        format.turbo_stream { render "onboarding/upgrade_prompt", status: :forbidden }
         format.html { render "onboarding/upgrade_prompt", status: :forbidden, layout: "application" }
         format.json { render json: { error: "Sign in with Hack Club to do that." }, status: :forbidden }
       end

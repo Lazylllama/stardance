@@ -7,6 +7,10 @@ export default class extends Controller {
     this.element.close();
   }
 
+  remove() {
+    this.element.remove();
+  }
+
   connect() {
     if (!this.element.open) this.element.showModal();
   }
