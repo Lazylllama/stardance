@@ -8,6 +8,15 @@ class Admin::Certification::HardwareReviewPolicy < ApplicationPolicy
     user&.can_review?
   end
 
+  # The design and build queues are the same permission as the old combined one.
+  def design?
+    index?
+  end
+
+  def build?
+    index?
+  end
+
   def next?
     index?
   end

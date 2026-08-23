@@ -22,6 +22,7 @@
 #  geocoded_subdivision         :string
 #  granted_roles                :string           default([]), not null, is an Array
 #  guest_email                  :string
+#  hardware_channel_invited_at  :datetime
 #  has_gotten_free_stickers     :boolean          default(FALSE)
 #  has_pending_achievements     :boolean          default(FALSE), not null
 #  hcb_email                    :string
@@ -103,6 +104,7 @@ class User < ApplicationRecord
   has_many :project_follows, dependent: :destroy
   has_many :followed_projects, through: :project_follows, source: :project
   has_one :preference, class_name: "User::Preference", dependent: :destroy
+  has_many :data_exports, class_name: "User::DataExport", dependent: :destroy
 
   has_many :follows_as_follower, class_name: "Follow", foreign_key: :follower_id, dependent: :destroy, inverse_of: :follower
   has_many :follows_as_followed, class_name: "Follow", foreign_key: :followed_id, dependent: :destroy, inverse_of: :followed
@@ -121,6 +123,7 @@ class User < ApplicationRecord
   has_many :reviewed_mission_submissions, class_name: "Mission::Submission",
            foreign_key: :reviewed_by_id, dependent: :nullify
   has_many :shop_suggestions, dependent: :destroy
+  has_many :shop_suggestion_votes, dependent: :destroy
   has_many :shop_wishlists, dependent: :destroy
   has_many :wishlisted_shop_items, through: :shop_wishlists, source: :shop_item
   has_many :sold_items, class_name: "ShopItem::HackClubberItem", foreign_key: :user_id
@@ -279,6 +282,10 @@ class User < ApplicationRecord
     raffle_participant&.referrals&.status_verified&.count || 0
   end
 
+  def free_sticker_weeks
+    StickerPromo.weeks_for(self)
+  end
+
   REFERRAL_ACHIEVEMENTS = { referral_2: 2, referral_5: 5 }.freeze
 
   def sync_referral_achievements!
@@ -333,23 +340,6 @@ class User < ApplicationRecord
                                                   .where(posts: { user_id: id })
                                                   .distinct
                                                   .pluck(:mission_id)
-  end
-
-  # Fires the Outpost email at most once per user, and adds them to the #outpost
-  # Slack channel. Locks the row so concurrent /outpost hits can't enqueue the
-  # work twice.
-  def deliver_outpost_email!
-    return if email.blank?
-
-    with_lock("FOR UPDATE OF users") do
-      return if outpost_email_sent_at.present?
-
-      update_column(:outpost_email_sent_at, Time.current)
-    end
-
-    UserMailer.outpost(self).deliver_later
-    # Slack invite temporarily disabled — re-enable to auto-add users to the #outpost channel.
-    # AddUserToOutpostChannelJob.perform_later(id)
   end
 
   private

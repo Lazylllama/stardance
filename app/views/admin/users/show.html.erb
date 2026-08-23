@@ -117,8 +117,8 @@
                 <%= link_to "→ Slack", "https://hackclub.slack.com/team/#{identity.uid}", target: "_blank" %>
               <% end %>
               <% if identity.provider == "hackatime" %>
-                <%= link_to "→ Billy", "https://billy.3kh0.net/?u=#{identity.uid}", target: "_blank" %>
-                <%= link_to "→ Joe", "https://joe.fraud.hackclub.com/profile/#{identity.uid}", target: "_blank" %>
+                <%= link_to "→ Hackatime", telescreen_hackatime_overview_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
+                <%= link_to "→ Telescreen", telescreen_subject_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
               <% end %>
               <% if identity.provider == "hack_club" %>
                 <%= link_to "→ IDV", "#{HCAService.backend_url("/identities/#{identity.uid}")}", target: "_blank" %>
@@ -135,23 +135,10 @@
       </dl>
     </div>
   </div>
-  <% if Flipper.enabled?(:hardware_flow, current_user) %>
+  <% if Flipper.enabled?(:hardware_flow, current_user) && @user.earned_achievement?(:manual_outpost_ticket_approval) %>
   <div>
     <h2>Hardware</h2>
-    <div>
-      <% if @user.earned_achievement?(:manual_outpost_ticket_approval) %>
-        <p>Outpost Ticket: <strong>approved</strong></p>
-        <%= button_to "Remove approval ✗", admin_user_presentable_hardware_flag_path(@user),
-                      method: :delete,
-                      disabled: !current_user&.admin?,
-                      title: "Remove the Outpost Ticket approval" %>
-      <% else %>
-        <%= button_to "Approve Outpost Ticket ✓", admin_user_presentable_hardware_flag_path(@user),
-                      method: :post,
-                      disabled: !current_user&.admin?,
-                      title: "Manually approve the Outpost Ticket" %>
-      <% end %>
-    </div>
+    <p>Super Hardware Builder: <strong>yes</strong></p>
   </div>
   <% end %>
 
@@ -338,6 +325,10 @@
       <% end %>
       </div>
     </div>
+
+    <% if @certification_integrities.any? %>
+      <%= render "certification_integrities", integrities: @certification_integrities %>
+    <% end %>
 
     <div class="mission-panel">
       <h2 class="admin-user-show__section-title">Internal Notes</h2>

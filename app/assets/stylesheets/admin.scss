@@ -1,4 +1,7 @@
 /* Import page-specific styles */
+@use "pages/admin/dashboard";
+@use "pages/admin/rating_dashboard";
+@use "pages/admin/mega_dashboard";
 @use "pages/admin/missions_edit";
 @use "pages/admin/ysws_reviews";
 @use "pages/admin/integrity_reviews";
@@ -69,7 +72,9 @@ body.admin-page {
     font-size: var(--font-size-l);
   }
 
-  a:not(.action-btn):not([class*="btn-"]) {
+  a:not(.action-btn):not([class*="btn-"]):not(.ysws-queue__view-btn):not(
+      .ysws-dashboard__reviewer-link--on-pace
+    ):not(.ship-queue__row-link) {
     color: var(--color-brand-highlight);
     text-decoration: none;
 
@@ -224,7 +229,7 @@ body.admin-page {
 
   /* ── Buttons ───────────────────────────────────────── */
 
-  button,
+  button:not(.action-btn),
   input[type="submit"] {
     display: inline-flex;
     align-items: center;
@@ -319,7 +324,8 @@ body.admin-page {
     content: unset;
   }
 
-  &:disabled {
+  &:disabled,
+  &.disabled {
     background: var(--color-space-surface-faint);
     color: var(--color-space-text-muted);
     cursor: not-allowed;
@@ -691,6 +697,18 @@ dialog {
   margin-left: auto;
   color: var(--color-space-text-muted);
   font-size: 0.8rem;
+}
+
+.admin-report-group__resolve-button {
+  border-radius: 999px;
+  background: var(--color-brand-highlight);
+  color: var(--color-set-1-bg);
+  font-weight: 600;
+
+  &:hover {
+    background: var(--color-brand-highlight-secondary);
+    color: var(--color-set-1-bg);
+  }
 }
 
 .admin-actions-wrap {

@@ -65,7 +65,6 @@ class Post::Devlog < ApplicationRecord
   has_many :likes, as: :likeable, dependent: :destroy
   has_many :comments, as: :commentable, dependent: :destroy
 
-  has_many :lookout_sessions, foreign_key: :devlog_id
 
   # only for images – not for videos or gif!
   has_many_attached :attachments do |attachable|
@@ -101,7 +100,16 @@ class Post::Devlog < ApplicationRecord
             },
             allow_nil: true,
             on: :create
+  # Call normalizer prior to validation
+  before_validation :normalize_line_endings
   validates :body, presence: true, length: { maximum: BODY_MAX_LENGTH }
+
+  private
+
+  # Normalize line endings (\r\n for now) to \n
+  def normalize_line_endings
+    self.body = body.gsub("\r\n", "\n") if body.present?
+  end
 
   after_create_commit :handle_post_creation
   after_update_commit :update_project_duration_if_changed

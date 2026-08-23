@@ -21,6 +21,12 @@ class Admin::UsersController < Admin::ApplicationController
     authorize @user
 
     @all_projects = @user.projects.with_deleted.order(deleted_at: :desc)
+    @certification_integrities = Certification::Integrity
+      .joins(ship_event: :post)
+      .where(posts: { user_id: @user.id })
+      .includes(:reviewer, ship_event: { post: :project })
+      .by_status_priority
+      .order(created_at: :desc)
     @audit_pagy, @audit_versions = pagy(:offset, @user.versions.order(created_at: :desc), limit: 25)
   end
 

@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
 class Gorse::PostPayload
+  RECOMMENDATION_MAX_AGE = 6.hours
+
   def initialize(post)
     @post = post
+  end
+
+  def self.recommendable_feed_scope(viewer)
+    feed_scope(viewer).where("posts.created_at >= ?", RECOMMENDATION_MAX_AGE.ago)
   end
 
   def self.feed_scope(viewer)
@@ -13,7 +19,7 @@ class Gorse::PostPayload
             .where(project_id: Project.not_deleted)
             .select("posts.*"),
         Post.of_ship_events(join: true)
-            .where.not(post_ship_events: { certification_status: "rejected" })
+            .where.not(post_ship_events: { certification_status: Post::ShipEvent::HIDDEN_STATUSES })
             .where(project_id: Project.not_deleted)
             .select("posts.*"),
         # Collapse a viral post's reposts: keep only the most recent repost per
@@ -84,7 +90,7 @@ class Gorse::PostPayload
     end
 
     def hidden_ship_event?
-      post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected"
+      post.postable_type == "Post::ShipEvent" && post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
     end
 
     def has_media?

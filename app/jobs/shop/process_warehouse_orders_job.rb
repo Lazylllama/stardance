@@ -35,9 +35,9 @@ class Shop::ProcessWarehouseOrdersJob < ApplicationJob
           aasm_state: order.aasm_state
         )
       end
-    end
 
-    warehouse_pkg.send_to_theseus!
+      warehouse_pkg.send_to_theseus!
+    end
 
     orders.each do |order|
       order.mark_fulfilled!(warehouse_pkg.theseus_package_id, nil, "System - Warehouse Package")

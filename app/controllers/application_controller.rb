@@ -7,7 +7,6 @@ class ApplicationController < ActionController::Base
   include Pagy::Method
   include Achievementable
   include Trackable
-  include OutpostEmailing
 
   before_action :store_referral_code
   before_action :remember_page
@@ -65,6 +64,9 @@ class ApplicationController < ActionController::Base
 
     if session[:user_id]
       scope = User.where(id: session[:user_id])
+                  .eager_load(:preference)
+                  .preload(:hack_club_identity, :hackatime_identity)
+
       scope = scope.eager_load(*Array(preloads)) if preloads.present?
       user = scope.to_a.first
 
