@@ -50,6 +50,7 @@ class Mission::Submission < ApplicationRecord
   include Ledgerable
   include AASM
   include MissionReviewable
+  include Mission::PrizeRedeemable
 
   has_paper_trail
 
@@ -103,10 +104,25 @@ class Mission::Submission < ApplicationRecord
   scope :in_review, -> { where.not(status: %w[approved rejected]) }
 
   scope :reviewable,  -> { pending }
-  scope :unredeemed,  -> { approved.where(shop_order_id: nil) }
+  # What the review overview queues. Hardware missions are reviewed as funding
+  # requests and ship certs on their projects instead, and an
+  # awaiting_certification submission has no pending_at because it has not
+  # entered the queue yet. `hardware` is nullable in practice despite the
+  # annotation, and a null mission is a software one.
+  scope :software_reviewable, -> {
+    joins(:mission)
+      .where(deleted_at: nil, missions: { enabled: true, hardware: [ false, nil ] })
+      .where.not(status: "awaiting_certification")
+  }
   scope :stale_pending, ->(days: 7) {
     pending.where("pending_at < ?", days.days.ago)
   }
+  # Every verdict handed down on a project, across every mission it has been
+  # submitted to, newest first. Includes verdicts since erased from the record
+  # by a re-review request, so see Verdict before relying on the columns alone.
+  def self.review_history_for(project, excluding: nil)
+    Verdict.history_for(project, excluding: excluding)
+  end
 
   # When the submission last entered the review queue; created_at covers rows
   # that predate pending_at (or never reached the queue).
@@ -114,11 +130,10 @@ class Mission::Submission < ApplicationRecord
     pending_at || created_at
   end
 
-  # The after-ship prize this submission can redeem for `shop_item`, if any.
-  # Part of the redemption-gate interface (see Mission::PrizeRedemption.record!).
-  def redeemable_prize_for(shop_item)
-    mission.prizes.after_shipping.find_by(shop_item_id: shop_item.id)
-  end
+  # Redemption-gate interface (see Mission::PrizeRedeemable): an approved
+  # submission claims the mission's after-shipping prizes.
+  def redemption_mission = mission
+  def redemption_prize_category = :after_shipping
 
   # Rewards granted when a submission is approved: the mission achievement and
   # any fixed stardust. Idempotent. reviewer_id is recorded on the ledger entry.

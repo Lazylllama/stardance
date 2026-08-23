@@ -22,6 +22,7 @@
 #  geocoded_subdivision         :string
 #  granted_roles                :string           default([]), not null, is an Array
 #  guest_email                  :string
+#  hardware_channel_invited_at  :datetime
 #  has_gotten_free_stickers     :boolean          default(FALSE)
 #  has_pending_achievements     :boolean          default(FALSE), not null
 #  hcb_email                    :string
@@ -103,6 +104,7 @@ class User < ApplicationRecord
   has_many :project_follows, dependent: :destroy
   has_many :followed_projects, through: :project_follows, source: :project
   has_one :preference, class_name: "User::Preference", dependent: :destroy
+  has_many :data_exports, class_name: "User::DataExport", dependent: :destroy
 
   has_many :follows_as_follower, class_name: "Follow", foreign_key: :follower_id, dependent: :destroy, inverse_of: :follower
   has_many :follows_as_followed, class_name: "Follow", foreign_key: :followed_id, dependent: :destroy, inverse_of: :followed
@@ -278,6 +280,10 @@ class User < ApplicationRecord
 
   def verified_referral_count
     raffle_participant&.referrals&.status_verified&.count || 0
+  end
+
+  def free_sticker_weeks
+    StickerPromo.weeks_for(self)
   end
 
   REFERRAL_ACHIEVEMENTS = { referral_2: 2, referral_5: 5 }.freeze

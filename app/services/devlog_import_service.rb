@@ -1,3 +1,6 @@
+require "resolv"
+require "ipaddr"
+
 class DevlogImportService
   ALLOWED_HOSTS = %w[
     raw.githubusercontent.com
@@ -5,6 +8,10 @@ class DevlogImportService
     user-images.githubusercontent.com
     dl.airtableusercontent.com
     v5.airtableusercontent.com
+  ].freeze
+
+  ALLOWED_DOMAINS = %w[
+    .hackclub.com
   ].freeze
 
   ALLOWED_CONTENT_TYPES = %w[image/jpeg image/png image/webp image/gif].freeze
@@ -55,6 +62,7 @@ class DevlogImportService
       %w[project_id body hours image].each { |f| @errors << "#{label}: missing '#{f}'" if entry[f].blank? }
 
       @errors << "#{label}: hours must be >= 0.25" if entry["hours"].present? && entry["hours"].to_f < 0.25
+      @errors << "#{label}: phase must be 'design' or 'build'" if entry["phase"].present? && !Post::Devlog::PHASES.include?(entry["phase"])
 
       if entry["image"].present?
         uri = URI.parse(entry["image"]) rescue nil
@@ -62,7 +70,7 @@ class DevlogImportService
           @errors << "#{label}: invalid image URL"
         elsif !uri.is_a?(URI::HTTPS)
           @errors << "#{label}: image URL must be HTTPS"
-        elsif !ALLOWED_HOSTS.include?(uri.host)
+        elsif !allowed_host?(uri.host)
           @errors << "#{label}: image host '#{uri.host}' not in allowlist"
         end
       end
@@ -100,7 +108,7 @@ class DevlogImportService
     devlog = Post::Devlog.new(
       body: entry["body"],
       duration_seconds: (entry["hours"].to_f * 3600).to_i,
-      phase: project.hardware_stage,
+      phase: entry["phase"].presence || project.hardware_stage,
       hackatime_projects_key_snapshot: "journal-import"
     )
     devlog.uploading_attachments = true
@@ -124,9 +132,11 @@ class DevlogImportService
     { devlog_id: devlog.id, post_id: post.id, hours: entry["hours"], project_id: project.id }
   end
 
+  MAX_REDIRECTS = 5
+
   def download_image(url, label)
     uri = URI.parse(url)
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) { |http| http.request(Net::HTTP::Get.new(uri)) }
+    response = follow_redirects(uri)
 
     return "#{label}: failed to download image (HTTP #{response.code})" unless response.is_a?(Net::HTTPSuccess)
     return "#{label}: image too large (#{response.body.bytesize} bytes)" if response.body.bytesize > MAX_IMAGE_SIZE
@@ -151,5 +161,37 @@ class DevlogImportService
     { io: tempfile, filename: File.basename(uri.path).presence || "image#{EXTENSIONS[content_type]}", content_type: content_type }
   rescue => e
     "#{label}: image download error: #{e.message}"
+  end
+
+  def follow_redirects(uri, limit = MAX_REDIRECTS)
+    raise "too many redirects" if limit == 0
+    raise "redirect to non-HTTPS URL" unless uri.is_a?(URI::HTTPS)
+    assert_public_host!(uri.host)
+
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) do |http|
+      http.request(Net::HTTP::Get.new(uri))
+    end
+
+    if response.is_a?(Net::HTTPRedirection) && response["location"]
+      follow_redirects(URI.parse(response["location"]), limit - 1)
+    else
+      response
+    end
+  end
+
+  def allowed_host?(host)
+    ALLOWED_HOSTS.include?(host) || ALLOWED_DOMAINS.any? { |domain| host.end_with?(domain) }
+  end
+
+  def assert_public_host!(hostname)
+    addrs = Resolv.getaddresses(hostname)
+    raise "could not resolve host '#{hostname}'" if addrs.empty?
+
+    addrs.each do |addr_str|
+      ip = IPAddr.new(addr_str)
+      if ip.private? || ip.loopback? || ip.link_local?
+        raise "redirect to private/internal address blocked (#{hostname} -> #{addr_str})"
+      end
+    end
   end
 end

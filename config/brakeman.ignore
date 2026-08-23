@@ -123,5 +123,5 @@
       "note": "Intentional external redirect: the Join button sends attendees to the workshop's Zoom call. zoom_link is admin-entered and model-validated to be an https:// URL."
     }
   ],
-  "brakeman_version": "8.0.5"
+  "brakeman_version": "8.0.6"
 }

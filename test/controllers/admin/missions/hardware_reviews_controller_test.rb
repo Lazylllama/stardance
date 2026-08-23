@@ -3,7 +3,7 @@ require "test_helper"
 class Admin::Missions::HardwareReviewsControllerTest < ActionDispatch::IntegrationTest
   setup do
     Flipper.enable(:hardware_flow)
-    @owner = create_user(slack_id: "U_MHW_OWNER", display_name: "mhw-owner")
+    @owner = create_user(slack_id: "U_MHW_OWNER", display_name: "mhw-owner", verified: true)
     @reviewer = create_user(slack_id: "U_MHW_REV", display_name: "mhw-reviewer")
     @outsider = create_user(slack_id: "U_MHW_OUT", display_name: "mhw-outsider")
 
@@ -65,7 +65,7 @@ class Admin::Missions::HardwareReviewsControllerTest < ActionDispatch::Integrati
     HCBService.stub(:create_card_grant, HCB_GRANT_RESPONSE) do
       patch admin_certification_funding_request_path(@funding),
             params: { redirect_to_hardware: @design_project.id,
-                      certification_funding_request: { status: "approved", feedback: "looks good" } }
+                      certification_funding_request: { verdict: "approved", feedback: "looks good" } }
     end
 
     assert_redirected_to next_admin_mission_hardware_reviews_path(@mission.slug, stage: "design")

@@ -124,13 +124,6 @@ export default class extends Controller {
         break;
     }
 
-    const container = this.#container();
-    if (container !== document.body) {
-      const cr = container.getBoundingClientRect();
-      top -= cr.top;
-      left -= cr.left;
-    }
-
     this.popover.style.top = `${Math.max(8, top)}px`;
     this.popover.style.left = `${Math.max(8, left)}px`;
   }

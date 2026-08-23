@@ -103,11 +103,12 @@ module Certification
       select("certification_ysws_reviews.*", "#{TODO_DEVLOG_COUNT_SQL} AS todo_devlog_count")
     }
 
-    # Reviews whose ship event already carries a decided integrity check. The
-    # queue defaults to this — a review can't be completed without one, and a
-    # still-pending integrity check isn't decided yet.
+    # Reviews whose ship event already carries a decided integrity check, or
+    # whose project is hardware (hardware projects skip integrity checks).
     scope :with_integrity_check, -> {
-      joins(:integrity_check).where.not(certification_integrities: { status: :pending })
+      hardware = joins(:project).where.not(projects: { hardware_stage: nil })
+      decided  = joins(:integrity_check).where.not(certification_integrities: { status: :pending })
+      where(id: hardware).or(where(id: decided))
     }
 
     scope :by_project_type, ->(type) {
@@ -545,17 +546,7 @@ module Certification
     end
 
     def check_and_update_unified_db_status!
-      api_key  = Rails.application.credentials.dig(:ysws_review, :airtable_api_key) ||
-                 Rails.application.credentials&.airtable&.api_key ||
-                 ENV["AIRTABLE_API_KEY"]
-      base_id  = Rails.application.credentials.dig(:ysws_review, :airtable_base_id) ||
-                 ENV["YSWS_REVIEW_AIRTABLE_BASE_ID"]
-      tbl_name = Rails.application.credentials.dig(:ysws_review, :airtable_table_name) ||
-                 ENV["YSWS_REVIEW_AIRTABLE_TABLE"] ||
-                 "YSWS Project Submission"
-
-      table = Norairrecord.table(api_key, base_id, tbl_name)
-      record = table.all(filter: "{review_id} = '#{id}'").first
+      record = ::Certification::YswsAirtable.record_for(id)
       unified_record_id = record&.[]("Automation - YSWS Record ID").presence
 
       update_column(:in_unified_db, unified_record_id) if unified_record_id.present? && in_unified_db != unified_record_id

@@ -138,6 +138,7 @@
     border-radius: 999px;
     padding: var(--space-xxs) var(--space-m);
     cursor: pointer;
+    text-decoration: none;
     transition:
       border-color 160ms ease,
       background-color 160ms ease;
@@ -145,5 +146,12 @@
     &:hover {
       border-color: var(--color-border-input-focus);
     }
+  }
+
+  &__export-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    text-decoration: none;
   }
 }

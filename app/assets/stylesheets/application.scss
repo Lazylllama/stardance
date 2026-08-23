@@ -40,6 +40,7 @@
 @use "components/certificate_widget";
 @use "components/mission_panel";
 @use "components/status_pill";
+@use "components/review_history";
 @use "components/feed";
 @use "components/mentions";
 @use "components/star_border";
@@ -103,5 +104,6 @@
 @use "pages/raffle";
 @use "pages/notifications" as notifications_page;
 @use "pages/notification_settings" as notification_settings_page;
+@use "pages/data_exports" as data_exports_page;
 @use "pages/rng";
 @use "landing/landing_footer";

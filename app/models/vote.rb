@@ -34,6 +34,7 @@
 #
 class Vote < ApplicationRecord
   FLAG_COST = 5
+  MAX_BANKED_VOTES = 30
   MIN_SCORE = 1
   MAX_SCORE = 9
 
@@ -150,7 +151,7 @@ class Vote < ApplicationRecord
         ship_event.clear_payout_review
       end
 
-      ShipEventPayoutRefreshJob.perform_later
+      ShipEventPayoutRefreshJob.perform_later(ship_event_id)
       true
     else
       false
@@ -206,7 +207,7 @@ class Vote < ApplicationRecord
       )
     end
 
-    ShipEventPayoutRefreshJob.perform_later
+    ShipEventPayoutRefreshJob.perform_later(ship_event_id)
   end
 
   private
@@ -240,7 +241,7 @@ class Vote < ApplicationRecord
   end
 
   def refresh_ship_event_payout_later
-    ShipEventPayoutRefreshJob.perform_later
+    ShipEventPayoutRefreshJob.perform_later(ship_event_id)
   end
 
   def send_gorse_vote_later
@@ -256,7 +257,7 @@ class Vote < ApplicationRecord
   end
 
   def enqueue_auto_discard
-    Vote::AutoDiscardJob.perform_later(id)
+    Vote::AutoDiscardJob.set(wait: 1.minute).perform_later(id)
   end
 
   def cache_reason_embedding_later

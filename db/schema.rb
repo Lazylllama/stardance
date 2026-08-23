@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_21_072613) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "vector"
@@ -190,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.string "hcb_grant_hashid"
     t.text "internal_reason"
     t.integer "lock_version", default: 0, null: false
+    t.boolean "prizes_waived", default: false, null: false
     t.bigint "project_id", null: false
     t.integer "requested_amount_cents", null: false
     t.bigint "reviewer_id"
@@ -420,6 +421,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.text "refresh_token_ciphertext"
     t.string "slug"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "jelly_conversations", force: :cascade do |t|
+    t.integer "assignee_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "first_response_seconds"
+    t.string "jelly_id", null: false
+    t.datetime "last_inbound_at"
+    t.datetime "last_outbound_at"
+    t.datetime "messages_synced_at"
+    t.datetime "opened_at"
+    t.datetime "remote_updated_at"
+    t.datetime "resolved_at"
+    t.string "status", null: false
+    t.datetime "synced_at"
+    t.datetime "updated_at", null: false
+    t.index ["jelly_id"], name: "index_jelly_conversations_on_jelly_id", unique: true
+    t.index ["remote_updated_at"], name: "index_jelly_conversations_on_remote_updated_at"
+    t.index ["status"], name: "index_jelly_conversations_on_status"
+  end
+
+  create_table "jelly_daily_stats", force: :cascade do |t|
+    t.integer "arrivals"
+    t.integer "awaiting_reply_count"
+    t.datetime "created_at", null: false
+    t.integer "median_first_response_seconds"
+    t.integer "open_count"
+    t.integer "p95_hang_seconds"
+    t.date "recorded_on", null: false
+    t.integer "resolutions"
+    t.datetime "updated_at", null: false
+    t.index ["recorded_on"], name: "index_jelly_daily_stats_on_recorded_on", unique: true
   end
 
   create_table "ledger_entries", force: :cascade do |t|
@@ -733,11 +766,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.string "feedback_video_url"
     t.float "hours_at_payout"
     t.float "hours_at_ship"
+    t.string "lifecycle_data_quality"
     t.float "multiplier"
     t.decimal "originality_median", precision: 5, scale: 2
     t.decimal "originality_percentile", precision: 5, scale: 2
     t.decimal "overall_percentile", precision: 5, scale: 2
     t.decimal "overall_score", precision: 5, scale: 2
+    t.datetime "paid_at"
     t.float "payout"
     t.datetime "payout_basis_locked_at"
     t.decimal "payout_basis_overall_score", precision: 5, scale: 2
@@ -755,6 +790,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.decimal "usability_median", precision: 5, scale: 2
     t.decimal "usability_percentile", precision: 5, scale: 2
     t.integer "votes_count", default: 0, null: false
+    t.datetime "voting_completed_at"
+    t.datetime "voting_started_at"
+    t.index ["paid_at"], name: "index_post_ship_events_on_paid_at"
+    t.index ["voting_completed_at"], name: "index_post_ship_events_on_voting_completed_at"
+    t.index ["voting_started_at"], name: "index_post_ship_events_on_voting_started_at"
   end
 
   create_table "post_views", force: :cascade do |t|
@@ -1371,6 +1411,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.index ["user_id"], name: "index_user_achievements_on_user_id"
   end
 
+  create_table "user_data_exports", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.string "zip_filename"
+    t.index ["user_id", "status"], name: "index_user_data_exports_on_user_id_and_status"
+    t.index ["user_id"], name: "index_user_data_exports_on_user_id"
+    t.index ["user_id"], name: "index_user_data_exports_on_user_id_active", unique: true, where: "(((status)::text = 'pending'::text) OR ((status)::text = 'processing'::text))"
+  end
+
   create_table "user_hackatime_projects", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -1459,6 +1511,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
     t.string "geocoded_subdivision"
     t.string "granted_roles", default: [], null: false, array: true
     t.string "guest_email"
+    t.datetime "hardware_channel_invited_at"
     t.boolean "has_gotten_free_stickers", default: false
     t.boolean "has_pending_achievements", default: false, null: false
     t.string "hcb_email"
@@ -1755,6 +1808,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_004859) do
   add_foreign_key "show_and_tell_payout_records", "users", column: "payout_given_by_id"
   add_foreign_key "streak_activities", "users"
   add_foreign_key "user_achievements", "users"
+  add_foreign_key "user_data_exports", "users"
   add_foreign_key "user_hackatime_projects", "projects"
   add_foreign_key "user_hackatime_projects", "users"
   add_foreign_key "user_identities", "users"

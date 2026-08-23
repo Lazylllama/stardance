@@ -397,11 +397,33 @@
       background: rgba(255, 255, 255, 0.03);
     }
 
-    tbody tr.ship-queue__row--link {
+    tbody tr.ship-queue__row--link,
+    tbody tr.ship-queue__row--anchored {
       cursor: pointer;
 
       &:hover {
         background: rgba(255, 255, 255, 0.06);
+      }
+    }
+
+    tbody tr.ship-queue__row--anchored {
+      position: relative;
+    }
+  }
+
+  &__row-link {
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      &::after {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
       }
     }
   }
