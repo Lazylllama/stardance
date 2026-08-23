@@ -1,7 +1,7 @@
 class UsersController < ApplicationController
   include TimelinePostPreloading
 
-  discover_rail_widgets :certificate, :achievements, :upcoming_events,
+  discover_rail_widgets :certificate, :achievements, :upcoming_events, :feedback_promo,
                         context: -> { { profile_user: @user } }
 
   before_action :set_user
