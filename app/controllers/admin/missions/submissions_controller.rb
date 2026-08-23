@@ -70,6 +70,9 @@ module Admin
       def show
         authorize @submission
         @reviewed_today = Mission::Submission.reviewed_today(current_user, mission: @mission)
+        @project_review_history = Mission::Submission.review_history_for(
+          @submission.ship_event&.post&.project, excluding: @submission
+        )
         @versions = @submission.versions.order(created_at: :asc).to_a
         whodunnit_ids = @versions.map(&:whodunnit).compact.uniq
         @whodunnit_users = User.where(id: whodunnit_ids).index_by { |u| u.id.to_s }
