@@ -16,6 +16,8 @@ export default class extends Controller {
     this._activeIndex = -1;
     this._searchTimer = null;
     this._commandTimer = null;
+    this._missionRequest = null;
+    this._commandRequest = null;
     if (this.hasResultsTarget)
       this._initialResults = this.resultsTarget.innerHTML;
     this._boundGlobalKey = this._globalKey.bind(this);
@@ -26,6 +28,7 @@ export default class extends Controller {
     document.removeEventListener("keydown", this._boundGlobalKey);
     clearTimeout(this._searchTimer);
     clearTimeout(this._commandTimer);
+    this._cancelRequests();
   }
 
   _globalKey(event) {
@@ -44,6 +47,7 @@ export default class extends Controller {
     this.inputTarget.value = "";
     clearTimeout(this._searchTimer);
     clearTimeout(this._commandTimer);
+    this._cancelRequests();
     this._clearDynamicJump();
     this._clearDynamicMissions();
     if (this.hasResultsTarget && this.hasSearchUrlValue) {
@@ -70,6 +74,9 @@ export default class extends Controller {
 
   filter() {
     const query = this.inputTarget.value.toLowerCase().trim();
+    clearTimeout(this._searchTimer);
+    clearTimeout(this._commandTimer);
+    this._cancelRequests();
 
     const directRoutes = [
       {
@@ -105,8 +112,6 @@ export default class extends Controller {
       null,
     );
     if (directMatch) {
-      clearTimeout(this._searchTimer);
-      clearTimeout(this._commandTimer);
       this._clearDynamicMissions();
       this._renderDynamicJump({
         label: `${directMatch.label} #${directMatch.id}`,
@@ -117,14 +122,12 @@ export default class extends Controller {
     this._clearDynamicJump();
 
     if (query.length >= 2 && this.hasMissionSearchUrlValue) {
-      clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => this._fetchAll(query), 200);
     } else {
       this._clearDynamicMissions();
     }
 
     if (this.hasResultsTarget && this.hasSearchUrlValue) {
-      clearTimeout(this._commandTimer);
       if (query.length > 0) {
         this.resultsTarget.innerHTML =
           '<p class="command-palette__empty">Searching...</p>';
@@ -212,13 +215,24 @@ export default class extends Controller {
 
   _fetchAll(query) {
     const q = encodeURIComponent(query);
+    const request = new AbortController();
+    this._missionRequest = request;
 
     fetch(`${this.missionSearchUrlValue}?q=${q}`, {
       headers: { Accept: "application/json" },
+      signal: request.signal,
     })
       .then((r) => r.json())
-      .then((missions) => this._renderDynamicMissions(missions))
-      .catch(() => this._clearDynamicMissions());
+      .then((missions) => {
+        if (this._missionRequest === request)
+          this._renderDynamicMissions(missions);
+      })
+      .catch(() => {
+        if (this._missionRequest === request) this._clearDynamicMissions();
+      })
+      .finally(() => {
+        if (this._missionRequest === request) this._missionRequest = null;
+      });
   }
 
   _renderDynamicJump({ label, path }) {
@@ -317,11 +331,21 @@ export default class extends Controller {
     url.searchParams.set("q", query);
     url.searchParams.set("surface", "command_palette");
     url.searchParams.set("current_path", window.location.pathname);
+    const request = new AbortController();
+    this._commandRequest = request;
 
-    fetch(url.toString(), { headers: { Accept: "application/json" } })
+    fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      signal: request.signal,
+    })
       .then((r) => r.json())
-      .then((data) => this._renderResults(data))
-      .catch(() => {});
+      .then((data) => {
+        if (this._commandRequest === request) this._renderResults(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (this._commandRequest === request) this._commandRequest = null;
+      });
   }
 
   _renderResults(data) {
@@ -387,6 +411,13 @@ export default class extends Controller {
       const cb = document.getElementById("streamer_mode");
       if (cb) cb.checked = enable;
     });
+  }
+
+  _cancelRequests() {
+    this._missionRequest?.abort();
+    this._commandRequest?.abort();
+    this._missionRequest = null;
+    this._commandRequest = null;
   }
 
   _applyActive() {
