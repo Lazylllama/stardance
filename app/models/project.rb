@@ -615,6 +615,12 @@ class Project < ApplicationRecord
 
   INFO_REQUIREMENT_KEYS = FIELD_REQUIREMENT_MAP.values.flatten.freeze
 
+  # The subset of project info required to submit a design-stage funding request.
+  # A demo link usually doesn't exist yet while the build is still being
+  # designed, so demo_url is dropped from the funding gate. It stays in
+  # INFO_REQUIREMENT_KEYS, so it's still required to ship.
+  FUNDING_INFO_REQUIREMENT_KEYS = (INFO_REQUIREMENT_KEYS - FIELD_REQUIREMENT_MAP[:demo_url]).freeze
+
   def shipping_requirements
     owner_vote_balance = memberships.owner.first&.user&.vote_balance.to_i
     votes_needed = [ -owner_vote_balance, 0 ].max
@@ -800,22 +806,45 @@ class Project < ApplicationRecord
   # Whether every project-info requirement (see INFO_REQUIREMENT_KEYS) passes,
   # i.e. the editable details are filled in and ship-ready.
   def info_complete?
-    shipping_requirements
-      .select { |r| INFO_REQUIREMENT_KEYS.include?(r[:key]) }
-      .all? { |r| r[:passed] }
+    info_requirements_met?(INFO_REQUIREMENT_KEYS)
   end
 
+  # Whether the info needed to submit a design-stage funding request is complete.
+  # Unlike #info_complete? this doesn't require a demo link, which usually
+  # doesn't exist yet at the design stage (see FUNDING_INFO_REQUIREMENT_KEYS).
+  def funding_info_complete?
+    info_requirements_met?(FUNDING_INFO_REQUIREMENT_KEYS)
+  end
+
+  # Whether the project info needed for the current stage's next action is
+  # complete. At the design stage the next action is a funding request, which
+  # doesn't need a demo link (see #funding_info_complete?); once building, the
+  # next action is shipping, which does (see #info_complete?).
+  def stage_info_complete?
+    design_stage? ? funding_info_complete? : info_complete?
+  end
+
+  # Label of the first unmet info requirement for the current stage, used as the
+  # "Complete project info" tooltip. Mirrors #stage_info_complete? so a
+  # design-stage builder is never nagged about a demo link they don't yet need.
   def info_blocker_message
+    keys = design_stage? ? FUNDING_INFO_REQUIREMENT_KEYS : INFO_REQUIREMENT_KEYS
     req = shipping_requirements
-      .select { |r| INFO_REQUIREMENT_KEYS.include?(r[:key]) }
+      .select { |r| keys.include?(r[:key]) }
       .find { |r| !r[:passed] }
     req&.dig(:label)
   end
 
   # The editable info fields (see FIELD_REQUIREMENT_MAP) that still have an
-  # unmet requirement — used to highlight what's left to fill in on the form.
+  # unmet requirement for the current stage — used to highlight what's left to
+  # fill in on the form. Stage-aware like #stage_info_complete?, so a demo link
+  # isn't flagged red while designing (it isn't needed until shipping).
   def incomplete_info_fields
-    unmet = shipping_requirements.reject { |r| r[:passed] }.map { |r| r[:key] }
+    stage_keys = design_stage? ? FUNDING_INFO_REQUIREMENT_KEYS : INFO_REQUIREMENT_KEYS
+    unmet = shipping_requirements
+      .select { |r| stage_keys.include?(r[:key]) }
+      .reject { |r| r[:passed] }
+      .map { |r| r[:key] }
     FIELD_REQUIREMENT_MAP.select { |_field, keys| (keys & unmet).any? }.keys
   end
 
@@ -941,6 +970,14 @@ class Project < ApplicationRecord
   end
 
   private
+
+  # Whether every shipping requirement in `keys` currently passes. Shared by
+  # #info_complete? (all info keys) and #funding_info_complete? (info minus demo).
+  def info_requirements_met?(keys)
+    shipping_requirements
+      .select { |r| keys.include?(r[:key]) }
+      .all? { |r| r[:passed] }
+  end
 
   def do_url_probe(url)
     response = SafeUrl.safe_get(
