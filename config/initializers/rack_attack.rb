@@ -12,7 +12,9 @@ module RackAttackClient
   end
 
   def self.user_or_ip(request)
-    request.env["warden"]&.user(:user)&.id&.to_s || ip(request)
+    user_id = request.session[:user_id]
+
+    user_id.present? ? "user:#{user_id}" : "ip:#{ip(request)}"
   end
 
   def self.static_request?(request)
