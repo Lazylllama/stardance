@@ -565,7 +565,7 @@
                   onclick: "document.getElementById('composer-modal-' + #{@project.id.to_json}).showModal()"
                 ) %>
           <% end %>
-          <% unless @project.info_complete? %>
+          <% unless @project.stage_info_complete? %>
             <% if @project.has_devlog_since_last_ship? %>
               <%= render ActionButtonComponent.new(
                     text: "Complete project info",
@@ -592,7 +592,7 @@
                   ) %>
             <% end %>
           <% end %>
-          <% if is_member && current_user && @project.info_complete? %>
+          <% if is_member && current_user && @project.stage_info_complete? %>
             <% unless current_user.identity_verified? %>
               <%= render ActionButtonComponent.new(
                     text: "Verify your identity",
@@ -636,7 +636,7 @@
                       tooltip_position_value: "top"
                     }
                   ) %>
-            <% elsif !@project.info_complete? %>
+            <% elsif !@project.funding_info_complete? %>
               <%= render ActionButtonComponent.new(
                     text: "Submit for funding",
                     variant: :primary,
