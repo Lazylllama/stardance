@@ -72,12 +72,10 @@ module Posts
     def card_data
       url = card_link_url
       data = engagement_data
-      return data if url.blank?
+      return data if url.blank? || !clickable
 
       controllers = [ data[:controller], "card-link" ].compact.join(" ")
-      if clickable
-        actions = [ data[:action], "click->card-link#navigate auxclick->card-link#navigate" ].compact.join(" ")
-      end
+      actions = [ data[:action], "click->card-link#navigate auxclick->card-link#navigate" ].compact.join(" ")
 
       data.merge(
         controller: controllers,
