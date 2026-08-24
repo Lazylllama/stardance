@@ -101,6 +101,17 @@ class FeedPresentationComponentsTest < ViewComponent::TestCase
     assert_selector "a.feed-post-card__overlay-link[href='#{href}']", visible: :all
   end
 
+  test "post card can render without navigation data" do
+    render_inline Posts::CardComponent.new(post: @post, current_user: @user, clickable: false)
+
+    assert_selector ".feed-post-card[data-controller~='feed-engagement']"
+    assert_no_selector ".feed-post-card--linked"
+    assert_no_selector ".feed-post-card[data-controller~='card-link']"
+    assert_no_selector ".feed-post-card[data-card-link-url-value]"
+    assert_no_selector ".feed-post-card[data-action*='card-link#navigate']"
+    assert_no_selector ".feed-post-card__overlay-link", visible: :all
+  end
+
   test "post card can render without passive feed engagement tracking" do
     render_inline Posts::CardComponent.new(post: @post, current_user: @user, track_engagement: false)
 
