@@ -56,13 +56,13 @@
       <div class="shop-orders__field">
         <%= f.label :sort, "Sort by" %>
         <%= f.select :sort, options_for_select([
-            ['Created (newest)', 'created_at_desc'],
             ['Created (oldest)', 'created_at_asc'],
+            ['Created (newest)', 'created_at_desc'],
             ['ID (desc)', 'id_desc'],
             ['ID (asc)', 'id_asc'],
             ['Tickets (high)', 'shells_desc'],
             ['Tickets (low)', 'shells_asc']
-          ], params[:sort] || 'created_at_desc') %>
+          ], params[:sort] || 'created_at_asc') %>
       </div>
 
       <div class="shop-orders__field">

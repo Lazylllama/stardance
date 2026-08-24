@@ -16,6 +16,10 @@
         <span><%= pluralize(group[:total_items], 'item') %></span>
         <span><%= group[:total_shells] %> tickets</span>
       </div>
+      <% approvable_orders = group[:orders].select { |order| approvable_order?(order) } %>
+      <% if approvable_orders.size > 1 %>
+        <%= render "approve_all", user: group[:user], orders: approvable_orders %>
+      <% end %>
     </div>
 
     <div>
@@ -51,7 +55,10 @@
             </td>
             <td><%= order.created_at.strftime("%b %d, %Y") %></td>
             <td>
-              <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+              <div class="shop-orders__row-actions">
+                <%= link_to "Inspect", admin_shop_order_path(order, return_view: params[:view], return_status: params[:status]) %>
+                <%= render "approve_button", order: order %>
+              </div>
             </td>
           </tr>
         <% end %>

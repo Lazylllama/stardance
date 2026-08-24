@@ -9,7 +9,8 @@
     sidebar_trigger - when true, this item triggers the details sidebar in
                       popup mode (only the first item on the page should).
     mac_recommendation - this devlog's entry from the MAC pre-screen report, or
-                      nil when the pre-screen didn't run or had nothing for it.
+                      nil when the pre-screen didn't run, had nothing for it, or
+                      suggested no reduction.
                       Read-only: it suggests minutes, it never sets them.
 
   Relies on the page-level @repo_info and @devlog_commits for the git graph.
@@ -17,7 +18,8 @@
 <% frozen ||= false %>
 <% sidebar_trigger ||= false %>
 <% mac_recommendation ||= nil %>
-<div class="devlog-item<%= " devlog-item--frozen" if frozen %>"
+<div id="devlog-review-<%= devlog_review.id %>"
+     class="devlog-item<%= " devlog-item--frozen" if frozen %>"
      <% unless frozen %>
        data-controller="certification--ysws--devlog-review"
        data-certification--ysws--devlog-review-id-value="<%= devlog_review.id %>"
@@ -79,8 +81,7 @@
             The reasoning leads — it's what the decision turns on; the suggested
             number follows it. %>
         <% if mac_recommendation && mac_recommendation["recommended_minutes"] %>
-          <div class="mac-hint mac-hint--aside">
-            <div class="mac-hint__label">MAC pre-screen</div>
+          <div class="<%= mac_hint_classes(mac_recommendation) %>">
             <% if mac_recommendation["justification"].present? %>
               <p class="mac-hint__reason"><%= mac_recommendation["justification"] %></p>
             <% end %>

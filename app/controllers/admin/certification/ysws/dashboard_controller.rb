@@ -16,5 +16,11 @@ class Admin::Certification::Ysws::DashboardController < Admin::Certification::Ap
     else
       @on_pace_reviewer_ids = Set.new
     end
+
+    # The "See your progress" panel rides its own flag, so it can be rolled out
+    # (and rolled back) without touching the leaderboard's pace treatment. Left
+    # nil when off so the frame skips the queries as well as the markup.
+    @progress = ::Certification::Ysws.reviewer_progress(current_user.id) if
+      Flipper.enabled?(:reviewer_progress_panel, current_user)
   end
 end

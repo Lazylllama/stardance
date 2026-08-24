@@ -45,6 +45,7 @@ class ProjectsController < ApplicationController
     @total_hours = (@project.duration_seconds / 3600.0).round
     @test_time_granted = session[test_time_session_key].present?
     @hackatime_times = {}
+    @project_has_devlogs = @project.posts.where(postable_type: "Post::Devlog").exists?
 
     if @is_member && current_user
       @composer_devlog = Post::Devlog.new
@@ -115,7 +116,17 @@ class ProjectsController < ApplicationController
       @posts = @posts.reject { |post| post.postable_type == "Post::GitCommit" }
     end
 
-    @posts = @posts.reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status == "rejected" }
+    # A misfiled ship is withdrawn, so it comes off the timeline for everyone,
+    # its owner included: the queue-mismatch card explains what happened and
+    # asks the question, and leaving the ship card up alongside it just reads as
+    # a live ship. Disputing the flag puts the ship back to pending and it
+    # returns here.
+    @posts = @posts.reject do |post|
+      post.postable_type == "Post::ShipEvent" &&
+        post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES)
+    end
+
+    @queue_mismatch_review = visible_queue_mismatch
 
     # Shipwright verdicts are rendered straight from the review records —
     # they're private to project members, so they never become Post rows.
@@ -184,17 +195,14 @@ class ProjectsController < ApplicationController
         current = latest_ship_event.votes.payout_countable.count
         remaining = [ required - current, 0 ].max
 
-        ratings_total = Post::ShipEvent::VOTE_COST_PER_SHIP
         ratings_remaining = [ -latest_ship_event.payout_recipient.vote_balance, 0 ].max
-        ratings_given = ratings_total - ratings_remaining
 
         @votes_for_payout = {
           ship_event: latest_ship_event,
           current: current,
           required: required,
           remaining: remaining,
-          ratings_given: ratings_given,
-          ratings_total: ratings_total,
+          ratings_remaining: ratings_remaining,
           static_prize: is_static,
           # Suppresses the payout checklist entirely; see PayoutVotesWidget.
           hardware: @project.hardware?,
@@ -218,7 +226,7 @@ class ProjectsController < ApplicationController
     return [] unless Flipper.enabled?(:week_1_release, current_user)
 
     @project.ship_reviews
-            .where.not(status: :pending)
+            .decided
             .includes(:reviewer)
             .with_attached_verdict_video
             .to_a
@@ -237,6 +245,17 @@ class ProjectsController < ApplicationController
     @project.certification_funding_requests.includes(:reviewer).order(created_at: :desc).limit(1).to_a
   end
   private :visible_funding_requests
+
+  # The "your submission is in the wrong queue" question, if one is open. Same
+  # audience as the funding requests above: members and admins only.
+  def visible_queue_mismatch
+    return nil unless current_user
+    return nil unless @is_member || current_user.admin?
+    return nil unless Flipper.enabled?(:hardware_flow, current_user)
+
+    @project.review_awaiting_queue_answer
+  end
+  private :visible_queue_mismatch
 
   def add_test_time
     authorize @project
@@ -459,6 +478,25 @@ class ProjectsController < ApplicationController
     end
   end
 
+  # /projects/latest — permalink to the newest project on Stardance.
+  #
+  # Ordered by created_at rather than updated_at: "latest" here means most
+  # recently started, and updated_at churns on every edit, hour sync and
+  # counter-cache bump, which would make the target jump around.
+  #
+  # Project's default_scope excludes soft-deleted records, so this can't land on
+  # one. It's redirect-only, so the usual project-page authorization runs on the
+  # target itself when show renders.
+  def latest
+    project = Project.order(created_at: :desc).first
+
+    if project
+      redirect_to project_path(project)
+    else
+      redirect_to root_path, alert: "There aren't any projects yet!"
+    end
+  end
+
   def followers
     @project = Project.find(params[:id])
     authorize @project, :show?
@@ -569,7 +607,7 @@ class ProjectsController < ApplicationController
         "hackclub", "gitea", "git", "repo", "code"
       ]
 
-      path = uri.path.downcase
+      path = uri.path.downcase.chomp("/")
       host = uri.host.downcase
 
       is_valid_repo_url = false

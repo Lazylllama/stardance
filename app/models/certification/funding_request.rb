@@ -13,9 +13,10 @@
 #  hcb_grant_hashid          :string
 #  internal_reason           :text
 #  lock_version              :integer          default(0), not null
+#  prizes_waived             :boolean          default(FALSE), not null
 #  requested_amount_cents    :integer          not null
 #  stardust_earned           :integer
-#  status                    :integer          default("pending"), not null
+#  status                    :integer          default(0), not null
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  project_id                :bigint           not null
@@ -39,14 +40,26 @@
 #
 module Certification
   # A hardware project owner's request for a build grant, submitted from the
-  # design ("I need Funding") stage. Routes through the same reviewer queue as
+  # design stage. Routes through the same reviewer queue as
   # ship certifications (Certification::Reviewable). On approval the project
   # switches to the build stage and an HCB card grant is issued for the approved
   # amount, capped by the tier's max.
+  #
+  # When the project's mission hands out a design kit (an after_design prize),
+  # approval delivers that kit for redemption instead of a cash grant: no HCB
+  # grant is issued and the tier/amount fields are vestigial (defaulted, hidden
+  # in the request form).
+  #
+  # A reviewer can also approve without any funding at all (the builder already
+  # has the parts, or is covered some other way). That is an ordinary approval
+  # recorded as an approved amount of $0, which issues no grant. On a kit
+  # mission the same verdict waives the kit (`prizes_waived`): the project still
+  # moves to the build stage, but nothing is owed and nothing is claimable.
   class FundingRequest < ApplicationRecord
     self.table_name = "certification_funding_requests"
 
     include Certification::Reviewable
+    include Mission::PrizeRedeemable
 
     belongs_to :project
     belongs_to :user
@@ -54,10 +67,16 @@ module Certification
 
     has_paper_trail
 
+    # misfiled: a reviewer says this belongs in the build queue and the builder
+    # hasn't answered yet. withdrawn: the builder agreed, so the request is done
+    # with and the project moves on to the build stage. Neither is a verdict, so
+    # both stay out of the approval-rate and decision tallies.
     enum :status, {
       pending: 0,
       approved: 1,
-      returned: 2
+      returned: 2,
+      misfiled: 3,
+      withdrawn: 4
     }, default: :pending
 
     # HCB org the hardware grants are issued from. Spend controls (approved and
@@ -84,22 +103,41 @@ module Certification
     # Stardust a reviewer earns per completed funding review.
     REVIEW_BOUNTY = 1
 
+    # The three choices a reviewer picks from on the design review form.
+    VERDICTS = %w[approved approved_without_grant returned].freeze
+
+    before_validation :default_kit_request_fields, on: :create, if: :kit_mission?
+    # Zeroed here rather than in the writer so it wins regardless of the order
+    # the verdict and the approved amount arrive in from the form.
+    before_validation :zero_approved_amount, if: -> { @verdict == "approved_without_grant" }
+
     validates :complexity_tier, inclusion: { in: TIER_MAX_CENTS.keys }
-    validates :requested_amount_cents, numericality: { only_integer: true, greater_than: 0 }
+    validates :requested_amount_cents,
+              numericality: { only_integer: true, greater_than: 0 }, unless: :kit_mission?
     validates :approved_amount_cents,
               numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
     validates :feedback, length: { maximum: 10_000 }, allow_blank: true
+    validates :verdict, inclusion: { in: VERDICTS }, allow_nil: true
     validate :requested_within_tier_max
     validate :approved_within_tier_max
     validate :project_in_design_stage, on: :create
     validate :project_has_devlogs, on: :create
     validate :no_pending_request_exists, on: :create
+    validate :owner_eligible_for_funding, on: :create
 
     scope :for_reviewer, ->(user) {
       joins(:project)
         .where(projects: { deleted_at: nil })
         .where.not(project_id: user.memberships.select(:project_id))
     }
+
+    # What the global hardware design queue can actually hand a reviewer. A
+    # request on a soft-deleted project is unreachable from every dash, and a
+    # hardware mission's requests are reviewed on that mission's own dash, so
+    # counting either against this queue reports a backlog nobody can work.
+    scope :in_global_hardware_queue, -> { joins(:project).merge(::Project.hardware.without_hardware_mission) }
+    # The other half: requests a hardware mission reviews on its own dash.
+    scope :in_hardware_mission_queue, -> { joins(:project).merge(::Project.hardware.with_hardware_mission) }
 
     def self.available_for(user)
       super.merge(for_reviewer(user))
@@ -120,7 +158,7 @@ module Certification
       returned_count = where(status: :returned).count
       decided_count = approved_count + returned_count
 
-      decided = where.not(status: :pending)
+      decided_scope = decided
 
       {
         pending: where(status: :pending).count,
@@ -128,9 +166,9 @@ module Certification
         returned: returned_count,
         decided: decided_count,
         approval_rate: decided_count.zero? ? nil : (approved_count * 100.0 / decided_count).round,
-        decisions_today: decided.where(decided_at: today..).count,
+        decisions_today: decided_scope.where(decided_at: today..).count,
         new_today: where(created_at: today..).count,
-        decisions_this_week: decided.where(decided_at: week..).count,
+        decisions_this_week: decided_scope.where(decided_at: week..).count,
         new_this_week: where(created_at: week..).count,
         oldest_pending: where(status: :pending).order(created_at: :asc).first,
         queue_target: QUEUE_TARGET,
@@ -141,7 +179,7 @@ module Certification
 
     # Reviewers ranked by completed decisions over a window.
     def self.leaderboard(period, now: Time.current, limit: 10)
-      scope = where.not(reviewer_id: nil).where.not(status: :pending)
+      scope = where.not(reviewer_id: nil).decided
       case period.to_sym
       when :daily  then scope = scope.where(decided_at: now.beginning_of_day..)
       when :weekly then scope = scope.where(decided_at: now.beginning_of_week..)
@@ -158,7 +196,7 @@ module Certification
     # How many requests this reviewer has decided today.
     def self.reviewed_today(user, now: Time.current)
       where(reviewer_id: user.id)
-        .where.not(status: :pending)
+        .decided
         .where(decided_at: now.beginning_of_day..)
         .count
     end
@@ -181,6 +219,86 @@ module Certification
       @owner ||= project.memberships.owner.first&.user || user
     end
 
+    # True when the project's active mission hands out a kit at design approval
+    # (an after_design prize) rather than a cash grant. Independent of the
+    # verdict: the create-time defaults and the requested-amount validation key
+    # off the mission, not off what a reviewer later decided.
+    def kit_mission?
+      redeemable_prizes.exists?
+    end
+
+    # True when approving this request actually delivers that kit. A reviewer
+    # who approved the design without sending one (the builder already has the
+    # parts, or is redoing a mission they've claimed before) waives it.
+    def awards_design_kit?
+      !prizes_waived? && kit_mission?
+    end
+
+    # A waived approval owes no prizes, so nothing is left to claim: this closes
+    # the claim links on the project page and the shop's free-price gate, both
+    # of which ask the request what it still owes.
+    def unredeemed_prizes
+      return Mission::Prize.none if prizes_waived?
+
+      super
+    end
+
+    # True when approving this request pays out an HCB card grant, as opposed to
+    # shipping a kit or approving the build with no funding at all.
+    def issues_grant?
+      approved? && !awards_design_kit? && final_amount_cents.to_i.positive?
+    end
+
+    # An approval that funds nothing: the project moves to the build stage, but
+    # no grant is issued and no kit is owed.
+    def approved_without_grant?
+      approved? && !awards_design_kit? && !issues_grant?
+    end
+
+    # The review form's verdict radio. Collapses the status and the "no grant"
+    # approval into one choice; the amount is zeroed before validation. Only a
+    # real verdict maps here: the queue-routing statuses aren't choices on the
+    # form, and reflecting them would fail the inclusion validation below.
+    def verdict
+      @verdict ||= if approved_without_grant?
+        "approved_without_grant"
+      elsif decided?
+        status
+      end
+    end
+
+    def verdict=(value)
+      @verdict = value.presence
+      return unless VERDICTS.include?(@verdict)
+
+      without_grant = @verdict == "approved_without_grant"
+      self.status = without_grant ? "approved" : @verdict
+      # On a kit mission this is what makes the verdict stick: the amount is
+      # already 0 either way, so the waiver is the only thing separating
+      # "approved, kit on the way" from "approved, no kit".
+      self.prizes_waived = without_grant
+    end
+
+    # True unless a newer funding request has superseded this one (a resubmit
+    # after a return). A superseded request's verdict is inert: it must not
+    # advance the project or issue a grant/kit, so approving the wrong one can't
+    # move the project while a newer request is still live.
+    def latest_for_project?
+      return true unless project
+      !project.certification_funding_requests.where("id > ?", id).exists?
+    end
+
+    # Redemption-gate interface (see Mission::PrizeRedeemable): an approved
+    # design claims the mission's after-design kits.
+    def redemption_mission = project&.current_mission
+    def redemption_prize_category = :after_design
+
+    # The kit shipped when this design is approved (the mission's first
+    # after_design prize), for reviewer-facing copy.
+    def design_kit_shop_item
+      redeemable_prizes.first&.shop_item
+    end
+
     # Locals for the verdict notification's Slack template.
     def notification_locals
       routes = Rails.application.routes.url_helpers
@@ -193,6 +311,9 @@ module Certification
         project_title: project.title,
         project_url: routes.project_url(project, **url_opts),
         approved: approved?,
+        awards_kit: awards_design_kit?,
+        kit_mission: kit_mission?,
+        issues_grant: issues_grant?,
         amount_dollars: final_amount_dollars,
         tier_label: tier_label,
         reviewer_name: reviewer&.display_name,
@@ -214,9 +335,9 @@ module Certification
     before_save :stamp_claimed_at,
       if: -> { will_save_change_to_reviewer_id? && reviewer_id.present? && claimed_at.nil? }
     before_save :stamp_decided_at,
-      if: -> { will_save_change_to_status? && status_change&.last != "pending" && decided_at.nil? }
+      if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && decided_at.nil? }
     before_save :assign_stardust_earned,
-      if: -> { will_save_change_to_status? && status_change&.last != "pending" && reviewer_id.present? }
+      if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
     after_save :apply_verdict_to_project!, if: :saved_change_to_status?
     # Notify first. The verdict message only states what already happened (the
     # request was approved, the project moved to build) and never claims a card
@@ -227,13 +348,27 @@ module Certification
     # so a grant that failed (an expired HCB token is a live failure mode here)
     # retries the next time the request is saved instead of being stranded.
     # issue_hcb_grant! already returns early when a grant exists.
-    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && !pending? }
-    after_save_commit :issue_hcb_grant!, if: -> { approved? && hcb_grant_hashid.blank? }
+    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? }
+    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? }
+    after_save_commit :issue_hcb_grant!, if: -> { issues_grant? && hcb_grant_hashid.blank? && latest_for_project? }
+    after_create_commit :post_submission_to_hardware_review_channel!
+
+    def queue_mismatch_flagged_label = "design funding"
+    def queue_mismatch_suggested_label = "build certification"
 
     private
 
+    # The builder confirmed they never needed funding and the build is done, so
+    # the project moves to the build stage and the design devlogs they logged
+    # while actually building are re-filed as build time.
+    def apply_queue_conversion!
+      project.converting_review_queue = true
+      project.update!(hardware_stage: "build")
+      project.refile_design_devlogs_as_build!
+    end
+
     def project_in_design_stage
-      errors.add(:base, "Only projects in the funding stage can request funding.") unless project&.design_stage?
+      errors.add(:base, "Only projects in the design stage can request funding.") unless project&.design_stage?
     end
 
     def project_has_devlogs
@@ -242,6 +377,19 @@ module Certification
 
     def no_pending_request_exists
       errors.add(:base, "You already have a funding request under review.") if project&.has_pending_funding_request?
+    end
+
+    # The grant (or kit) goes to the project owner, so they have to clear the
+    # same identity and YSWS bar shipping applies before the request can enter
+    # the queue (see Project#shipping_requirements).
+    def owner_eligible_for_funding
+      return if project.blank?
+
+      if !owner&.identity_verified?
+        errors.add(:base, "Verify your identity before requesting funding.")
+      elsif !owner.ysws_eligible?
+        errors.add(:base, "You're not eligible for YSWS prizes yet, so we can't fund this build. Check the Hack Club portal for details.")
+      end
     end
 
     def requested_within_tier_max
@@ -267,6 +415,18 @@ module Certification
       self.approved_amount_cents ||= requested_amount_cents
     end
 
+    def zero_approved_amount
+      self.approved_amount_cents = 0
+    end
+
+    # Kit missions have no cash amount, but the columns are NOT NULL. Seed the
+    # smallest valid tier and a zero amount so the record persists; the form
+    # hides both fields for these requests.
+    def default_kit_request_fields
+      self.complexity_tier ||= TIER_MAX_CENTS.keys.min
+      self.requested_amount_cents ||= 0
+    end
+
     def assign_stardust_earned
       self.stardust_earned = REVIEW_BOUNTY
     end
@@ -282,7 +442,8 @@ module Certification
     # On a decision, advance the project. approved_amount_cents is defaulted in a
     # before_save so it's set by the time this runs.
     def apply_verdict_to_project!
-      return if pending?
+      return unless decided?
+      return unless latest_for_project?
       project.with_lock do
         case status.to_sym
         when :approved

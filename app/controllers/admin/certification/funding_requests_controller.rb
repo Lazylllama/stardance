@@ -6,19 +6,49 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
   def update
     authorize @funding_request
     if @funding_request.update(funding_request_params)
-      verb = @funding_request.approved? ? "Approved" : "Returned"
       count = ::Certification::FundingRequest.reviewed_today(current_user)
-      notice = "#{verb} funding for “#{@funding_request.project.title}.” That's #{count} reviewed today. Keep going!"
+      notice = "#{verdict_sentence} That's #{count} reviewed today. Keep going!"
       # Straight on to the next design review; `next` claims it, and falls back
       # to the queue when there's nothing left.
-      redirect_to next_admin_certification_hardware_reviews_path(stage: "design"), notice: notice
+      redirect_to hardware_review_next_path_for(@funding_request.project, "design"), notice: notice
     else
       load_hardware_review_context
       render "admin/certification/hardware_reviews/show", status: :unprocessable_entity
     end
   end
 
+  # "This shouldn't be in this queue": hands the request back to the builder to
+  # confirm they've already finished building. No verdict is recorded and no
+  # bounty is earned - the reviewer is routing, not deciding.
+  def flag_queue_mismatch
+    authorize @funding_request
+    if @funding_request.flag_queue_mismatch!(reviewer: current_user, reason: params[:reason])
+      redirect_to hardware_review_next_path_for(@funding_request.project, "design"),
+                  notice: "Sent back to the builder to confirm the build is already done."
+    else
+      redirect_to hardware_review_path_for(@funding_request.project),
+                  alert: "This review isn't pending, so it can't be re-routed."
+    end
+  end
+
   private
+
+  # Names the verdict back to the reviewer, since "approved" now covers a grant,
+  # a kit, and no funding at all.
+  def verdict_sentence
+    title = @funding_request.project.title
+    if !@funding_request.approved?
+      "Returned funding for “#{title}.”"
+    elsif @funding_request.issues_grant?
+      "Approved funding for “#{title}.”"
+    elsif @funding_request.awards_design_kit?
+      "Approved “#{title}” and sent the kit."
+    elsif @funding_request.kit_mission?
+      "Approved “#{title}” with no kit."
+    else
+      "Approved “#{title}” with no grant."
+    end
+  end
 
   def set_funding_request
     @funding_request = ::Certification::FundingRequest.find(params[:id])
@@ -75,6 +105,6 @@ class Admin::Certification::FundingRequestsController < Admin::Certification::Ap
   end
 
   def funding_request_params
-    params.require(:certification_funding_request).permit(:status, :feedback, :approved_amount_dollars)
+    params.require(:certification_funding_request).permit(:verdict, :feedback, :approved_amount_dollars)
   end
 end

@@ -181,9 +181,25 @@
               <em class="mission-home__card-title-accent">Prizes</em>
             </h2>
             <ul class="mission-home__prize-list">
-              <%= render "missions/rating_status", mission: @mission %>
               <% tones = %w[yellow lilac peach mint] %>
               <% tone_idx = 0 %>
+              <%# The kit is claimed at design approval; the voting/stardust reward
+                  and any after-ship prizes come after building. Only a mission with
+                  a design kit is split into labelled sections. %>
+              <% design_prizes = @ordered_prizes.select(&:after_design?) %>
+              <% building_prizes = @ordered_prizes.reject(&:after_design?) %>
+              <% split_sections = design_prizes.any? %>
+
+              <% if split_sections %>
+                <li class="mission-home__prize-group-label">After design</li>
+                <% design_prizes.each do |prize| %>
+                  <%= render "missions/prize_tile", prize: prize, tone: tones[tone_idx % tones.length] %>
+                  <% tone_idx += 1 %>
+                <% end %>
+                <li class="mission-home__prize-group-label">After building</li>
+              <% end %>
+
+              <%= render "missions/rating_status", mission: @mission %>
               <% if has_stardust %>
                 <li class="mission-home__prize mission-home__prize--<%= tones[tone_idx % tones.length] %>">
                   <div class="mission-home__prize-tile">
@@ -196,28 +212,12 @@
                 </li>
                 <% tone_idx += 1 %>
               <% end %>
-              <% @ordered_prizes.each_with_index do |prize, idx| %>
-                <% tone = tones[(tone_idx + idx) % tones.length] %>
-                <li class="mission-home__prize mission-home__prize--<%= tone %>">
-                  <div class="mission-home__prize-tile">
-                    <% if prize.shop_item.respond_to?(:image) && prize.shop_item.image.respond_to?(:attached?) && prize.shop_item.image.attached? %>
-                      <%= image_tag prize.shop_item.image, alt: "", class: "mission-home__prize-img" %>
-                    <% else %>
-                      <svg viewBox="0 0 24 24" width="28" height="28" class="mission-home__prize-glyph" aria-hidden="true">
-                        <path d="M12 1.5 13.6 10.4 22.5 12 13.6 13.6 12 22.5 10.4 13.6 1.5 12 10.4 10.4Z" />
-                      </svg>
-                    <% end %>
-                  </div>
-                  <div class="mission-home__prize-body">
-                    <p class="mission-home__prize-title"><%= prize.shop_item.name %></p>
-                    <% if prize.shop_item.description.present? %>
-                      <p class="mission-home__prize-blurb"><%= prize.shop_item.description %></p>
-                    <% end %>
-                  </div>
-                </li>
+              <% building_prizes.each do |prize| %>
+                <%= render "missions/prize_tile", prize: prize, tone: tones[tone_idx % tones.length] %>
+                <% tone_idx += 1 %>
               <% end %>
               <% @shop_unlocks.each_with_index do |shop_unlock, idx| %>
-                <% tone = tones[(tone_idx + @ordered_prizes.size + idx) % tones.length] %>
+                <% tone = tones[(tone_idx + idx) % tones.length] %>
                 <li class="mission-home__prize mission-home__prize--<%= tone %>">
                   <div class="mission-home__prize-tile">
                     <% if shop_unlock.shop_item.respond_to?(:image) && shop_unlock.shop_item.image.respond_to?(:attached?) && shop_unlock.shop_item.image.attached? %>
@@ -235,7 +235,7 @@
                 </li>
               <% end %>
               <% @unlocked_missions.each_with_index do |unlocked, idx| %>
-                <% tone = tones[(tone_idx + @ordered_prizes.size + @shop_unlocks.size + idx) % tones.length] %>
+                <% tone = tones[(tone_idx + @shop_unlocks.size + idx) % tones.length] %>
                 <li class="mission-home__prize mission-home__prize--<%= tone %>">
                   <div class="mission-home__prize-tile">
                     <% if unlocked.icon.attached? %>

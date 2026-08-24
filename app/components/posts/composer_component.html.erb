@@ -6,6 +6,8 @@
            data-composer-target="dropZone"
            data-composer-simple-mode-value="<%= simple_mode? %>"
            data-composer-max-files-value="<%= Post::Devlog::MAX_ATTACHMENTS %>"
+           data-composer-max-file-size-value="<%= Post::Devlog::ATTACHMENT_MAX_SIZE %>"
+           data-composer-body-max-length-value="<%= Post::Devlog::BODY_MAX_LENGTH %>"
            data-composer-preview-time-url-value="<%= preview_time_url %>"
            data-composer-hackatime-linked-value="<%= hackatime_linked? %>"
            data-action="<%= "drop->composer#drop dragover->composer#dragover dragleave->composer#dragleave" if show_attachments? %>">
@@ -58,8 +60,13 @@
                  role="textbox"
                  aria-label="<%= body_label %>"
                  data-placeholder="<%= placeholder %>"
+                 data-composer-target="editor"
                  data-emoji-picker-target="editor"
                  data-action="paste->textarea-hint#paste focus->composer#showInfo input->emoji-picker#editorInput blur->composer#collapseIfEmpty blur->emoji-picker#editorBlur keydown->emoji-picker#editorKeydown"></div>
+
+            <div class="feed-composer__emoji-popover"
+                 data-emoji-picker-target="popover"
+                 hidden></div>
             <p class="textarea-hint" data-textarea-hint-target="hint">Please write this yourself, humans read it!</p>
           </div>
         </div>
@@ -98,11 +105,13 @@
 
           <div class="feed-composer__grid" data-composer-target="grid" data-count="0" hidden></div>
         <% end %>
+
+        <p class="feed-composer__error" data-composer-target="error" role="alert" hidden></p>
       </div>
 
       <div class="feed-composer__toolbar">
-        <div class="feed-composer__tools">
-          <div class="md-tabs" role="tablist">
+        <div class="feed-composer__controls">
+          <div class="md-tabs feed-composer__tabs" role="tablist">
             <button type="button" class="md-tabs__tab" role="tab" aria-selected="true"
                     data-markdown-preview-target="writeTab"
                     data-action="markdown-preview#showWrite">Write</button>
@@ -110,32 +119,28 @@
                     data-markdown-preview-target="previewTab"
                     data-action="markdown-preview#showPreview">Preview</button>
           </div>
-          <button type="button" class="feed-composer__tool-btn" aria-label="Markdown formatting help"
-                  data-action="markdown-preview#openHelp">
-            <%= inline_svg_tag "icons/question.svg", class: "feed-composer__tool-icon" %>
-          </button>
-          <div class="feed-composer__emoji-wrap">
-            <div class="feed-composer__emoji-popover"
-                 data-emoji-picker-target="popover"
-                 hidden></div>
+          <div class="feed-composer__assist">
+            <button type="button" class="feed-composer__tool-btn" aria-label="Markdown formatting help"
+                    data-action="markdown-preview#openHelp">
+              <%= inline_svg_tag "icons/question.svg", class: "feed-composer__tool-icon" %>
+            </button>
+            <% if show_time_preview? %>
+              <div class="feed-composer__info-wrap" data-composer-target="footer">
+                <div class="feed-composer__info">
+                  <turbo-frame id="devlog-preview-time"
+                               data-composer-target="timeFrame"
+                               <%= "hidden" unless hackatime_linked? %>>
+                    <span class="feed-composer__info-text">Loading time...</span>
+                  </turbo-frame>
+                  <%= link_to "Link a Hackatime project to post",
+                        project_path(selected_project, editing: true),
+                        class: "feed-composer__info-text feed-composer__info-text--warn",
+                        data: { composer_target: "warn", turbo: false },
+                        hidden: hackatime_linked? %>
+                </div>
+              </div>
+            <% end %>
           </div>
-
-          <% if show_time_preview? %>
-            <div class="feed-composer__info-wrap" data-composer-target="footer">
-            <div class="feed-composer__info">
-              <turbo-frame id="devlog-preview-time"
-                           data-composer-target="timeFrame"
-                           <%= "hidden" unless hackatime_linked? %>>
-                <span class="feed-composer__info-text">Loading time...</span>
-              </turbo-frame>
-              <%= link_to "Link a Hackatime project to post",
-                    project_path(selected_project, editing: true),
-                    class: "feed-composer__info-text feed-composer__info-text--warn",
-                    data: { composer_target: "warn", turbo: false },
-                    hidden: hackatime_linked? %>
-            </div>
-            </div>
-          <% end %>
         </div>
 
         <div class="feed-composer__submit-group">

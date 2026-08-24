@@ -450,7 +450,11 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :ambassador_referrals, only: [ :index, :show ]
       resources :certification_decisions, only: [ :create ]
-      resources :mac_analyses, only: [ :create, :update ]
+      resources :mac_analyses, only: [ :create, :update ] do
+        collection do
+          get :pending
+        end
+      end
       resources :fraud_reports, only: [ :create ]
       resources :reviewer_payouts, only: [ :index, :create ] do
         member do
@@ -586,6 +590,7 @@ Rails.application.routes.draw do
       end
     end
     resource :notification_settings, only: [ :show, :update ], controller: "notification_settings"
+    resources :data_exports, only: [ :index, :create, :show, :destroy ]
     # Temporary: central list of a builder's Lookout recordings so they can push
     # any un-sent time to Hackatime after the recorder's retirement. Removed with
     # the rest of the recovery surface after LookoutSession::FINALIZE_DEADLINE.
@@ -629,6 +634,13 @@ Rails.application.routes.draw do
     get "dashboard/counts/:key", to: "dashboard_counts#show", as: :dashboard_count
 
     resource :funnel, only: [ :show ], controller: "funnel"
+    resource :rating_dashboard, only: [ :show ], controller: "rating_dashboard"
+
+    # Sections load lazily so one slow data source can't hold up the page.
+    get    "mega_dashboard",                   to: "mega_dashboard#show",        as: :mega_dashboard
+    get    "mega_dashboard/sections/:section", to: "mega_dashboard#section",     as: :mega_dashboard_section, constraints: { section: %r{[^/]+} }
+    delete "mega_dashboard/cache",             to: "mega_dashboard#clear_cache", as: :mega_dashboard_cache
+    post   "mega_dashboard/nps_vibes",         to: "mega_dashboard#refresh_nps_vibes", as: :mega_dashboard_nps_vibes
 
     mount Blazer::Engine, at: "blazer", constraints: ->(request) {
       AdminConstraint.allow?(request, :access_blazer?)
@@ -735,6 +747,9 @@ Rails.application.routes.draw do
       end
       resource :letter_mail_batch, only: [ :create ]
       resources :orders, only: [ :index, :show ] do
+        collection do
+          post :bulk_approve
+        end
         member do
           post :reveal_address
           post :reveal_phone
@@ -763,6 +778,7 @@ Rails.application.routes.draw do
     end
     resources :messages, only: [ :index, :create ]
     resources :email_templates, only: [ :index, :create, :destroy ]
+    resources :devlog_imports, only: [ :new, :create ]
     resources :audit_logs, only: [ :index, :show ]
     resources :fulfillment_payouts, only: [ :index, :show ] do
       member do
@@ -817,6 +833,16 @@ Rails.application.routes.draw do
           post :undo
         end
       end
+      # A hardware mission's own two-stage review queue (design funding + build
+      # certification), reviewed by the mission's team. Verdicts reuse the global
+      # funding/ship mutation endpoints so PaperTrail stays attached.
+      resources :hardware_reviews, path: "hardware", param: :project_id, only: [ :index, :show ], controller: "missions/hardware_reviews" do
+        collection do
+          get :design
+          get :build
+          get :next
+        end
+      end
     end
     get "mission_reviews", to: "missions/submissions#overview", as: :mission_reviews
 
@@ -841,12 +867,14 @@ Rails.application.routes.draw do
         patch :set_project_type, on: :member
         patch :set_bonus_stardust, on: :member
         post :report_fraud, on: :member
+        post :flag_queue_mismatch, on: :member
         scope module: :ships do
           resource :claim, only: [ :create, :destroy ]
         end
       end
 
       resources :funding_requests, path: "funding", only: [ :update ] do
+        post :flag_queue_mismatch, on: :member
         scope module: :funding_requests do
           resource :claim, only: [ :create, :destroy ]
         end
@@ -877,7 +905,9 @@ Rails.application.routes.draw do
       post "review/:id/report_fraud", to: "ysws#report_fraud", as: "ysws_report_fraud"
       delete "review/:id/claim", to: "ysws#unclaim", as: "ysws_claim"
       post "review/:id/complete", to: "ysws#complete", as: "complete_ysws_review"
+      post "review/:id/undo", to: "ysws#undo", as: "undo_ysws_review"
       post "review/:id/return_to_ship_cert", to: "ysws#return_to_ship_cert", as: "return_to_ship_cert_ysws_review"
+      post "review/:id/resync", to: "ysws#resync", as: "resync_ysws_review"
 
       # Admin payout management
       resources :payouts, only: [ :index, :show ] do
@@ -888,6 +918,9 @@ Rails.application.routes.draw do
       end
 
       resources :reports, path: "report", only: [ :index, :show ] do
+        collection do
+          post :resolve_project
+        end
         member do
           post :review
           post :dismiss
@@ -911,6 +944,10 @@ Rails.application.routes.draw do
     get  "setup/link_account",  to: "setup#link_account",  as: :setup_link_account
     get  "setup/welcome",       to: "setup#welcome",       as: :setup_welcome
   end
+
+  # Permalink to the most recently created project. Mounted before
+  # `resources :projects` so "latest" isn't swallowed as a project id.
+  get "projects/latest", to: "projects#latest", as: :latest_project
 
   # Projects — public index lives on the user profile projects section; only
   # show/new/edit/update/destroy and the nested resources are exposed here.
@@ -943,6 +980,9 @@ Rails.application.routes.draw do
     resource :recertification, only: [ :create ], module: :projects
     resource :mission_resubmission, only: [ :create ], module: :projects
     resource :funding_request, only: [ :create ], module: :projects
+    # The builder's answer to a reviewer's "wrong queue" flag. Singular: a
+    # project can only have one submission awaiting an answer at a time.
+    resource :queue_mismatch, only: [ :update, :destroy ], module: :projects
     resource :mission, only: [ :create, :destroy ], module: :projects, controller: "missions"
     resource :magic, only: [ :create, :destroy ], module: :projects, controller: "magic"
     resource :fire_nomination, only: [ :create, :destroy ], module: :projects
@@ -1014,6 +1054,9 @@ Rails.application.routes.draw do
   # Project-side / reviewer-queue / admin-managed missions surfaces ship in later PRs.
   resources :missions, only: [ :index, :show ], param: :slug do
     resource :og_image, only: [ :show ], module: :missions, defaults: { format: :png }
+    collection do
+      get :search
+    end
     member do
       get :guide
       get :gallery

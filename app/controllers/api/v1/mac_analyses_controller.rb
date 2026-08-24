@@ -1,4 +1,20 @@
 class Api::V1::MACAnalysesController < Api::V1::BaseController
+  include Pagy::Method
+
+  def pending
+    scope = Certification::Ysws.pending
+                               .without_mac_analysis
+                               .order(created_at: :asc)
+
+    pagy = Pagy::Offset.new(count: scope.count, page: params[:page] || 1)
+
+    review_ids = scope.offset(pagy.offset)
+                      .limit(pagy.limit)
+                      .pluck(:id)
+
+    render json: { review_ids:, page: pagy.page, pages: pagy.pages, count: pagy.count }
+  end
+
   def create
     review = Certification::Ysws.find(params.require(:review_id))
 

@@ -15,18 +15,25 @@
   </div>
 
   <% if review_type == :funding %>
-    <div class="hardware-review__fact hardware-review__fact--primary">
-      <dt>Requested</dt>
-      <dd>$<%= review.requested_amount_dollars %></dd>
-    </div>
-    <div class="hardware-review__fact">
-      <dt><%= review.tier_label %> max</dt>
-      <dd>$<%= review.tier_max_dollars %></dd>
-    </div>
-    <div class="hardware-review__fact hardware-review__fact--wide">
-      <dt>Tier examples</dt>
-      <dd><%= review.tier_examples %></dd>
-    </div>
+    <% if review.awards_design_kit? %>
+      <div class="hardware-review__fact hardware-review__fact--primary hardware-review__fact--wide">
+        <dt>Kit</dt>
+        <dd><%= review.design_kit_shop_item&.name || "Design kit" %></dd>
+      </div>
+    <% else %>
+      <div class="hardware-review__fact hardware-review__fact--primary">
+        <dt>Requested</dt>
+        <dd>$<%= review.requested_amount_dollars %></dd>
+      </div>
+      <div class="hardware-review__fact">
+        <dt><%= review.tier_label %> max</dt>
+        <dd>$<%= review.tier_max_dollars %></dd>
+      </div>
+      <div class="hardware-review__fact hardware-review__fact--wide">
+        <dt>Tier examples</dt>
+        <dd><%= review.tier_examples %></dd>
+      </div>
+    <% end %>
   <% else %>
     <div class="hardware-review__fact hardware-review__fact--primary">
       <dt>Hours logged</dt>

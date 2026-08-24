@@ -117,8 +117,8 @@
                 <%= link_to "→ Slack", "https://hackclub.slack.com/team/#{identity.uid}", target: "_blank" %>
               <% end %>
               <% if identity.provider == "hackatime" %>
-                <%= link_to "→ Billy", "https://billy.3kh0.net/?u=#{identity.uid}", target: "_blank" %>
-                <%= link_to "→ Joe", "https://joe.fraud.hackclub.com/profile/#{identity.uid}", target: "_blank" %>
+                <%= link_to "→ Hackatime", telescreen_hackatime_overview_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
+                <%= link_to "→ Telescreen", telescreen_subject_url(identity.uid), target: "_blank", rel: "noopener noreferrer" %>
               <% end %>
               <% if identity.provider == "hack_club" %>
                 <%= link_to "→ IDV", "#{HCAService.backend_url("/identities/#{identity.uid}")}", target: "_blank" %>
@@ -241,7 +241,7 @@
         </script>
       <% end %>
 
-      <% if policy(current_user).view_order_full_details? %>
+      <% if policy(@user).reject_orders? %>
         <% if @user.shop_orders.where(aasm_state: %w[pending awaiting_periodical_fulfillment]).any? %>
           <button type="button" onclick="document.getElementById('reject-modal-orders').showModal()">
             ✗ Reject Orders
@@ -250,8 +250,20 @@
             <form action="<%= admin_user_order_rejection_path(@user) %>" method="post">
               <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
               <div>
-                <%= label_tag :reason, "Rejection Reason (optional)" %>
-                <%= text_area_tag :reason, "", placeholder: "Enter reason..." %>
+                <%= label_tag :reason, "Public Rejection Reason (optional)" %>
+                <%= text_area_tag :reason, "", placeholder: "Shown to the user..." %>
+              </div>
+              <div>
+                <%= label_tag :internal_rejection_reason, "Internal Reason (required, staff only)" %>
+                <%= text_area_tag :internal_rejection_reason, "", placeholder: "Detailed internal reason for these rejections...", required: true %>
+              </div>
+              <div>
+                <%= label_tag :fraud_related_project_id, "Related Project ID (required)" %>
+                <%= number_field_tag :fraud_related_project_id, nil, placeholder: "e.g. 1234", required: true, autocomplete: "off" %>
+              </div>
+              <div>
+                <%= label_tag :joe_case_url, "Telescreen case URL (optional)" %>
+                <%= url_field_tag :joe_case_url, nil, placeholder: "https://telescreen.hackclub.com/cases/...", autocomplete: "off" %>
               </div>
               <div>
                 <button type="submit">Confirm Reject</button>

@@ -24,6 +24,13 @@ module Certification
       review = find_review(ysws_review_id)
       return unless review
 
+      # An undo can land between #complete enqueuing this job and it running.
+      # Never write a submission row for a review that's back in the queue.
+      if review.pending?
+        Rails.logger.info "[YswsAirtableSyncJob] Skipping review ##{review.id}: back to pending"
+        return
+      end
+
       Rails.logger.info "[YswsAirtableSyncJob] Starting sync for review ##{review.id}"
 
       # Check if this review has already been submitted to unified DB
@@ -71,7 +78,7 @@ module Certification
 
     def check_stardance_review_submitted_unified(review)
       # Fetch existing Airtable record by review_id
-      existing_record = table.all(filter: "{review_id} = '#{review.id}'").first
+      existing_record = ::Certification::YswsAirtable.record_for(review.id)
 
       # If record exists and has "Automation - YSWS Record ID" populated, it's already in unified DB
       if existing_record && existing_record["Automation - YSWS Record ID"].present?
@@ -90,7 +97,7 @@ module Certification
           rejected: true,
           rejection_reason: "User banned: #{user.banned_reason || 'No reason provided'}"
         }
-      elsif integrity_check_for(review).banned?
+      elsif !review.project.hardware? && integrity_check_for(review).banned?
         {
           rejected: true,
           rejection_reason: "Manual fraud check rejected"
@@ -169,14 +176,15 @@ module Certification
       user_data = extract_user_data(user)
       primary_address = user_data[:addresses]&.first || {}
 
-      integrity_check = integrity_check_for(review)
+      integrity_check = project.hardware? ? nil : integrity_check_for(review)
 
       # Calculate minutes. When the fraud department deducted hours during
       # integrity review, those come off the reviewer-approved total before we
-      # report the override hours to Airtable.
+      # report the override hours to Airtable. Hardware projects skip integrity
+      # checks entirely so there is never a deduction.
       total_original_minutes = devlog_reviews.sum { |dr| dr.original_minutes.to_i }
       total_approved_minutes = review.approved_minutes_total
-      deducted_minutes = integrity_check.deducted? ? integrity_check.deduction_minutes.to_i : 0
+      deducted_minutes = integrity_check&.deducted? ? integrity_check.deduction_minutes.to_i : 0
       net_approved_minutes = [ total_approved_minutes - deducted_minutes, 0 ].max
       hours_spent = (net_approved_minutes / 60.0).round(2)
 
@@ -291,11 +299,11 @@ module Certification
         # Report status
         "report_status" => report_status(review),
 
-        # Certification integrity
-        "integrity_id" => integrity_check.id.to_s,
-        "integrity_status" => integrity_check.status,
-        "integrity_flags" => integrity_check.flags,
-        "fraud_data" => integrity_check.fraud_detection_data&.to_json,
+        # Certification integrity (hardware projects skip integrity checks)
+        "integrity_id" => integrity_check&.id&.to_s,
+        "integrity_status" => integrity_check&.status || "not_applicable",
+        "integrity_flags" => integrity_check&.flags || 0,
+        "fraud_data" => integrity_check&.fraud_detection_data&.to_json,
 
         # Double-dip flag
         "flagged_double_dipped" => ::Certification::UnifiedYswsService.double_dipped?(project.repo_url)
@@ -372,11 +380,11 @@ module Certification
       if deducted_minutes.positive?
         deducted_hours = (deducted_minutes / 60.0).round(2)
         deduction_explanation = "Further deducted by #{deducted_hours} hours by the fraud department for hour fraud."
-        deduction_explanation += " Reason: #{integrity_check.decision_justification}" if integrity_check.decision_justification.present?
+        deduction_explanation += " Reason: #{integrity_check.decision_justification}" if integrity_check&.decision_justification.present?
         intro += "\n#{deduction_explanation}"
       end
 
-      integrity_note = INTEGRITY_JUSTIFICATION_NOTES.fetch(integrity_check.status)
+      integrity_note = integrity_check ? INTEGRITY_JUSTIFICATION_NOTES.fetch(integrity_check.status) : "Hardware project — integrity check not applicable."
 
       # A project with no ship cert at all can't be linked — say so rather than
       # emitting a URL with an empty id, which reads as a broken review link.
@@ -584,28 +592,7 @@ module Certification
     end
 
     def table
-      @table ||= Norairrecord.table(
-        airtable_api_key,
-        airtable_base_id,
-        table_name
-      )
-    end
-
-    def table_name
-      Rails.application.credentials.dig(:ysws_review, :airtable_table_name) ||
-        ENV["YSWS_REVIEW_AIRTABLE_TABLE"] ||
-        "YSWS Project Submission"
-    end
-
-    def airtable_api_key
-      Rails.application.credentials.dig(:ysws_review, :airtable_api_key) ||
-        Rails.application.credentials&.airtable&.api_key ||
-        ENV["AIRTABLE_API_KEY"]
-    end
-
-    def airtable_base_id
-      Rails.application.credentials.dig(:ysws_review, :airtable_base_id) ||
-        ENV["YSWS_REVIEW_AIRTABLE_BASE_ID"]
+      @table ||= ::Certification::YswsAirtable.table
     end
   end
 end

@@ -31,9 +31,9 @@ class Certification::MACAnalysis < ApplicationRecord
   # the banner's overall tone from the flags it raised.
   SEVERITY_ORDER = %w[green yellow orange red].freeze
 
-  # The signal keys present in essentially every report, in display order.
-  # Anything else the analyzer emitted is surfaced separately as #extra_signals,
-  # so a new signal shows up in the UI without a code change.
+  # The signal keys present in essentially every report, in display order. The
+  # banner reads its signal cards from these; whatever ad-hoc keys a given report
+  # adds alongside them aren't displayed.
   CORE_SIGNAL_KEYS = %w[
     total_heartbeats
     total_writes
@@ -47,6 +47,9 @@ class Certification::MACAnalysis < ApplicationRecord
     phantom_entities
     other_categories
   ].freeze
+
+  # cached_data entry shown alongside the signals instead of as raw evidence.
+  CATEGORY_BREAKDOWN_KEY = "category_breakdown".freeze
 
   self.table_name = "certification_mac_analyses"
 
@@ -92,15 +95,23 @@ class Certification::MACAnalysis < ApplicationRecord
       .to_h
   end
 
-  def extra_signals
-    signals.except(*CORE_SIGNAL_KEYS).reject { |_key, value| value.nil? }
-  end
 
   # Per-devlog time recommendation for one Certification::Devlog, or nil when the
   # report has none for it. Memoised into a lookup because the devlog partial
   # asks once per devlog.
+  #
+  # Recommendations that don't cut the claimed time are withheld: the devlog hint
+  # exists to flag over-claimed minutes, so "leave it as is" is noise on a card.
+  # The full list stays available via #devlog_recommendations for the banner.
+  #
+  # Whatever survives is tagged "deduction" so the card can pick its tone without
+  # re-deriving the comparison in the view.
   def recommendation_for(devlog_review_id)
-    recommendations_by_devlog_review_id[devlog_review_id]
+    recommendation = recommendations_by_devlog_review_id[devlog_review_id]
+    return if recommendation.blank?
+
+    deduction = deduction?(recommendation)
+    recommendation.merge("deduction" => deduction) if deduction || recommendation["original_minutes"].blank?
   end
 
   def devlog_recommendations
@@ -111,18 +122,15 @@ class Certification::MACAnalysis < ApplicationRecord
   # evidence the verdict rests on, so a reviewer can check it without refetching.
   # `columns` is empty for flat lists (e.g. filenames), which render as a list
   # rather than a table.
+  #
+  # The category breakdown is excluded: it reads as a signal rather than as raw
+  # evidence, so the banner shows it beside the ones it explains.
   def evidence_tables
-    cached_data.filter_map do |key, value|
-      rows = Array.wrap(value)
-      next if !value.is_a?(Array) || rows.empty?
+    cached_data.keys.filter_map { |key| evidence_table(key) unless key == CATEGORY_BREAKDOWN_KEY }
+  end
 
-      {
-        key: key,
-        title: key.to_s.humanize,
-        columns: rows.grep(Hash).flat_map(&:keys).uniq,
-        rows: rows
-      }
-    end
+  def category_breakdown
+    evidence_table(CATEGORY_BREAKDOWN_KEY)
   end
 
   # Scalar cached_data entries — the analyzer's free-text notes about how it read
@@ -132,6 +140,14 @@ class Certification::MACAnalysis < ApplicationRecord
   end
 
   private
+
+    # True when the analyzer asked for fewer minutes than the devlog claimed.
+    # Reports that omit the claimed figure can't be compared, so they aren't
+    # deductions — #recommendation_for keeps them visible but untoned.
+    def deduction?(recommendation)
+      original = recommendation["original_minutes"]
+      original.present? && recommendation["recommended_minutes"].to_i < original.to_i
+    end
 
     # `report` is non-null in the schema, but guard anyway: these readers are
     # called from the review page, which must not 500 on a malformed row.
@@ -145,6 +161,19 @@ class Certification::MACAnalysis < ApplicationRecord
 
     def cached_data
       @cached_data ||= hash_at("cached_data")
+    end
+
+    # One cached_data entry as a table, or nil when it holds no rows to show.
+    def evidence_table(key)
+      rows = cached_data[key]
+      return unless rows.is_a?(Array) && rows.any?
+
+      {
+        key: key,
+        title: key.to_s.humanize,
+        columns: rows.grep(Hash).flat_map(&:keys).uniq,
+        rows: rows
+      }
     end
 
     def hash_at(key)

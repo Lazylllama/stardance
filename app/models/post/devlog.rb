@@ -41,6 +41,7 @@ class Post::Devlog < ApplicationRecord
 
   BODY_MAX_LENGTH = 4_000
   MAX_ATTACHMENTS = 4
+  ATTACHMENT_MAX_SIZE = 50.megabytes
   ACCEPTED_CONTENT_TYPES = %w[
     image/jpeg
     image/png
@@ -89,7 +90,7 @@ class Post::Devlog < ApplicationRecord
 
   validates :attachments,
             content_type: { in: ACCEPTED_CONTENT_TYPES, spoofing_protection: true },
-            size: { less_than: 50.megabytes, message: "is too large (max 50 MB)" },
+            size: { less_than: ATTACHMENT_MAX_SIZE, message: "is too large (max 50 MB)" },
             processable_file: true
   validate :at_least_one_attachment
   validate :at_most_max_attachments
@@ -100,7 +101,16 @@ class Post::Devlog < ApplicationRecord
             },
             allow_nil: true,
             on: :create
+  # Call normalizer prior to validation
+  before_validation :normalize_line_endings
   validates :body, presence: true, length: { maximum: BODY_MAX_LENGTH }
+
+  private
+
+  # Normalize line endings (\r\n for now) to \n
+  def normalize_line_endings
+    self.body = body.gsub("\r\n", "\n") if body.present?
+  end
 
   after_create_commit :handle_post_creation
   after_update_commit :update_project_duration_if_changed
