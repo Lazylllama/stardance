@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 
 const PIXEL = 2;
 const MAX_PIXEL = 4;
-const FRAME_MS = 1000 / 30;
+const QUALITY_FRAME_BUDGET_MS = 1000 / 30;
 const QUALITY_WINDOW_MS = 2000;
 const MAX_CLICKS = 6;
 const CLICK_LIFE_S = 2.5;
@@ -347,7 +347,6 @@ export default class extends Controller {
     if (shouldRun && !this.running) {
       this.running = true;
       this.lastTick = null;
-      this.nextDrawAt = null;
       this.qualityElapsed = this.qualityFrames = this.healthyTime = 0;
       this.frame = requestAnimationFrame((t) => this.tick(t));
     } else if (!shouldRun && this.running) {
@@ -359,9 +358,6 @@ export default class extends Controller {
   tick(now) {
     if (!this.running || !this.gl) return;
     this.frame = requestAnimationFrame((t) => this.tick(t));
-    if (this.nextDrawAt != null && now + 0.1 < this.nextDrawAt) return;
-    const late = Math.max(0, now - (this.nextDrawAt ?? now));
-    this.nextDrawAt = now + FRAME_MS - (late % FRAME_MS);
     const elapsed = this.lastTick == null ? 0 : now - this.lastTick;
     if (elapsed > 0) this.adaptQuality(elapsed);
     const dt = Math.min(0.1, elapsed / 1000);
@@ -387,10 +383,10 @@ export default class extends Controller {
     if (this.qualityElapsed < QUALITY_WINDOW_MS) return;
     const average = this.qualityElapsed / this.qualityFrames;
     let pixelSize = this.pixelSize;
-    if (average > FRAME_MS * 1.35) {
+    if (average > QUALITY_FRAME_BUDGET_MS * 1.35) {
       pixelSize = Math.min(MAX_PIXEL, pixelSize + 1);
       this.healthyTime = 0;
-    } else if (average < FRAME_MS * 1.12) {
+    } else if (average < QUALITY_FRAME_BUDGET_MS * 1.12) {
       this.healthyTime += this.qualityElapsed;
       if (this.healthyTime >= QUALITY_WINDOW_MS * 4) {
         pixelSize = Math.max(PIXEL, pixelSize - 1);

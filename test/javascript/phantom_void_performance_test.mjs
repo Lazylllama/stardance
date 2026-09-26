@@ -10,7 +10,7 @@ const qualityState = () => ({
   healthyTime: 0,
 });
 
-test("rendering is capped at 30fps across common display refresh rates", () => {
+test("rendering processes every animation frame across common display refresh rates", () => {
   const originalRaf = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = () => 1;
   try {
@@ -29,7 +29,11 @@ test("rendering is capped at 30fps across common display refresh rates", () => {
       };
       for (let frame = 0; frame < refreshRate * 2; frame++)
         methods.tick.call(controller, (frame * 1000) / refreshRate);
-      assert.ok(draws >= 59 && draws <= 61, `${refreshRate}Hz: ${draws} draws`);
+      assert.equal(
+        draws,
+        refreshRate * 2,
+        `${refreshRate}Hz must not skip frames`,
+      );
       assert.equal(controller.pixelSize, 2);
       assert.ok(controller.time > 1.9 && controller.time < 2.01);
     }
