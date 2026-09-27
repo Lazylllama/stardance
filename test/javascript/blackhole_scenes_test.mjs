@@ -32,6 +32,7 @@ test("the Phantom ad receives its own card mask without masking its canvas separ
     };
     const controller = {
       surfaces: new Map(),
+      surfaceSeed: BlackholeController.prototype.surfaceSeed,
       element: { contains: () => false },
       masksTarget: { firstElementChild: { append: () => masks++ } },
       surfaceResize: { observe: () => observed++ },
