@@ -294,6 +294,16 @@ module Certification
 
     # True when approving this request pays out an HCB card grant, as opposed to
     # shipping a kit or approving the build with no funding at all.
+    def redeemable_prizes
+      redeemed_shop_item_ids = Mission::PrizeRedemption
+        .where(source_type: self.class.polymorphic_name,
+               source_id: project.certification_funding_requests.select(:id))
+        .joins(:mission_prize)
+        .pluck("mission_prizes.shop_item_id")
+
+      super.where.not(shop_item_id: redeemed_shop_item_ids)
+    end
+
     def issues_grant?
       approved? && !awards_design_kit? && final_amount_cents.to_i.positive?
     end
