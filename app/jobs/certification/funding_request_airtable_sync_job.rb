@@ -94,7 +94,7 @@ module Certification
         "airtable_synced_at" => Time.current.iso8601,
 
         # Hours
-        "Optional - Override Hours Spent" => hours_at_submission,
+        "Optional - Override Hours Spent" => hackpad_project? ? 10 : hours_at_submission,
         "Optional - Override Hours Spent Justification" => build_justification,
         "hours_pre_deflation" => hours_at_submission,
         "is_hardware" => true,
@@ -129,32 +129,65 @@ module Certification
     end
 
     def build_justification
+      mission_slug = @funding_request.project.current_mission&.slug
+
+      case mission_slug
+      when "blare"
+        "BLARE_MISSION"
+      when "hackpad"
+        build_hackpad_justification
+      else
+        build_custom_justification
+      end
+    end
+
+    def build_custom_justification
       project = @funding_request.project
-      reviewer_name = @funding_request.reviewer&.display_name || @funding_request.reviewer&.email || "Unknown"
+      submitted_at = @funding_request.created_at&.strftime("%Y-%m-%d %H:%M UTC")
+      total_hours = hours_at_submission || 0
+      requested = @funding_request.requested_amount_cents ? "$#{"%.2f" % (@funding_request.requested_amount_cents / 100.0)}" : "N/A"
+      approved = @funding_request.approved_amount_cents ? "$#{"%.2f" % (@funding_request.approved_amount_cents / 100.0)}" : "N/A"
 
-      lines = []
-      lines << "This is a hardware design funding request (not a YSWS review)."
-      lines << "Tier: #{@funding_request.tier_code}" if @funding_request.tier_code.present?
+      <<~TEXT.strip
+        This is a hardware design submitted to Stardance on #{submitted_at}
 
-      if @funding_request.requested_amount_cents
-        lines << "Requested amount: $#{"%.2f" % (@funding_request.requested_amount_cents / 100.0)}"
-      end
-      if @funding_request.approved_amount_cents
-        lines << "Approved amount: $#{"%.2f" % (@funding_request.approved_amount_cents / 100.0)}"
-      end
+        Authors had to log their hours either through lapse or hackatime, and concurrently post devlogs of their progress. Through this, they logged #{total_hours} hours at the time of submission.
 
-      lines << "Issues HCB grant: #{@funding_request.issues_grant? ? "Yes" : "No"}"
-      lines << "Awards design kit: #{@funding_request.awards_design_kit? ? "Yes" : "No"}"
-      lines << "HCB grant hashid: #{@funding_request.hcb_grant_hashid}" if @funding_request.hcb_grant_hashid.present?
-      lines << ""
-      lines << "Reviewer feedback: #{@funding_request.feedback}" if @funding_request.feedback.present?
-      lines << "Submitter note: #{@funding_request.submitter_note}" if @funding_request.submitter_note.present?
-      lines << ""
-      lines << "Reviewed by #{reviewer_name} on #{@funding_request.decided_at&.strftime("%Y-%m-%d")}."
-      lines << ""
-      lines << "The Stardance project can be found at https://stardance.hackclub.com/projects/#{project.id}"
+        note that some projects had JOURNAL.md files which were converted into devlogs instead.
 
-      lines.join("\n").strip
+        It was then reviewed by the following reviewers:
+
+        #{verdict_history}
+
+        Other data:
+
+        Tier: #{@funding_request.tier_code || "N/A"}
+        Requested amount: #{requested}
+        Approved amount: #{approved}
+
+        The Stardance project can be found at https://stardance.hackclub.com/projects/#{project.id}
+      TEXT
+    end
+
+    def build_hackpad_justification
+      project = @funding_request.project
+      total_hours = hours_at_submission || 0
+
+      <<~TEXT.strip
+        This is a hackpad that was submitted to stardance
+
+        Authors were pointed to log their hours either through lapse or hackatime, and concurrently post devlogs of their progress. Through this, they logged #{total_hours} hours at the time of submission.
+
+        note that some projects had JOURNAL.md files which were converted into devlogs instead.
+
+        It was then reviewed by the following reviewers:
+
+        #{verdict_history}
+
+        Because consistent timetracking was not strictly enforced, many hackpads are missing time. This, in addition to the 600+ hackpads that have manually had their time checked in the ~2 years the program has been running, means that we are setting all hackpad designs to 10 hours (despite the median being 15) unless it is of note, in which case there will be a justification below indicating otherwise.
+
+        The Stardance project can be found at https://stardance.hackclub.com/projects/#{project.id}
+      TEXT
     end
 
     def extract_user_data(user)
@@ -251,6 +284,24 @@ module Certification
         .sum(:duration_seconds)
 
       @hours_at_submission = (total_seconds / 3600.0).round(2)
+    end
+
+    def hackpad_project?
+      @funding_request.project.current_mission&.slug == "hackpad"
+    end
+
+    def verdict_history
+      requests = @funding_request.project
+        .certification_funding_requests
+        .where.not(decided_at: nil)
+        .includes(:reviewer)
+        .order(decided_at: :asc)
+
+      requests.map do |fr|
+        name = fr.reviewer&.display_name || fr.reviewer&.email || "Unknown"
+        at = fr.decided_at.strftime("%Y-%m-%d %H:%M UTC")
+        "#{fr.status.capitalize} by #{name} at #{at}"
+      end.join("\n")
     end
 
     def report_status
