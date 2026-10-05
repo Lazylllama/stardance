@@ -114,6 +114,16 @@
     font-size: var(--font-size-s);
   }
 
+  &__badge {
+    border: 1px solid var(--color-brand-mint);
+    border-radius: 999px;
+    color: var(--color-brand-mint);
+    font-size: var(--font-size-xs);
+    margin-left: var(--space-xxs);
+    padding: 0 var(--space-xs);
+    white-space: nowrap;
+  }
+
   &__metric-value {
     font-size: var(--font-size-l);
   }

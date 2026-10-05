@@ -8,7 +8,7 @@ module Admin
     def show
       authorize :growth
 
-      metric = params[:metric].presence_in(GrowthDailySnapshot::METRICS.keys) || "engaged"
+      metric = params[:metric].presence_in(GrowthDailySnapshot::METRICS.keys) || GrowthDailySnapshot::SOURCE_OF_TRUTH
       signups = params[:signups].presence_in(Growth::Simulator::SIGNUPS) || "word_of_mouth"
       @report = Growth::Report.new(metric:, signups:)
     end

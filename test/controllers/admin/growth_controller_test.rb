@@ -28,7 +28,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "signups can be held flat" do
-    GrowthDailySnapshot.create!(metric: "engaged", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
+    GrowthDailySnapshot.create!(metric: "coding", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
     sign_in @admin
 
     get admin_growth_path(signups: "flat")
@@ -37,7 +37,28 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     assert_select ".growth__toggle-option--active", text: "Flat"
   end
 
-  test "an unknown metric falls back to engaged and shows the empty state" do
+  test "coding is the default metric and is marked as the source of truth" do
+    GrowthDailySnapshot.create!(metric: "coding", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
+    sign_in @admin
+
+    get admin_growth_path
+
+    assert_response :success
+    assert_select ".growth__metric--selected", text: /Coding.*Source of truth/m
+    assert_no_match "For comparison only", response.body
+  end
+
+  test "other metrics say they are for comparison only" do
+    GrowthDailySnapshot.create!(metric: "vote", snapshot_on: UserActivityDay.today - 1, new_users: 1, current_users: 5)
+    sign_in @admin
+
+    get admin_growth_path(metric: "vote")
+
+    assert_response :success
+    assert_match "For comparison only", response.body
+  end
+
+  test "an unknown metric falls back to the source of truth and shows the empty state" do
     sign_in @admin
 
     get admin_growth_path(metric: "nonsense")

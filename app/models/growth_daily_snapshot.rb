@@ -27,9 +27,14 @@ class GrowthDailySnapshot < ApplicationRecord
   # Each metric is a definition of "active": a user is active on a day if
   # they have any of the metric's sources that day.
   METRICS = {
+    "coding" => [ "coding" ],
     "engaged" => UserActivityDay::SOURCES - [ "visit" ],
     **UserActivityDay::SOURCES.index_with { |source| [ source ] }
   }.freeze
+
+  # The DAU we report and project: 5+ minutes of Hackatime coding on a
+  # project linked to Stardance. The other metrics are for comparison.
+  SOURCE_OF_TRUTH = "coding".freeze
 
   METRIC_LABELS = {
     "engaged" => "Engaged (any action)",
