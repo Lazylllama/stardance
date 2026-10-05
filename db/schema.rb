@@ -347,10 +347,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.bigint "claimed_by_id"
     t.datetime "created_at", null: false
     t.datetime "demo_checked_at", precision: nil
-    t.bigint "funding_request_id"
     t.string "in_unified_db"
     t.integer "original_minutes"
-    t.bigint "post_ship_event_id"
+    t.bigint "post_ship_event_id", null: false
     t.bigint "project_id", null: false
     t.datetime "repo_checked_at", precision: nil
     t.datetime "returned_at"
@@ -363,7 +362,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["claimed_by_id"], name: "index_certification_ysws_reviews_on_claimed_by_id"
-    t.index ["funding_request_id"], name: "index_certification_ysws_reviews_on_funding_request_id"
     t.index ["post_ship_event_id"], name: "index_certification_ysws_reviews_on_post_ship_event_id"
     t.index ["project_id"], name: "index_certification_ysws_reviews_on_project_id"
     t.index ["reviewer_id"], name: "index_certification_ysws_reviews_on_reviewer_id"
@@ -525,6 +523,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.integer "total_amount"
     t.integer "total_orders"
     t.datetime "updated_at", null: false
+  end
+
   create_table "growth_daily_snapshots", force: :cascade do |t|
     t.integer "at_risk_mau", default: 0, null: false
     t.integer "at_risk_wau", default: 0, null: false
@@ -539,8 +539,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.jsonb "transitions", default: {}, null: false
     t.datetime "updated_at", null: false
     t.index ["metric", "snapshot_on"], name: "index_growth_daily_snapshots_on_metric_and_snapshot_on", unique: true
-  end
-
   end
 
   create_table "hcb_credentials", force: :cascade do |t|
@@ -1615,6 +1613,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.bigint "user_id", null: false
     t.index ["user_id", "achievement_slug"], name: "index_user_achievements_on_user_id_and_achievement_slug", unique: true
     t.index ["user_id"], name: "index_user_achievements_on_user_id"
+  end
+
   create_table "user_activity_days", force: :cascade do |t|
     t.date "active_on", null: false
     t.datetime "created_at", null: false
@@ -1623,8 +1623,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.bigint "user_id", null: false
     t.index ["active_on"], name: "index_user_activity_days_on_active_on"
     t.index ["user_id", "active_on"], name: "index_user_activity_days_on_user_id_and_active_on", unique: true
-  end
-
   end
 
   create_table "user_data_exports", force: :cascade do |t|
@@ -1923,7 +1921,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   add_foreign_key "certification_ship_reviews", "post_ship_events", on_delete: :nullify
   add_foreign_key "certification_ship_reviews", "projects"
   add_foreign_key "certification_ship_reviews", "users", column: "reviewer_id"
-  add_foreign_key "certification_ysws_reviews", "certification_funding_requests", column: "funding_request_id"
   add_foreign_key "certification_ysws_reviews", "certification_ship_reviews", column: "ship_cert_id"
   add_foreign_key "certification_ysws_reviews", "post_ship_events"
   add_foreign_key "certification_ysws_reviews", "projects"
@@ -2007,8 +2004,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   add_foreign_key "raffle_draws", "raffle_participants", column: "winner_participant_id"
   add_foreign_key "raffle_draws", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_participants", "raffle_weeks", column: "signup_week_id"
+  add_foreign_key "raffle_participants", "users"
   add_foreign_key "raffle_referrals", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_referrals", "raffle_weeks", column: "credited_week_id"
+  add_foreign_key "raffle_referrals", "users", column: "referred_user_id"
   add_foreign_key "raffle_weekly_claims", "raffle_participants", column: "participant_id"
   add_foreign_key "raffle_weekly_claims", "raffle_weeks", column: "week_id"
   add_foreign_key "raffle_weeks", "raffle_participants", column: "winner_participant_id"
@@ -2057,8 +2056,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   add_foreign_key "sticky_streaks", "users"
   add_foreign_key "streak_activities", "users"
   add_foreign_key "streak_activities", "users", column: "manual_credit_by_id", on_delete: :nullify
-  add_foreign_key "user_activity_days", "users", on_delete: :cascade
   add_foreign_key "user_achievements", "users"
+  add_foreign_key "user_activity_days", "users", on_delete: :cascade
   add_foreign_key "user_data_exports", "users"
   add_foreign_key "user_hackatime_projects", "projects"
   add_foreign_key "user_hackatime_projects", "users"
