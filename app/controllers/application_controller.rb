@@ -278,6 +278,7 @@ class ApplicationController < ActionController::Base
 
   def track_active_user
     ActiveUserTracker.track(user_id: current_user&.id, session_id: session.id.to_s)
+    UserActivityDay.track_visit(current_user.id) if current_user && !impersonating?
   end
 
   def apply_dev_override_ref

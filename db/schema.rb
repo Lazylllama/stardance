@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_02_170610) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -525,6 +525,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_170610) do
     t.integer "total_amount"
     t.integer "total_orders"
     t.datetime "updated_at", null: false
+  create_table "growth_daily_snapshots", force: :cascade do |t|
+    t.integer "at_risk_mau", default: 0, null: false
+    t.integer "at_risk_wau", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "current_users", default: 0, null: false
+    t.integer "dormant_users", default: 0, null: false
+    t.string "metric", null: false
+    t.integer "new_users", default: 0, null: false
+    t.integer "reactivated_users", default: 0, null: false
+    t.integer "resurrected_users", default: 0, null: false
+    t.date "snapshot_on", null: false
+    t.jsonb "transitions", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["metric", "snapshot_on"], name: "index_growth_daily_snapshots_on_metric_and_snapshot_on", unique: true
+  end
+
   end
 
   create_table "hcb_credentials", force: :cascade do |t|
@@ -1599,6 +1615,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_170610) do
     t.bigint "user_id", null: false
     t.index ["user_id", "achievement_slug"], name: "index_user_achievements_on_user_id_and_achievement_slug", unique: true
     t.index ["user_id"], name: "index_user_achievements_on_user_id"
+  create_table "user_activity_days", force: :cascade do |t|
+    t.date "active_on", null: false
+    t.datetime "created_at", null: false
+    t.string "sources", default: [], null: false, array: true
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["active_on"], name: "index_user_activity_days_on_active_on"
+    t.index ["user_id", "active_on"], name: "index_user_activity_days_on_user_id_and_active_on", unique: true
+  end
+
   end
 
   create_table "user_data_exports", force: :cascade do |t|
@@ -2031,6 +2057,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_170610) do
   add_foreign_key "sticky_streaks", "users"
   add_foreign_key "streak_activities", "users"
   add_foreign_key "streak_activities", "users", column: "manual_credit_by_id", on_delete: :nullify
+  add_foreign_key "user_activity_days", "users", on_delete: :cascade
   add_foreign_key "user_achievements", "users"
   add_foreign_key "user_data_exports", "users"
   add_foreign_key "user_hackatime_projects", "projects"

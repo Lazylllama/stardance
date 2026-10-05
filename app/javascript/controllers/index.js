@@ -253,6 +253,9 @@ application.register("hackatime-link", HackatimeLinkController);
 import HcbChartController from "./hcb_chart_controller";
 application.register("hcb-chart", HcbChartController);
 
+import GrowthChartController from "./growth_chart_controller";
+application.register("growth-chart", GrowthChartController);
+
 import HourFunnelController from "./hour_funnel_controller";
 application.register("hour-funnel", HourFunnelController);
 
