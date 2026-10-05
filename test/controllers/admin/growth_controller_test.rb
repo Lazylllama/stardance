@@ -23,6 +23,18 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     assert_select ".growth__metric--selected", text: /Coding/
     assert_match "32 DAU", response.body
     assert_select ".growth__table th", text: "CURR"
+    assert_select ".growth__toggle-option--active", text: "Word of mouth"
+    assert_match "Projected, no change", response.body
+  end
+
+  test "signups can be held flat" do
+    GrowthDailySnapshot.create!(metric: "engaged", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
+    sign_in @admin
+
+    get admin_growth_path(signups: "flat")
+
+    assert_response :success
+    assert_select ".growth__toggle-option--active", text: "Flat"
   end
 
   test "an unknown metric falls back to engaged and shows the empty state" do

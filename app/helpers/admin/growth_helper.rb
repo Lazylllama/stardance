@@ -33,6 +33,24 @@ module Admin
       { key: "iwaurr", label: "iWAURR", color: "--color-brand-salmon" }
     ].freeze
 
+    GROWTH_SIGNUP_LABELS = {
+      "word_of_mouth" => "Word of mouth",
+      "flat" => "Flat"
+    }.freeze
+
+    GROWTH_PROJECTION_COLORS = %w[--color-brand-mint --color-brand-lilac --color-brand-yellow].freeze
+
+    # Actual DAU solid, then dashed projections: the baseline and each lever.
+    def growth_projection_series(levers)
+      [
+        { key: "actual", label: "Actual DAU", color: "--color-brand-cream" },
+        { key: "baseline", label: "Projected, no change", color: "--color-brand-blue", dashed: true },
+        *levers.zip(GROWTH_PROJECTION_COLORS).map do |lever, color|
+          { key: lever.rate, label: "#{GROWTH_RATE_LABELS.fetch(lever.rate)} improved", color:, dashed: true }
+        end
+      ]
+    end
+
     def growth_percent(rate)
       rate ? number_to_percentage(rate * 100, precision: 1) : "—"
     end

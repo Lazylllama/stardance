@@ -76,6 +76,34 @@
     }
   }
 
+  &__panel-header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-s);
+    justify-content: space-between;
+  }
+
+  &__toggle {
+    display: flex;
+    gap: var(--space-xxs);
+  }
+
+  &__toggle-option {
+    border: 1px solid var(--color-space-border);
+    border-radius: 999px;
+    color: var(--color-space-text-muted);
+    font-size: var(--font-size-s);
+    padding: var(--space-xxs) var(--space-s);
+    text-decoration: none;
+
+    &--active {
+      background: var(--color-set-2-bg);
+      border-color: var(--color-brand-cream);
+      color: var(--color-brand-cream);
+    }
+  }
+
   &__panel h3 {
     font-size: var(--font-size-m);
     margin: 0;
@@ -96,6 +124,10 @@
 
     &--small {
       height: 120px;
+    }
+
+    &--tall {
+      height: 360px;
     }
   }
 

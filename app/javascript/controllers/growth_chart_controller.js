@@ -3,6 +3,7 @@ import Chart from "chart.js/auto";
 
 // One growth-model chart: stacked bars when `stacked`, lines otherwise.
 // `series` names the row keys to plot and the brand colour token for each.
+// A series marked `dashed` draws as a dashed line, for projections.
 // `compact` drops the legend and date labels for the small-multiple charts.
 export default class extends Controller {
   static values = {
@@ -17,7 +18,7 @@ export default class extends Controller {
     if (this.rowsValue.length === 0) return;
 
     const styles = getComputedStyle(document.documentElement);
-    const datasets = this.seriesValue.map(({ key, label, color }) => {
+    const datasets = this.seriesValue.map(({ key, label, color, dashed }) => {
       const value = styles.getPropertyValue(color).trim();
       return {
         label,
@@ -27,6 +28,7 @@ export default class extends Controller {
         backgroundColor: value,
         borderColor: value,
         borderWidth: this.stackedValue ? 0 : 2,
+        borderDash: dashed ? [6, 4] : [],
         pointRadius: 0,
         spanGaps: true,
       };
