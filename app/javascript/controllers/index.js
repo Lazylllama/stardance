@@ -513,3 +513,6 @@ application.register("buku-x3-reveal", BukuX3RevealController);
 
 import BukuX3StatusController from "./buku_x3_status_controller";
 application.register("buku-x3-status", BukuX3StatusController);
+
+import WrongToolSheetController from "./wrong_tool_sheet_controller";
+application.register("wrong-tool-sheet", WrongToolSheetController);
