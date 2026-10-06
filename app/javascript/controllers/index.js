@@ -259,6 +259,9 @@ application.register("hcb-chart", HcbChartController);
 import GrowthChartController from "./growth_chart_controller";
 application.register("growth-chart", GrowthChartController);
 
+import FullscreenController from "./fullscreen_controller";
+application.register("fullscreen", FullscreenController);
+
 import HourFunnelController from "./hour_funnel_controller";
 application.register("hour-funnel", HourFunnelController);
 

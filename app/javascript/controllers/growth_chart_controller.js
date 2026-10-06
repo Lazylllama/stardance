@@ -73,6 +73,17 @@ export default class extends Controller {
     });
   }
 
+  // Compact charts get their legend and dates back while maximised.
+  fullscreenChanged() {
+    if (!this.chart || !this.compactValue) return;
+
+    const maximised =
+      document.fullscreenElement?.contains(this.element) ?? false;
+    this.chart.options.plugins.legend.display = maximised;
+    this.chart.options.scales.x.ticks.display = maximised;
+    this.chart.update();
+  }
+
   disconnect() {
     this.chart?.destroy();
   }

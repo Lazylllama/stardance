@@ -26,17 +26,22 @@
     justify-content: space-between;
   }
 
-  // Scoped under .admin-content to outrank that sheet's generic button styling.
-  .admin-content &__rebuild button,
-  .admin-content &__rebuild input[type="submit"] {
+  // Prefixed with body to outrank the global button styling.
+  body & button#{&}__rebuild {
     background: none;
     border: 1px solid var(--color-space-border);
     border-radius: 999px;
+    box-shadow: none;
     color: var(--color-space-text-muted);
     cursor: pointer;
     font: inherit;
     min-height: 0;
     padding: var(--space-xxs) var(--space-s);
+
+    &:hover {
+      border-color: var(--color-brand-blue);
+      color: var(--color-space-text);
+    }
   }
 
   &__section {
@@ -61,12 +66,30 @@
     border-radius: 12px;
     display: grid;
     gap: var(--space-xs);
+    min-width: 0;
     padding: var(--space-s);
+
+    // Maximised: fill the screen and let the chart take the spare height.
+    &:fullscreen {
+      border: 0;
+      border-radius: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-l);
+    }
+
+    &:fullscreen .growth__chart {
+      flex: 1;
+      height: auto;
+      min-height: 0;
+    }
   }
 
+  // The whole card selects its metric: the label link stretches over it,
+  // with the chart and maximise button raised above so they stay usable.
   &__metric {
     color: var(--color-space-text);
-    text-decoration: none;
+    position: relative;
 
     &:hover {
       border-color: var(--color-brand-blue);
@@ -75,19 +98,66 @@
     &--selected {
       border-color: var(--color-brand-mint);
     }
+
+    .growth__chart,
+    .growth__maximise {
+      z-index: 1;
+    }
   }
 
-  &__panel-header {
+  &__metric-label {
+    text-decoration: none;
+
+    &::after {
+      content: "";
+      inset: 0;
+      position: absolute;
+    }
+
+    .growth__metric:fullscreen &::after {
+      content: none;
+    }
+  }
+
+  &__chart-header {
     align-items: center;
     display: flex;
-    flex-wrap: wrap;
     gap: var(--space-s);
     justify-content: space-between;
+  }
+
+  body & button#{&}__maximise {
+    background: none;
+    border: 1px solid var(--color-space-border);
+    border-radius: 8px;
+    box-shadow: none;
+    color: var(--color-space-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    min-height: 0;
+    padding: var(--space-xxs);
+    position: relative;
+
+    &:hover {
+      border-color: var(--color-brand-blue);
+      color: var(--color-space-text);
+    }
+
+    &[hidden] {
+      display: none;
+    }
+
+    svg {
+      display: block;
+      height: 1rem;
+      width: 1rem;
+    }
   }
 
   &__toggle {
     display: flex;
     gap: var(--space-xxs);
+    margin-left: auto;
   }
 
   &__toggle-option {
@@ -131,6 +201,7 @@
 
   &__chart {
     height: 280px;
+    min-width: 0;
     position: relative;
 
     &--small {
@@ -209,9 +280,35 @@
   }
 
   &__table {
+    border: 1px solid var(--color-space-border);
+    border-collapse: separate;
+    border-radius: 8px;
+    border-spacing: 0;
     margin: 0;
+    overflow: hidden;
+    width: 100%;
+
+    th,
+    td {
+      border-bottom: 1px solid var(--color-space-border);
+      padding: var(--space-xs) var(--space-s);
+    }
+
+    thead th {
+      color: var(--color-space-text-muted);
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child > * {
+      border-bottom: 0;
+    }
 
     td {
+      color: var(--color-space-text);
       text-align: right;
       white-space: nowrap;
     }
@@ -219,9 +316,16 @@
     th[scope="row"] {
       color: var(--color-space-text);
       font-size: var(--font-size-s);
-      letter-spacing: 0;
-      text-transform: none;
+      font-weight: normal;
+      text-align: left;
     }
+  }
+
+  code {
+    background: var(--color-overlay-light);
+    border-radius: 4px;
+    color: var(--color-brand-cream);
+    padding: 1px 6px;
   }
 
   &__details summary {

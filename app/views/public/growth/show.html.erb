@@ -35,22 +35,25 @@
       </p>
       <div class="growth__metrics">
         <% @report.dau_by_metric.each do |metric, rows| %>
-          <%= link_to public_growth_path(metric:, signups: @report.signups), class: class_names("growth__metric", "growth__metric--selected" => metric == @report.metric) do %>
-            <span class="growth__metric-label">
-              <%= GrowthDailySnapshot::METRIC_LABELS.fetch(metric) %>
-              <% if metric == GrowthDailySnapshot::SOURCE_OF_TRUTH %>
-                <span class="growth__badge">Source of truth</span>
+          <div class="<%= class_names("growth__metric", "growth__metric--selected" => metric == @report.metric) %>" data-controller="fullscreen">
+            <div class="growth__chart-header">
+              <%= link_to public_growth_path(metric:, signups: @report.signups), class: "growth__metric-label" do %>
+                <%= GrowthDailySnapshot::METRIC_LABELS.fetch(metric) %>
+                <% if metric == GrowthDailySnapshot::SOURCE_OF_TRUTH %>
+                  <span class="growth__badge">Source of truth</span>
+                <% end %>
               <% end %>
-            </span>
+              <%= render "maximise_button" %>
+            </div>
             <span class="growth__metric-value"><%= growth_users(rows.last&.values_at(*Growth::Report::DAU_PARTS)&.sum.to_i) %> DAU</span>
             <div class="growth__chart growth__chart--small">
-              <canvas data-controller="growth-chart"
+              <canvas data-controller="growth-chart" data-action="fullscreenchange@document->growth-chart#fullscreenChanged"
                       data-growth-chart-rows-value="<%= rows.to_json %>"
                       data-growth-chart-series-value="<%= GrowthHelper::GROWTH_DAU_SERIES.to_json %>"
                       data-growth-chart-stacked-value="true"
                       data-growth-chart-compact-value="true"></canvas>
             </div>
-          <% end %>
+          </div>
         <% end %>
       </div>
       <ul class="growth__legend">
@@ -89,18 +92,24 @@
       </div>
 
       <div class="growth__panels">
-        <div class="growth__panel">
-          <h3>Active users</h3>
+        <div class="growth__panel" data-controller="fullscreen">
+          <div class="growth__chart-header">
+            <h3>Active users</h3>
+            <%= render "maximise_button" %>
+          </div>
           <div class="growth__chart">
-            <canvas data-controller="growth-chart"
+            <canvas data-controller="growth-chart" data-action="fullscreenchange@document->growth-chart#fullscreenChanged"
                     data-growth-chart-rows-value="<%= @report.audience_rows.to_json %>"
                     data-growth-chart-series-value="<%= GrowthHelper::GROWTH_AUDIENCE_SERIES.to_json %>"></canvas>
           </div>
         </div>
-        <div class="growth__panel">
-          <h3>Retention rates, pooled over <%= Growth::Report::RATE_WINDOW %> days</h3>
+        <div class="growth__panel" data-controller="fullscreen">
+          <div class="growth__chart-header">
+            <h3>Retention rates, pooled over <%= Growth::Report::RATE_WINDOW %> days</h3>
+            <%= render "maximise_button" %>
+          </div>
           <div class="growth__chart">
-            <canvas data-controller="growth-chart"
+            <canvas data-controller="growth-chart" data-action="fullscreenchange@document->growth-chart#fullscreenChanged"
                     data-growth-chart-rows-value="<%= @report.rate_rows.to_json %>"
                     data-growth-chart-series-value="<%= GrowthHelper::GROWTH_RATE_SERIES.to_json %>"
                     data-growth-chart-percent-value="true"></canvas>
@@ -109,8 +118,8 @@
       </div>
 
       <% simulator = @report.simulator %>
-      <div class="growth__panel">
-        <div class="growth__panel-header">
+      <div class="growth__panel" data-controller="fullscreen">
+        <div class="growth__chart-header">
           <h3>Projected DAU</h3>
           <nav class="growth__toggle" aria-label="Where new signups come from">
             <% GrowthHelper::GROWTH_SIGNUP_LABELS.each do |signups, label| %>
@@ -118,6 +127,7 @@
                     class: class_names("growth__toggle-option", "growth__toggle-option--active" => signups == @report.signups) %>
             <% end %>
           </nav>
+          <%= render "maximise_button" %>
         </div>
         <p class="growth__note">
           <% if @report.signups == "word_of_mouth" %>
@@ -132,7 +142,7 @@
           <strong><%= growth_users(simulator.baseline_dau) %></strong> DAU.
         </p>
         <div class="growth__chart growth__chart--tall">
-          <canvas data-controller="growth-chart"
+          <canvas data-controller="growth-chart" data-action="fullscreenchange@document->growth-chart#fullscreenChanged"
                   data-growth-chart-rows-value="<%= @report.projection_rows.to_json %>"
                   data-growth-chart-series-value="<%= growth_projection_series(@report.projected_levers).to_json %>"></canvas>
         </div>
