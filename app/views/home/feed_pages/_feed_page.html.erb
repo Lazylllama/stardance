@@ -1,3 +1,7 @@
+<% if @pagy.page == 1 %>
+  <%= render Feed::WrongToolPromoComponent.new %>
+<% end %>
+
 <% @feed_posts.each_with_index do |post, index| %>
   <% source = @feed_post_sources&.fetch(post, "quality_latest") || "quality_latest" %>
   <% if post.postable_type == "Post::ShipEvent" %>
@@ -24,10 +28,6 @@
           current_user_reposted_post_ids: @reposted_post_ids,
           show_views: @show_post_views
         ) %>
-  <% end %>
-
-  <% if @pagy.page == 1 && index == [ Feed::WrongToolPromoComponent::AFTER_POSTS, @feed_posts.size ].min - 1 %>
-    <%= render Feed::WrongToolPromoComponent.new %>
   <% end %>
 
   <% if @pagy.page == 1 && index.zero? && @recommended_projects&.any? %>
@@ -81,8 +81,6 @@
       Nothing here yet. Sign up to start building and see the feed come alive!
     <% end %>
   </p>
-
-  <%= render Feed::WrongToolPromoComponent.new %>
 <% end %>
 
 <% if @pagy.next %>
