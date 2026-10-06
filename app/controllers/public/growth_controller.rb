@@ -1,8 +1,8 @@
-module Admin
+module Public
   # Duolingo-style growth model: daily user states, the rates users move
   # between them, and which rate is worth improving. Snapshots are built
   # nightly by GrowthRefreshJob; this page only reads them.
-  class GrowthController < Admin::ApplicationController
+  class GrowthController < ApplicationController
     REBUILD_DAYS = 30
 
     def show
@@ -22,7 +22,7 @@ module Admin
         whodunnit: current_user.id.to_s,
         object_changes: { rebuilt_days: [ nil, REBUILD_DAYS ] }
       )
-      redirect_to admin_growth_path(metric: params[:metric]), notice: "Rebuilding the last #{REBUILD_DAYS} days. Refresh in a few minutes."
+      redirect_to public_growth_path(metric: params[:metric]), notice: "Rebuilding the last #{REBUILD_DAYS} days. Refresh in a few minutes."
     end
   end
 end

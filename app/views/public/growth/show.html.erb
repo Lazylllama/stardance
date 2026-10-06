@@ -1,7 +1,11 @@
 <% content_for :title, "Growth Model" %>
 
-<div class="growth">
-  <%= link_to "← back to admin", admin_root_path, class: "growth__back" %>
+<% admin = policy(:growth).rebuild? %>
+
+<main class="growth">
+  <% if admin %>
+    <%= link_to "← back to admin", admin_root_path, class: "growth__back" %>
+  <% end %>
 
   <header class="growth__header">
     <div>
@@ -12,7 +16,9 @@
         Banned users and guests are left out.
       </p>
     </div>
-    <%= button_to "Rebuild last #{Admin::GrowthController::REBUILD_DAYS} days", rebuild_admin_growth_path(metric: @report.metric), class: "growth__rebuild" %>
+    <% if admin %>
+      <%= button_to "Rebuild last #{Public::GrowthController::REBUILD_DAYS} days", rebuild_public_growth_path(metric: @report.metric), class: "growth__rebuild" %>
+    <% end %>
   </header>
 
   <% if @report.empty? %>
@@ -29,7 +35,7 @@
       </p>
       <div class="growth__metrics">
         <% @report.dau_by_metric.each do |metric, rows| %>
-          <%= link_to admin_growth_path(metric:, signups: @report.signups), class: class_names("growth__metric", "growth__metric--selected" => metric == @report.metric) do %>
+          <%= link_to public_growth_path(metric:, signups: @report.signups), class: class_names("growth__metric", "growth__metric--selected" => metric == @report.metric) do %>
             <span class="growth__metric-label">
               <%= GrowthDailySnapshot::METRIC_LABELS.fetch(metric) %>
               <% if metric == GrowthDailySnapshot::SOURCE_OF_TRUTH %>
@@ -40,7 +46,7 @@
             <div class="growth__chart growth__chart--small">
               <canvas data-controller="growth-chart"
                       data-growth-chart-rows-value="<%= rows.to_json %>"
-                      data-growth-chart-series-value="<%= Admin::GrowthHelper::GROWTH_DAU_SERIES.to_json %>"
+                      data-growth-chart-series-value="<%= GrowthHelper::GROWTH_DAU_SERIES.to_json %>"
                       data-growth-chart-stacked-value="true"
                       data-growth-chart-compact-value="true"></canvas>
             </div>
@@ -48,7 +54,7 @@
         <% end %>
       </div>
       <ul class="growth__legend">
-        <% Admin::GrowthHelper::GROWTH_DAU_SERIES.each do |series| %>
+        <% GrowthHelper::GROWTH_DAU_SERIES.each do |series| %>
           <li><span class="growth__legend-key growth__legend-key--<%= series[:key] %>"></span> <%= series[:label] %></li>
         <% end %>
       </ul>
@@ -60,7 +66,7 @@
       <p class="growth__note">
         <% unless @report.metric == GrowthDailySnapshot::SOURCE_OF_TRUTH %>
           For comparison only: the DAU we report and project is
-          <%= link_to GrowthDailySnapshot::METRIC_LABELS.fetch(GrowthDailySnapshot::SOURCE_OF_TRUTH), admin_growth_path(signups: @report.signups) %>.
+          <%= link_to GrowthDailySnapshot::METRIC_LABELS.fetch(GrowthDailySnapshot::SOURCE_OF_TRUTH), public_growth_path(signups: @report.signups) %>.
         <% end %>
         Pick another metric above to switch this section. Latest day: <%= latest.snapshot_on.to_fs(:long) %>.
       </p>
@@ -88,7 +94,7 @@
           <div class="growth__chart">
             <canvas data-controller="growth-chart"
                     data-growth-chart-rows-value="<%= @report.audience_rows.to_json %>"
-                    data-growth-chart-series-value="<%= Admin::GrowthHelper::GROWTH_AUDIENCE_SERIES.to_json %>"></canvas>
+                    data-growth-chart-series-value="<%= GrowthHelper::GROWTH_AUDIENCE_SERIES.to_json %>"></canvas>
           </div>
         </div>
         <div class="growth__panel">
@@ -96,7 +102,7 @@
           <div class="growth__chart">
             <canvas data-controller="growth-chart"
                     data-growth-chart-rows-value="<%= @report.rate_rows.to_json %>"
-                    data-growth-chart-series-value="<%= Admin::GrowthHelper::GROWTH_RATE_SERIES.to_json %>"
+                    data-growth-chart-series-value="<%= GrowthHelper::GROWTH_RATE_SERIES.to_json %>"
                     data-growth-chart-percent-value="true"></canvas>
           </div>
         </div>
@@ -107,8 +113,8 @@
         <div class="growth__panel-header">
           <h3>Projected DAU</h3>
           <nav class="growth__toggle" aria-label="Where new signups come from">
-            <% Admin::GrowthHelper::GROWTH_SIGNUP_LABELS.each do |signups, label| %>
-              <%= link_to label, admin_growth_path(metric: @report.metric, signups:),
+            <% GrowthHelper::GROWTH_SIGNUP_LABELS.each do |signups, label| %>
+              <%= link_to label, public_growth_path(metric: @report.metric, signups:),
                     class: class_names("growth__toggle-option", "growth__toggle-option--active" => signups == @report.signups) %>
             <% end %>
           </nav>
@@ -152,7 +158,7 @@
           <tbody>
             <% simulator.levers.each do |lever| %>
               <tr>
-                <th scope="row"><%= Admin::GrowthHelper::GROWTH_RATE_LABELS.fetch(lever.rate) %></th>
+                <th scope="row"><%= GrowthHelper::GROWTH_RATE_LABELS.fetch(lever.rate) %></th>
                 <td><%= growth_percent(lever.current_rate) %></td>
                 <td><%= growth_users(lever.dau) %></td>
                 <td>+<%= number_with_precision(lever.lift, precision: 1) %></td>
@@ -184,4 +190,4 @@
       <dt>Resurrection</dt><dd>Share of yesterday's dormant users who came back today.</dd>
     </dl>
   </details>
-</div>
+</main>

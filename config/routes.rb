@@ -550,6 +550,11 @@ Rails.application.routes.draw do
       post :refresh
     end
   end
+  namespace :public do
+    resource :growth, only: [ :show ], controller: "growth" do
+      post :rebuild
+    end
+  end
 
   get "dev_login", to: "sessions#dev_login", as: :dev_login_auto if Rails.env.development? || Rails.env.test?
   get "dev_login/:id", to: "sessions#dev_login", as: :dev_login if Rails.env.development? || Rails.env.test?
@@ -668,10 +673,6 @@ Rails.application.routes.draw do
     resource :hour_funnel, only: [ :show ], controller: "hour_funnel" do
       post :refresh
     end
-    resource :growth, only: [ :show ], controller: "growth" do
-      post :rebuild
-    end
-
     # Sections load lazily so one slow data source can't hold up the page.
     get    "mega_dashboard",                   to: "mega_dashboard#show",        as: :mega_dashboard
     get    "mega_dashboard/sections/:section", to: "mega_dashboard#section",     as: :mega_dashboard_section, constraints: { section: %r{[^/]+} }

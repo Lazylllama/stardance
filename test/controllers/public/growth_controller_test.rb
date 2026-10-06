@@ -1,6 +1,6 @@
 require "test_helper"
 
-class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
+class Public::GrowthControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
@@ -16,7 +16,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     )
     sign_in @admin
 
-    get admin_growth_path(metric: "coding")
+    get public_growth_path(metric: "coding")
 
     assert_response :success
     assert_select "canvas[data-controller=growth-chart]", minimum: GrowthDailySnapshot::METRICS.size
@@ -31,7 +31,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     GrowthDailySnapshot.create!(metric: "coding", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
     sign_in @admin
 
-    get admin_growth_path(signups: "flat")
+    get public_growth_path(signups: "flat")
 
     assert_response :success
     assert_select ".growth__toggle-option--active", text: "Flat"
@@ -41,7 +41,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     GrowthDailySnapshot.create!(metric: "coding", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
     sign_in @admin
 
-    get admin_growth_path
+    get public_growth_path
 
     assert_response :success
     assert_select ".growth__metric--selected", text: /Coding.*Source of truth/m
@@ -52,7 +52,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
     GrowthDailySnapshot.create!(metric: "vote", snapshot_on: UserActivityDay.today - 1, new_users: 1, current_users: 5)
     sign_in @admin
 
-    get admin_growth_path(metric: "vote")
+    get public_growth_path(metric: "vote")
 
     assert_response :success
     assert_match "For comparison only", response.body
@@ -61,7 +61,7 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
   test "an unknown metric falls back to the source of truth and shows the empty state" do
     sign_in @admin
 
-    get admin_growth_path(metric: "nonsense")
+    get public_growth_path(metric: "nonsense")
 
     assert_response :success
     assert_match "No snapshots yet", response.body
@@ -70,20 +70,32 @@ class Admin::GrowthControllerTest < ActionDispatch::IntegrationTest
   test "rebuild enqueues the refresh and leaves an audit entry" do
     sign_in @admin
 
-    assert_enqueued_with(job: GrowthRefreshJob, args: [ { days: Admin::GrowthController::REBUILD_DAYS } ]) do
+    assert_enqueued_with(job: GrowthRefreshJob, args: [ { days: Public::GrowthController::REBUILD_DAYS } ]) do
       assert_difference -> { PaperTrail::Version.where(event: "rebuild_growth_model").count } do
-        post rebuild_admin_growth_path
+        post rebuild_public_growth_path
       end
     end
-    assert_redirected_to admin_growth_path
+    assert_redirected_to public_growth_path
   end
 
-  test "non-admin is denied" do
+  test "guests can view the page but not rebuild it" do
+    GrowthDailySnapshot.create!(metric: "coding", snapshot_on: UserActivityDay.today - 1, new_users: 2, current_users: 30)
+
+    get public_growth_path
+
+    assert_response :success
+    assert_select "canvas[data-controller=growth-chart]", minimum: 1
+    assert_select ".growth__rebuild", count: 0
+    assert_select ".growth__back", count: 0
+  end
+
+  test "non-admin cannot rebuild" do
     user = User.create!(slack_id: "U_GROWTH_USER", display_name: "growth_user", email: "growth_user@example.test")
     sign_in user
 
-    get admin_growth_path
-
-    assert_response :not_found
+    assert_no_enqueued_jobs(only: GrowthRefreshJob) do
+      post rebuild_public_growth_path
+    end
+    assert_response :forbidden
   end
 end

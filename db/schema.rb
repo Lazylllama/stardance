@@ -1677,6 +1677,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
     t.index ["user_id"], name: "index_user_notification_preferences_on_user_id"
   end
 
+  create_table "user_preference", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.boolean "leaderboard_optin", default: false, null: false
+    t.boolean "search_engine_indexing_off", default: false, null: false
+    t.boolean "send_notifications_for_followed_projects", default: true, null: false
+    t.boolean "send_notifications_for_followed_users", default: true, null: false
+    t.boolean "send_notifications_for_new_comments", default: true, null: false
+    t.boolean "send_notifications_for_new_followers", default: true, null: false
+    t.boolean "send_votes_to_slack", default: false, null: false
+    t.boolean "stardust_balance_notifications", default: false, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["leaderboard_optin"], name: "index_user_preference_on_leaderboard_optin"
+    t.index ["user_id"], name: "index_user_preference_on_user_id", unique: true
+  end
+
   create_table "user_preferences", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.boolean "leaderboard_optin", default: false, null: false
@@ -2026,7 +2042,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   add_foreign_key "shop_item_sources", "shop_items"
   add_foreign_key "shop_item_sources", "shop_sources"
   add_foreign_key "shop_items", "users"
-  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify
+  add_foreign_key "shop_items", "users", column: "created_by_user_id", on_delete: :nullify, validate: false
   add_foreign_key "shop_items", "users", column: "default_assigned_user_id", on_delete: :nullify
   add_foreign_key "shop_order_modifier_selections", "shop_item_modifiers"
   add_foreign_key "shop_order_modifier_selections", "shop_orders"
@@ -2063,6 +2079,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
   add_foreign_key "user_hackatime_projects", "users"
   add_foreign_key "user_identities", "users"
   add_foreign_key "user_notification_preferences", "users", on_delete: :cascade
+  add_foreign_key "user_preference", "users"
   add_foreign_key "user_preferences", "users"
   add_foreign_key "user_vote_verdicts", "users"
   add_foreign_key "vote_assignments", "post_ship_events", column: "ship_event_id"
