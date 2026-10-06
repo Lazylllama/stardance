@@ -13,7 +13,7 @@ module Feed
     # The last day of wrong tool; the ad stops showing after it.
     ENDS_ON = Date.new(2026, 10, 20)
     # Shown after this many posts on the feed's first page (or after the last, if it has fewer).
-    AFTER_POSTS = 4
+    AFTER_POSTS = 2
     # The sheet's size; _wrong_tool_promo.scss lays out this many columns.
     COLUMNS = ("A".."N").to_a.freeze
     ROWS = 6
