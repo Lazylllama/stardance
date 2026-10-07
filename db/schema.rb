@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_194029) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1695,6 +1695,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_141604) do
 
   create_table "user_preferences", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.boolean "disintegration_effects_enabled", default: true, null: false
     t.boolean "leaderboard_optin", default: false, null: false
     t.boolean "particle_effects_enabled", default: true, null: false
     t.boolean "search_engine_indexing_off", default: false, null: false
