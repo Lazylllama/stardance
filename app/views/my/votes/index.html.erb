@@ -11,7 +11,7 @@
         <li class="notifications-item">
           <div class="notifications-item__main">
             <p class="notifications-item__title">
-              <<% if vote.project %>
+              <% if vote.project %>
                 <%= link_to vote.project.title, project_path(vote.project), class: "notifications-item__actor" %>
               <% else %>
                 <span class="notifications-item__actor">Deleted project</span>
